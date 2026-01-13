@@ -15,18 +15,31 @@
             --accent: #58a6ff;
         }
 
-        body {
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
             margin: 0;
+            height: 100%;
             background: var(--bg);
             color: var(--text);
             font-family: Inter, sans-serif;
         }
 
+        /* App layout */
+        .app {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* Header */
         .header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 24px 40px;
+            padding: 16px 32px;
             border-bottom: 1px solid var(--border);
         }
 
@@ -59,15 +72,21 @@
             width: 260px;
         }
 
+        /* Content */
+        .content {
+            flex: 1;
+            overflow: auto;
+            padding: 32px;
+        }
+
+        /* Grid */
         .grid {
             display: grid;
             grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));
             gap: 28px;
-            padding: 40px;
-            max-width: 1400px;
-            margin: auto;
         }
 
+        /* Cards */
         .card {
             background: var(--panel);
             border: 1px solid var(--border);
@@ -99,15 +118,19 @@
 
 <body>
 
-<div class="header">
+<div class="app">
+    <div class="header">
     <div class="header-left">
-    <h1>🧪 Python Lab</h1>
+        <h1>🧪 Python Lab</h1>
         <button class="github-btn" onclick="openRepo()">Back to GitHub</button>
     </div>
     <input class="search" placeholder="Search…" oninput="filter(this.value)">
-</div>
+    </div>
 
-<div id="grid" class="grid"></div>
+    <div class="content">
+        <div id="grid" class="grid"></div>
+    </div>
+</div>
 
 <script>
     const user = "AtleSkjelbred1";
