@@ -97,10 +97,18 @@ body {
     async function load() {
         const file = new URLSearchParams(location.search).get("file");
         title.textContent = file;
-        const r = await fetch(file);
-        code = await r.text();
-        codeEl.textContent = code;
+        try {
+            const r = await fetch(file);
+            if (!r.ok) throw "File not found: " + file;
+            code = await r.text();
+            codeEl.textContent = code;
+        } catch (e) {
+            codeEl.textContent = "ERROR:\n" + e;
+            return;
+        }
+
         pyodide = await loadPyodide();
+
 }
 
     async function run() {
