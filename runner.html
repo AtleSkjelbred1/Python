@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Python Runner</title>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono&display=swap" rel="stylesheet">
+<style>
+body {
+    margin:0;
+    background:#0e1117;
+    color:#e6edf3;
+    font-family:Inter,sans-serif;
+}
+
+header {
+    padding:15px 30px;
+    border-bottom:1px solid #30363d;
+    display:flex;
+    justify-content:space-between;
+}
+
+button {
+    background:#238636;
+    border:none;
+    padding:8px 16px;
+    color:white;
+    border-radius:6px;
+    cursor:pointer;
+}
+
+main {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    height:calc(100vh - 60px);
+}
+
+.panel {
+    padding:20px;
+    overflow:auto;
+}
+
+.code {
+    font-family:'JetBrains Mono', monospace;
+    background:#161b22;
+    border-radius:8px;
+    padding:20px;
+    white-space:pre;
+}
+
+.terminal {
+    background:black;
+    color:#0f0;
+    border-radius:8px;
+    padding:20px;
+    white-space:pre;
+}
+</style>
+</head>
+<body>
+
+<header>
+    <div id="title"></div>
+    <button onclick="run()">▶ Run</button>
+</header>
+
+<main>
+    <div class="panel">
+        <h3>Code</h3>
+        <div id="code" class="code"></div>
+    </div>
+    <div class="panel">
+        <h3>Output</h3>
+        <div id="output" class="terminal"></div>
+    </div>
+</main>
+
+<script>
+let pyodide, code;
+
+async function load(){
+    const params = new URLSearchParams(window.location.search);
+    const file = params.get("file");
+    document.getElementById("title").textContent = file;
+
+    const r = await fetch(file);
+    code = await r.text();
+    document.getElementById("code").textContent = code;
+
+    pyodide = await loadPyodide();
+}
+
+async function run(){
+    document.getElementById("output").textContent = "";
+    pyodide.setStdout({batched:s => output.textContent += s});
+    pyodide.setStderr({batched:s => output.textContent += s});
+    await pyodide.runPythonAsync(code);
+}
+
+load();
+</script>
+
+</body>
+</html>
