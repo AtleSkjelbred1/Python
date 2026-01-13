@@ -30,6 +30,26 @@
             border-bottom: 1px solid var(--border);
         }
 
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .github-btn {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .github-btn:hover {
+            background: #1f2933;
+        }
+
         .search {
             background: var(--panel);
             border: 1px solid var(--border);
@@ -80,7 +100,10 @@
 <body>
 
 <div class="header">
+    <div class="header-left">
     <h1>🧪 Python Lab</h1>
+        <button class="github-btn" onclick="openRepo()">Back to GitHub</button>
+    </div>
     <input class="search" placeholder="Search…" oninput="filter(this.value)">
 </div>
 
@@ -89,6 +112,10 @@
 <script>
     const user = "AtleSkjelbred1";
     const repo = "Python";
+
+    function openRepo() {
+        window.open("https://github.com/" + user + "/" + repo, "_blank");
+    }
 
     async function loadFiles() {
         const res = await fetch(`https://api.github.com/repos/${user}/${repo}/contents`);
