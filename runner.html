@@ -17,8 +17,7 @@ body {
 .header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    padding: 16px 32px;
+    padding: 14px 32px;
     border-bottom: 1px solid #30363d;
 }
 
@@ -42,7 +41,7 @@ body {
 
 .main {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns:1fr 1fr;
     height: calc(100vh - 60px);
 }
 
@@ -51,22 +50,17 @@ body {
     overflow: auto;
 }
 
-.code {
+.code, .terminal {
     background: #161b22;
-    border: 1px solid #30363d;
     border-radius: 10px;
     padding: 20px;
-    white-space: pre;
     font-family: "JetBrains Mono", monospace;
+    white-space: pre;
 }
 
 .terminal {
     background: black;
     color: #00ff9c;
-    border-radius: 10px;
-    padding: 20px;
-    white-space: pre;
-    font-family: "JetBrains Mono", monospace;
 }
 </style>
 </head>
@@ -99,17 +93,16 @@ body {
     const title = document.getElementById("title");
 
     async function load() {
-        const params = new URLSearchParams(window.location.search);
-        const file = params.get("file");
+        const file = new URLSearchParams(location.search).get("file");
         title.textContent = file;
 
         try {
             const r = await fetch(file);
-            if (!r.ok) throw "File not found: " + file;
+            if (!r.ok) throw "File not found";
             code = await r.text();
             codeEl.textContent = code;
         } catch (e) {
-            codeEl.textContent = "ERROR loading file:\n" + e;
+            codeEl.textContent = "ERROR loading file\n" + e;
             return;
         }
 
@@ -118,9 +111,8 @@ body {
 
     async function run() {
         output.textContent = "";
-
         if (!pyodide) {
-            output.textContent = "Python engine not loaded.";
+            output.textContent = "Python engine not loaded";
             return;
         }
 
@@ -130,7 +122,7 @@ body {
         try {
             await pyodide.runPythonAsync(code);
         } catch (e) {
-            output.textContent += "\n" + e;
+            output.textContent += e;
         }
     }
 

@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <title>Python Lab</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-
     <style>
         :root {
             --bg: #0d1117;
@@ -15,10 +14,6 @@
             --accent: #58a6ff;
         }
 
-        * {
-            box-sizing: border-box;
-        }
-
         html, body {
             margin: 0;
             height: 100%;
@@ -27,14 +22,12 @@
             font-family: Inter, sans-serif;
         }
 
-        /* App layout */
         .app {
             display: flex;
             flex-direction: column;
             height: 100vh;
         }
 
-        /* Header */
         .header {
             display: flex;
             justify-content: space-between;
@@ -45,8 +38,8 @@
 
         .header-left {
             display: flex;
-            align-items: center;
             gap: 20px;
+            align-items: center;
         }
 
         .github-btn {
@@ -56,7 +49,6 @@
             padding: 8px 16px;
             border-radius: 8px;
             cursor: pointer;
-            font-weight: 600;
         }
 
         .github-btn:hover {
@@ -66,47 +58,40 @@
         .search {
             background: var(--panel);
             border: 1px solid var(--border);
-            padding: 10px 16px;
+            padding: 8px 14px;
             border-radius: 8px;
             color: white;
-            width: 260px;
+            width: 240px;
         }
 
-        /* Content */
         .content {
             flex: 1;
+            padding: 30px;
             overflow: auto;
-            padding: 32px;
         }
 
-        /* Grid */
         .grid {
             display: grid;
             grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));
-            gap: 28px;
+            gap: 24px;
         }
 
-        /* Cards */
         .card {
             background: var(--panel);
             border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 26px;
+            border-radius: 14px;
+            padding: 24px;
             cursor: pointer;
-            transition: .25s;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            min-height: 140px;
+            transition: .2s;
         }
 
         .card:hover {
-            transform: translateY(-6px);
+            transform: translateY(-5px);
             border-color: var(--accent);
         }
 
         .card h3 {
-            margin: 0 0 8px 0;
+            margin: 0 0 8px;
         }
 
         .card p {
@@ -117,14 +102,13 @@
 </head>
 
 <body>
-
 <div class="app">
     <div class="header">
     <div class="header-left">
-        <h1>🧪 Python Lab</h1>
-        <button class="github-btn" onclick="openRepo()">Back to GitHub</button>
+        <h2>🧪 Python Lab</h2>
+        <button class="github-btn" onclick="openRepo()">GitHub</button>
     </div>
-    <input class="search" placeholder="Search…" oninput="filter(this.value)">
+        <input class="search" placeholder="Search..." oninput="filterFiles(this.value)">
     </div>
 
     <div class="content">
@@ -135,6 +119,7 @@
 <script>
     const user = "AtleSkjelbred1";
     const repo = "Python";
+    let all = [];
 
     function openRepo() {
         window.open("https://github.com/" + user + "/" + repo, "_blank");
@@ -142,12 +127,13 @@
 
     async function loadFiles() {
         const res = await fetch(`https://api.github.com/repos/${user}/${repo}/contents`);
-        const files = await res.json();
-        window.all = files.filter(f => f.name.endsWith(".py"));
-        render(window.all);
+        const data = await res.json();
+        all = data.filter(f => f.name.endsWith(".py"));
+        render(all);
     }
 
     function render(list) {
+        const grid = document.getElementById("grid");
         grid.innerHTML = "";
         list.forEach(f => {
             const d = document.createElement("div");
@@ -158,9 +144,9 @@
         });
     }
 
-    function filter(q) {
+    function filterFiles(q) {
         q = q.toLowerCase();
-        render(window.all.filter(f => f.name.toLowerCase().includes(q)));
+        render(all.filter(f => f.name.toLowerCase().includes(q)));
     }
 
     loadFiles();
