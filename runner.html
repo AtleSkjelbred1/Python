@@ -30,6 +30,15 @@ body {
     cursor: pointer;
 }
 
+.btn.run {
+    background: #238636;
+    border: none;
+}
+
+.btn.run:hover {
+    background: #2ea043;
+}
+
 .main {
     display: grid;
     grid-template-columns:1fr 1fr;
@@ -67,7 +76,7 @@ body {
     <span id="title"></span>
     <div>
         <button class="btn" onclick="location='index.html'">Back</button>
-        <button class="btn" onclick="run()">Run</button>
+        <button class="btn run" onclick="run()">▶ Run</button>
     </div>
 </div>
 
@@ -86,11 +95,9 @@ let pyodide, code;
 async function load(){
     const file = new URLSearchParams(location.search).get("file");
     title.textContent = file;
-
     const r = await fetch(file);
     code = await r.text();
-    document.getElementById("code").textContent = code;
-
+    codeEl.textContent = code;
     pyodide = await loadPyodide();
 }
 
@@ -100,6 +107,10 @@ async function run(){
     pyodide.setStderr({batched: s => output.textContent += s});
     await pyodide.runPythonAsync(code);
 }
+
+const codeEl = document.getElementById("code");
+const output = document.getElementById("output");
+const title = document.getElementById("title");
 
 load();
 </script>

@@ -41,8 +41,8 @@
 
         .grid {
             display: grid;
-            grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));
-            gap: 24px;
+            grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));
+            gap: 28px;
             padding: 40px;
             max-width: 1400px;
             margin: auto;
@@ -55,6 +55,10 @@
             padding: 26px;
             cursor: pointer;
             transition: .25s;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: 140px;
         }
 
         .card:hover {
@@ -77,7 +81,7 @@
 
 <div class="header">
     <h1>🧪 Python Lab</h1>
-    <input class="search" placeholder="Search scripts…" oninput="filter(this.value)">
+    <input class="search" placeholder="Search…" oninput="filter(this.value)">
 </div>
 
 <div id="grid" class="grid"></div>
@@ -87,23 +91,20 @@
     const repo = "Python";
 
     async function loadFiles() {
-        const url = `https://api.github.com/repos/${user}/${repo}/contents`;
-        const res = await fetch(url);
+        const res = await fetch(`https://api.github.com/repos/${user}/${repo}/contents`);
         const files = await res.json();
-
         window.all = files.filter(f => f.name.endsWith(".py"));
         render(window.all);
     }
 
     function render(list) {
-        const grid = document.getElementById("grid");
         grid.innerHTML = "";
         list.forEach(f => {
-            const card = document.createElement("div");
-            card.className = "card";
-            card.innerHTML = `<h3>${f.name}</h3><p>${Math.round(f.size / 1024)} KB</p>`;
-            card.onclick = () => location = `runner.html?file=${f.name}`;
-            grid.appendChild(card);
+            const d = document.createElement("div");
+            d.className = "card";
+            d.innerHTML = `<h3>${f.name}</h3><p>${Math.round(f.size / 1024)} KB</p>`;
+            d.onclick = () => location = `runner.html?file=${f.name}`;
+            grid.appendChild(d);
         });
     }
 
