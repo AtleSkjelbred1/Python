@@ -1,0 +1,13 @@
+flask
+flask-cors
+python-dotenv
+watchdog
+icalendar
+requests
+pypdf
+python-docx
+python-pptx
+send2trash
+pywin32; sys_platform == "win32"
+keyboard; sys_platform == "win32"
+pytest
