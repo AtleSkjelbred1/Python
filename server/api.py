@@ -390,11 +390,11 @@ def archive_apply():
 @bp.route("/files/<int:file_id>/versions")
 def file_versions(file_id):
     with db.cursor() as cur:
-        cur.execute("SELECT hash FROM files WHERE id=?", (file_id,))
+        cur.execute("SELECT id FROM files WHERE id=?", (file_id,))
         row = cur.fetchone()
     if not row:
         return jsonify({"error": "not found"}), 404
-    return jsonify(versions.list_versions(row["hash"]))
+    return jsonify(versions.list_versions(file_id))
 
 
 @bp.route("/files/<int:file_id>/versions/<int:version_id>/restore", methods=["POST"])

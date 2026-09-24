@@ -73,12 +73,12 @@ CREATE TABLE IF NOT EXISTS cleanup_suggestions (
 
 CREATE TABLE IF NOT EXISTS versions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    file_hash TEXT NOT NULL,
+    file_id INTEGER NOT NULL,
     content_hash TEXT NOT NULL,
     snapshot_path TEXT NOT NULL,
     created_at REAL
 );
-CREATE INDEX IF NOT EXISTS idx_versions_hash ON versions(file_hash);
+CREATE INDEX IF NOT EXISTS idx_versions_file_id ON versions(file_id);
 
 CREATE TABLE IF NOT EXISTS retained_tags (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
