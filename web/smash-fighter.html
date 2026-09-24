@@ -236,9 +236,9 @@
       </table>
     </div>
     <div class="tips">
-      Tap a direction + Attack = tilt · hold Attack = charged smash · Jab ×3 by tapping Attack · Tap Jump = short hop, hold = full hop<br>
+      Tap a direction + Attack = tilt · hold Attack = charged smash · Jab ×3 by tapping Attack · Tap Jump = short hop, hold Jump = higher jump (also on the double jump)<br>
       Down in the air = fast fall · Down on a thin platform = drop through · Shield + direction = roll, Shield + down = spot dodge<br>
-      Shield at the moment of impact = parry · Shield in the air = air dodge · Grab, then a direction = throw (Attack = pummel)<br>
+      Specials go through shields · Shield at the moment of impact = parry · Shield in the air = air dodge · Grab, then a direction = throw (Attack = pummel)<br>
       At a ledge: toward/up = climb, Jump, Attack = get-up attack, Shield = roll, away/down = let go · Nyx &amp; Vex can wall jump
     </div>
     <div class="gp-status" id="gp-status">Gamepads: none connected</div>
@@ -442,7 +442,7 @@ class Move{
 function scaleMove(id,base,coef,extra){
   const m=new Move(id,Object.assign({},base,extra||{}));
   if(m.startup!=null) m.startup=Math.max(2,Math.round(m.startup/coef.spd));
-  if(m.recovery!=null) m.recovery=Math.max(4,Math.round(m.recovery/coef.spd));
+  if(m.recovery!=null) m.recovery=Math.max(3,Math.round(m.recovery*0.6/coef.spd)); // end lag kept short so attacks chain
   if(m.active!=null) m.active=Math.max(2,Math.round(m.active));
   if(m.dmg!=null) m.dmg=+(m.dmg*coef.dmg).toFixed(1);
   if(m.bkb!=null) m.bkb=+(m.bkb*coef.kb).toFixed(1);
@@ -509,8 +509,8 @@ const ULTIMATES = {
   vex:{name:'Umbral Execution',style:'lunge'},
 };
 const CHAR_DATA = [
-  {id:'kael',name:'Kael Ironwarden',color:0x3a5a8c,accent:0xc9a24b,weight:130,walkSpeed:2.5,runSpeed:4.3,jumpVel:14.2,doubleJumpVel:12.2,fallSpeed:15,fastFallSpeed:24,airSpeed:2.4,size:1.16,archetype:'power',canBlockProjectiles:true,
-    traits:'Shield blocks projectiles for free', desc:'Heavy knight with a greatsword. Slow but hits like a truck; can block projectiles.'},
+  {id:'kael',name:'Kael Ironwarden',color:0x3a5a8c,accent:0xc9a24b,weight:130,walkSpeed:2.5,runSpeed:4.3,jumpVel:14.2,doubleJumpVel:12.2,fallSpeed:15,fastFallSpeed:24,airSpeed:2.4,size:1.16,archetype:'power',
+    traits:'Guard Stance counters melee and reflects projectiles', desc:'Heavy knight with a greatsword. Slow but hits like a truck; counters and reflects attacks.'},
   {id:'nyx',name:'Nyx Voltara',color:0x8a3ac9,accent:0x2be6ff,weight:78,walkSpeed:3.6,runSpeed:6.7,jumpVel:16.2,doubleJumpVel:14.2,fallSpeed:13,fastFallSpeed:22,airSpeed:4.1,size:0.92,archetype:'speed',wallJump:true,
     traits:'Wall jump, teleport recovery', desc:'Hooded electric duelist with twin daggers. Blindingly fast, short combos, teleport recovery, low weight.'},
   {id:'brakka',name:'Brakka',color:0x6b6459,accent:0xff7a33,weight:162,walkSpeed:2.0,runSpeed:3.5,jumpVel:12.2,doubleJumpVel:10.2,fallSpeed:17,fastFallSpeed:26,airSpeed:1.9,size:1.38,archetype:'giant',superArmorSmash:true,
@@ -618,6 +618,8 @@ class ParticleSystem{
 const GRAVITY_ACCEL = 32;   // units/s^2
 const KB_TO_VEL = 0.09;     // knockback score -> launch speed (units/s)
 const KB_DECAY = 0.35;      // launch speed lost per frame while in hitstun (units/s)
+const JUMP_HOLD_FRAMES = 14; // how long a held jump button keeps reducing gravity
+const JUMP_HOLD_GRAVITY = 0.4;
 // Smash-style knockback: grows with the target's percent and the hit's damage, shrinks with weight.
 function knockbackScore(percentAfterHit,dmg,weight,kbg,bkb){
   const p=percentAfterHit;
@@ -650,7 +652,7 @@ class Fighter{
     this.respawnTimer=0; this.respawnInvuln=0; this.pose=null; this.eliminated=false;
     this.statDamageDealt=0; this.statLongestCombo=0; this.statKOs=0;
     this.comboCount=0; this.comboDamage=0; this.comboTimer=0; this.lastAttacker=null;
-    this.faceLock=0; this.walkCycle=0; this.squash=1;
+    this.faceLock=0; this.walkCycle=0; this.squash=1; this.jumpHold=0; this._jumpHeld=false;
     this.lastLandedMoveKey=null; this.trapRef=null;
     this.hurtR=0.42*cd.size;
     this.events=[];
@@ -770,6 +772,7 @@ class Fighter{
     this.walkCycle+=dt;
     const downP=cmd.down && !this._prevDown; this._prevDown=cmd.down;
     this._chargeHeld = this.action && this.action.move.special ? cmd.special : cmd.attack;
+    this._jumpHeld=cmd.jump;
     if(this.hitstop>0){ this.hitstop--; return; }
     if(this.comboTimer>0 && --this.comboTimer<=0){ this.comboCount=0; this.comboDamage=0; this.lastAttacker=null; }
     if(this.invuln>0) this.invuln--;
@@ -824,7 +827,7 @@ class Fighter{
       this.jumpSquat--; this.vel.x*=0.9;
       if(this.jumpSquat<=0){
         const full=cmd.jump; // released during jumpsquat -> short hop
-        this.vel.y=this.cd.jumpVel*(full?1:0.62); this.grounded=false; this.onPlatform=null; this.state='jump';
+        this.vel.y=this.cd.jumpVel*(full?1:0.62); this.grounded=false; this.onPlatform=null; this.state='jump'; this.jumpHold=full?JUMP_HOLD_FRAMES:0;
         this.events.push({type:'jump'});
       }
       this._physics(dt,world); return;
@@ -885,10 +888,10 @@ class Fighter{
     } else {
       if(cmd.jumpP){
         if(this.cd.wallJump && this.touchingWall && !this.wallJumpUsed){
-          this.vel.y=this.cd.jumpVel*0.95; this.vel.x=-this.touchingWall*6; this.facing=-this.touchingWall;
+          this.vel.y=this.cd.jumpVel*0.95; this.vel.x=-this.touchingWall*6; this.facing=-this.touchingWall; this.jumpHold=JUMP_HOLD_FRAMES;
           this.wallJumpUsed=true; this.fastFalling=false; this.state='jump'; this.events.push({type:'walljump'});
         } else if(this.jumpsLeft>0){
-          this.vel.y=this.cd.doubleJumpVel; this.jumpsLeft--; this.fastFalling=false;
+          this.vel.y=this.cd.doubleJumpVel; this.jumpsLeft--; this.fastFalling=false; this.jumpHold=JUMP_HOLD_FRAMES;
           this.state='doublejump'; this.stateTimer=0; this.events.push({type:'jump2'});
         }
       }
@@ -929,7 +932,7 @@ class Fighter{
     this.ledgeTimer++; this.vel.set(0,0,0); this.state='ledge';
     if(this.ledgeTimer<6) return;
     const toward=this.facing>0?cmd.right:cmd.left, away=this.facing>0?cmd.left:cmd.right;
-    if(cmd.jumpP){ this._ledgeRelease(); this.vel.y=this.cd.jumpVel*1.05; this.vel.x=this.facing*2; this.state='jump'; this.events.push({type:'jump'}); return; }
+    if(cmd.jumpP){ this._ledgeRelease(); this.jumpHold=JUMP_HOLD_FRAMES; this.vel.y=this.cd.jumpVel*1.05; this.vel.x=this.facing*2; this.state='jump'; this.events.push({type:'jump'}); return; }
     if(cmd.attackP){ this._ledgeClimb(); this.startAction('ledgeAttack',LEDGE_ATTACK); this.invuln=Math.max(this.invuln,12); return; }
     if(cmd.shieldP){ this._ledgeClimb(); this._startRoll(this.facing); this.invuln=18; return; }
     if(toward||cmd.up||this.ledgeTimer>360){ this._ledgeClimb(); this.invuln=Math.max(this.invuln,10); return; }
@@ -945,10 +948,10 @@ class Fighter{
     this.airDodged=false; this.jumpsLeft=1; this.upSpecialUsed=false; this.wallJumpUsed=false; this.fastFalling=false;
     this.events.push({type:'land',heavy:this.cd.weight>=140});
     if(this.hitstun>0) return;
-    if(this.helpless){ this.helpless=false; this.state='land'; this.landTimer=12; return; }
+    if(this.helpless){ this.helpless=false; this.state='land'; this.landTimer=8; return; }
     if(this.state==='attack' && this.action){
       const m=this.action.move;
-      if(m.id.indexOf('aerial')===0){ this.action=null; this.armorActive=false; this.state='land'; this.landTimer=m.landLag||6; }
+      if(m.id.indexOf('aerial')===0){ this.action=null; this.armorActive=false; this.state='land'; this.landTimer=Math.round((m.landLag||6)*0.6); }
       else if(m.recoveryMove||m.teleport){ this.action=null; this.state='land'; this.landTimer=8; }
       return;
     }
@@ -960,7 +963,10 @@ class Fighter{
     const prevY=this.pos.y;
     if(this.grounded && this.onPlatform && this.onPlatform._dx) this.pos.x+=this.onPlatform._dx;
     if(!this.grounded){
-      this.vel.y-=GRAVITY_ACCEL*dt;
+      // holding jump early in a rising jump lowers gravity, so a held jump climbs higher than a tapped one
+      let g=GRAVITY_ACCEL;
+      if(this.jumpHold>0){ if(this._jumpHeld && this.vel.y>0 && this.hitstun<=0){ g*=JUMP_HOLD_GRAVITY; this.jumpHold--; } else this.jumpHold=0; }
+      this.vel.y-=g*dt;
       if(this.fastFalling) this.vel.y=Math.min(this.vel.y,-this.cd.fastFallSpeed);
       else this.vel.y=Math.max(this.vel.y,-(this.hitstun>0?this.cd.fastFallSpeed*1.5:this.cd.fallSpeed));
     }
@@ -1401,7 +1407,7 @@ class AIController{
   }
   perceive(opp){
     this.buffer.push({x:opp.pos.x,y:opp.pos.y,vx:opp.vel.x,vy:opp.vel.y,percent:opp.percent,
-      attacking:opp.state==='attack',phase:opp.actionPhase,grounded:opp.grounded,hitstun:opp.hitstun>0,
+      attacking:opp.state==='attack',special:!!(opp.action&&(opp.action.move.special||opp.action.move.ultimate)),phase:opp.actionPhase,grounded:opp.grounded,hitstun:opp.hitstun>0,
       ledge:opp.state==='ledge',helpless:opp.helpless,gone:opp.eliminated||opp.state==='respawn'});
     while(this.buffer.length>this.p.react) this.buffer.shift();
     return this.buffer[0];
@@ -1455,7 +1461,6 @@ class AIController{
       if(pr.owner===f||pr.kind!=='bolt') continue;
       const ddx=f.pos.x-pr.pos.x;
       if(Math.abs(ddx)<3.5 && Math.sign(pr.vel.x)===Math.sign(ddx) && Math.abs(pr.pos.y-f.pos.y-1)<1.5 && R()>P.rand){
-        if(f.grounded&&(R()<P.shield||f.cd.canBlockProjectiles)){ cmd.shield=true; cmd.shieldP=this.holdShield===0; this.holdShield=10; return cmd; }
         if(f.grounded){ cmd.jumpP=true; cmd.jump=true; return cmd; }
       }
     }
@@ -1482,6 +1487,7 @@ class AIController{
     if(seen.attacking && seen.phase!=='recovery' && dist<3.6 && Math.abs(dy)<2.5 && f.grounded){
       this.mode='defend';
       const r=R();
+      if(seen.special){ if(this.diff!=='easy'&&r<0.6){ cmd.shieldP=true; dx>0?cmd.left=true:cmd.right=true; } return cmd; }
       if(r<P.parry){ cmd.shieldP=true; cmd.shield=true; return cmd; }
       if(r<P.parry+P.shield+danger){ this.holdShield=10+(R()*16|0); cmd.shield=true; cmd.shieldP=true; return cmd; }
       if(this.diff!=='easy' && r<P.parry+P.shield+danger+0.15){ cmd.shieldP=true; dx>0?cmd.left=true:cmd.right=true; return cmd; }
@@ -1842,7 +1848,9 @@ class Game{
     if(defender.invuln>0||defender.pose||defender.state==='respawn'||defender.eliminated) return false;
     if(defender.counterActive){ this._counterHit(defender,attacker,move,opts); return false; }
     const at=new THREE.Vector3(hb.x,hb.y,0.4);
-    if(defender.state==='shield' && defender.shielding){
+    const pierces=move.special||move.ultimate;
+    if(pierces && defender.state==='shield' && defender.shielding) this._floatText(defender,'SHIELD PIERCED');
+    if(defender.state==='shield' && defender.shielding && !pierces){
       if(defender.parryWindow>0){
         AUDIO.playParry();
         this.particles.spawn(at,22,{color:[0xffffff,0x9fe0ff],speed:0.25,life:20,additive:true});
@@ -1852,11 +1860,6 @@ class Game{
         if(!opts.remote){ attacker.interrupt(); attacker.hitstop=8; attacker.hitstun=28; attacker.state='hitstun'; attacker.vel.set(-dir*2,0,0); }
         this._floatText(defender,'PARRY!');
         this.cameraRig.kick(0.5);
-        return false;
-      }
-      if(defender.cd.canBlockProjectiles && move.projectile){
-        AUDIO.playSword(); this.particles.spawn(at,12,{color:0xffd27a,speed:0.2,life:14,additive:true});
-        this._floatText(defender,'BLOCKED');
         return false;
       }
       defender.shieldHP=Math.max(0,defender.shieldHP-move.dmg*1.8-3);
@@ -1897,7 +1900,7 @@ class Game{
     defender.hitstun=Math.round(clamp(kb*0.34,6,80))+(move.stun||0);
     defender.state='hitstun'; defender.tumble=kb>75;
     defender.squash=kb>60?0.78:0.9;
-    const hs=Math.round(clamp(dmg*0.55+3,3,move.ultimate?26:14));
+    const hs=Math.round(clamp(dmg*0.45+2,2,move.ultimate?22:10));
     defender.hitstop=hs; if(!opts.remote){ attacker.hitstop=hs; attacker._landedHit=true; }
     if(defender.lastAttacker===attacker && defender.comboTimer>0){ defender.comboCount++; defender.comboDamage+=dmg; }
     else { defender.comboCount=1; defender.comboDamage=dmg; }
