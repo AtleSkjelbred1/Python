@@ -11,6 +11,8 @@ menu.
 - Play: https://atleskjelbred1.github.io/Python/web/smash-fighter.html
 - Source: [`web/smash-fighter.html`](web/smash-fighter.html) — or just open the
   file in a browser (it loads Three.js from cdnjs, so it needs internet).
+- Characters, animations and stage props: [KayKit](https://kaylousberg.com) by
+  Kay Lousberg (CC0), embedded in the HTML file.
 
 ## File Sorter (local Windows app)
 
