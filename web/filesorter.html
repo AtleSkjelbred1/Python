@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>File Sorter</title>
+<style>
+  :root {
+    --bg: #14161a;
+    --bg-alt: #1b1e24;
+    --panel: #1e2128;
+    --panel-hover: #262a33;
+    --border: #2c313a;
+    --text: #d8dce3;
+    --text-dim: #8b93a1;
+    --text-faint: #5b6270;
+    --accent: #5b9dd9;
+    --accent-dim: #375b7a;
+    --danger: #d9736b;
+    --warn: #d9b25b;
+    --ok: #6fbf8c;
+    --radius: 6px;
+    --course-1: #5b9dd9;
+    --course-2: #9d7fd9;
+    --course-3: #d97f9d;
+    --course-4: #6fbf8c;
+    --course-5: #d9b25b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 13px/1.45 -apple-system, "Segoe UI", Arial, sans-serif; }
+  body { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  button { font-family: inherit; font-size: inherit; cursor: pointer; }
+  input { font-family: inherit; font-size: inherit; }
+  a { color: var(--accent); text-decoration: none; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* Top bar */
+  #topbar { display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+    background: var(--bg-alt); border-bottom: 1px solid var(--border); flex: 0 0 auto; }
+  #search-wrap { flex: 1; position: relative; display: flex; align-items: center; }
+  #search { width: 100%; background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    border-radius: var(--radius); padding: 7px 10px 7px 30px; outline: none; }
+  #search:focus { border-color: var(--accent-dim); }
+  #search-icon { position: absolute; left: 9px; color: var(--text-faint); pointer-events: none; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; background: var(--panel-hover);
+    border: 1px solid var(--border); border-radius: 999px; padding: 2px 9px; font-size: 12px; color: var(--text-dim); }
+  #chips { display: flex; gap: 6px; flex-wrap: wrap; margin-left: 6px; }
+  .btn { background: var(--panel); border: 1px solid var(--border); color: var(--text-dim);
+    border-radius: var(--radius); padding: 6px 10px; }
+  .btn:hover { background: var(--panel-hover); color: var(--text); }
+  .btn.active { border-color: var(--accent-dim); color: var(--accent); background: rgba(91,157,217,.12); }
+  .btn.primary { border-color: var(--accent-dim); color: var(--accent); }
+  #progress { font-size: 11px; color: var(--text-faint); white-space: nowrap; }
+
+  /* Tabs */
+  #tabs { display: flex; gap: 2px; padding: 0 12px; background: var(--bg-alt); border-bottom: 1px solid var(--border); flex: 0 0 auto; }
+  .tab { padding: 9px 14px; color: var(--text-dim); border-bottom: 2px solid transparent; font-size: 12.5px; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  .tab .count { color: var(--text-faint); margin-left: 4px; }
+
+  /* Layout */
+  #main { flex: 1; display: flex; min-height: 0; }
+  #left { width: 220px; flex: 0 0 auto; background: var(--bg-alt); border-right: 1px solid var(--border);
+    overflow-y: auto; padding: 10px 0; }
+  #center { flex: 1; min-width: 0; overflow-y: auto; position: relative; }
+  #right { width: 300px; flex: 0 0 auto; background: var(--bg-alt); border-left: 1px solid var(--border);
+    overflow-y: auto; padding: 12px; }
+
+  .side-section { padding: 4px 12px 12px; }
+  .side-title { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-faint);
+    margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+  .side-item { display: flex; align-items: center; justify-content: space-between; gap: 6px;
+    padding: 5px 8px; border-radius: var(--radius); color: var(--text-dim); cursor: pointer; }
+  .side-item:hover { background: var(--panel-hover); color: var(--text); }
+  .side-item.active { background: rgba(91,157,217,.12); color: var(--accent); }
+  .side-item .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+  .side-item .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .side-item .n { color: var(--text-faint); font-size: 11px; }
+  .side-item .icon-btn { opacity: 0; font-size: 11px; color: var(--text-faint); }
+  .side-item:hover .icon-btn { opacity: 1; }
+  .tree-folder { padding-left: 8px; font-size: 12px; color: var(--text-faint); }
+
+  /* File list */
+  table#file-table { width: 100%; border-collapse: collapse; }
+  #file-table thead th { text-align: left; font-size: 11px; color: var(--text-faint); text-transform: uppercase;
+    letter-spacing: .04em; padding: 8px 10px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--center-bg, var(--bg)); }
+  #file-table tbody tr { cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.03); }
+  #file-table tbody tr:hover { background: var(--panel-hover); }
+  #file-table tbody tr.selected { background: rgba(91,157,217,.10); }
+  #file-table td { padding: 7px 10px; vertical-align: middle; white-space: nowrap; }
+  .fname { display: flex; align-items: center; gap: 8px; max-width: 380px; overflow: hidden; text-overflow: ellipsis; }
+  .ficon { flex: 0 0 auto; opacity: .8; }
+  .tagrow { display: flex; gap: 4px; flex-wrap: wrap; max-width: 260px; }
+  .tag-chip { font-size: 10.5px; padding: 1px 7px; border-radius: 999px; color: #10121a; font-weight: 600; }
+  .tag-chip.low-conf { background: transparent !important; color: var(--text-dim) !important; border: 1px dashed var(--text-faint); }
+  .muted { color: var(--text-faint); }
+  #empty-state { padding: 60px 20px; text-align: center; color: var(--text-faint); }
+
+  /* Right panel */
+  .preview-box { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    min-height: 140px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; overflow: hidden; }
+  .preview-box img { max-width: 100%; max-height: 220px; }
+  .preview-box iframe { width: 100%; height: 260px; border: 0; }
+  .detail-row { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+  .detail-row .k { color: var(--text-faint); }
+  .detail-row .v { color: var(--text); text-align: right; overflow: hidden; text-overflow: ellipsis; }
+  .section-title { font-size: 11px; text-transform: uppercase; color: var(--text-faint); margin: 14px 0 6px; letter-spacing: .05em; }
+  .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+  .action-grid .btn { text-align: center; }
+  #tag-editor { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  #tag-add-input { width: 100%; margin-top: 6px; background: var(--panel); border: 1px solid var(--border);
+    color: var(--text); border-radius: var(--radius); padding: 5px 8px; }
+  .version-item { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dashed rgba(255,255,255,.05); font-size: 12px; }
+
+  /* Panels for tabs */
+  .panel-body { padding: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin-bottom: 10px; }
+  .dup-group { margin-bottom: 14px; }
+  .dup-file-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 12.5px; }
+  .dup-file-row input { accent-color: var(--accent); }
+  .week-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+  .day-col { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; min-height: 200px; }
+  .day-head { font-size: 11px; color: var(--text-faint); text-transform: uppercase; margin-bottom: 6px; }
+  .event-card { background: var(--panel-hover); border-radius: var(--radius); padding: 6px 8px; margin-bottom: 6px; font-size: 11.5px; cursor: pointer; }
+  .event-card.deadline { border-left: 3px solid var(--danger); }
+  .event-card.lecture { border-left: 3px solid var(--accent); }
+  .event-card.lab { border-left: 3px solid var(--ok); }
+  .event-card .cnt { color: var(--text-faint); font-size: 10.5px; }
+  .event-card.overdue { background: rgba(217,115,107,.16); }
+  .rule-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.04); font-size: 12.5px; }
+  .rule-row .grow { flex: 1; }
+  .storage-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 12px; }
+  .storage-bar-row .lbl { width: 120px; overflow: hidden; text-overflow: ellipsis; }
+  .storage-bar-track { flex: 1; height: 10px; background: var(--panel); border-radius: 5px; overflow: hidden; }
+  .storage-bar-fill { height: 100%; background: var(--accent); }
+  .storage-bar-row .val { width: 70px; text-align: right; color: var(--text-faint); }
+
+  /* Toast */
+  #toast-wrap { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 50; display: flex; flex-direction: column; gap: 6px; }
+  .toast { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 8px 12px; display: flex; align-items: center; gap: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.4); font-size: 12.5px; }
+  .toast button { background: none; border: none; color: var(--accent); }
+  #banner { display: none; background: rgba(217,178,91,.15); color: var(--warn); border-bottom: 1px solid var(--border);
+    padding: 6px 12px; font-size: 12px; }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div id="banner">Server not reachable — showing sample data. Start the local server to see your real files.</div>
+
+<div id="topbar">
+  <div id="search-wrap">
+    <span id="search-icon">⌕</span>
+    <input id="search" placeholder="Search files… try: ing2508 lab pdf last week   (Ctrl+K)" autocomplete="off">
+  </div>
+  <div id="chips"></div>
+  <button class="btn" id="follow-btn" title="Poll the active Explorer window and filter to its folder">Follow Explorer</button>
+  <span id="progress"></span>
+</div>
+
+<div id="tabs">
+  <div class="tab active" data-tab="files">Files</div>
+  <div class="tab" data-tab="week">Week</div>
+  <div class="tab" data-tab="review">Review <span class="count" id="review-count"></span></div>
+  <div class="tab" data-tab="duplicates">Duplicates <span class="count" id="dup-count"></span></div>
+  <div class="tab" data-tab="cleanup">Cleanup <span class="count" id="cleanup-count"></span></div>
+  <div class="tab" data-tab="storage">Storage</div>
+</div>
+
+<div id="main">
+  <div id="left">
+    <div class="side-section">
+      <div class="side-title">Collections</div>
+      <div id="collections-list"></div>
+      <div class="side-item" id="save-search" style="color:var(--accent)">+ Save current search</div>
+    </div>
+    <div class="side-section">
+      <div class="side-title">Tags</div>
+      <div id="tags-list"></div>
+    </div>
+    <div class="side-section">
+      <div class="side-title">Watched folders</div>
+      <div id="folders-list"></div>
+    </div>
+  </div>
+
+  <div id="center"></div>
+
+  <div id="right"></div>
+</div>
+
+<div id="toast-wrap"></div>
+
+<script>
+(function () {
+"use strict";
+
+/* ---------------------------------------------------------------------
+ * State
+ * ------------------------------------------------------------------- */
+const API_BASE = "http://localhost:5000";
+const COURSE_COLORS = ["#5b9dd9", "#9d7fd9", "#d97f9d", "#6fbf8c", "#d9b25b"];
+
+const state = {
+  serverOnline: false,
+  files: [],
+  tags: [],
+  collections: [],
+  events: [],
+  duplicates: [],
+  nearDuplicates: [],
+  rules: [],
+  cleanup: [],
+  storage: null,
+  activeTab: "files",
+  activeTagFilter: null,
+  searchText: "",
+  selected: new Set(),
+  focusedId: null,
+  follow: false,
+  status: { scanning: false, total: 0, done: 0 },
+};
+
+const courseColorMap = {};
+function colorForCourse(course) {
+  if (!course) return "#5b6270";
+  if (!courseColorMap[course]) {
+    const idx = Object.keys(courseColorMap).length % COURSE_COLORS.length;
+    courseColorMap[course] = COURSE_COLORS[idx];
+  }
+  return courseColorMap[course];
+}
+
+/* ---------------------------------------------------------------------
+ * Mock data (used when the local server cannot be reached)
+ * ------------------------------------------------------------------- */
+function buildMockData() {
+  const now = Date.now();
+  const day = 86400000;
+  const courses = ["ING2508", "ING1507", "INFOSEC101"];
+  const kinds = [
+    ["Lab_rapport", ".pdf"], ["Forelesningsnotater", ".pdf"], ["Oppgave", ".docx"],
+    ["Måljournal", ".tex"], ["Presentasjon", ".pptx"], ["Notater", ".md"],
+    ["Datablad", ".pdf"], ["Screenshot_2025", ".png"], ["installer", ".exe"],
+  ];
+  const files = [];
+  let id = 1;
+  for (let i = 0; i < 25; i++) {
+    const course = courses[i % courses.length];
+    const [base, ext] = kinds[i % kinds.length];
+    const isDup = i % 7 === 0;
+    const name = `${base}_${course}${isDup ? " (1)" : ""}${ext}`;
+    const ctime = now - Math.floor(Math.random() * 20) * day;
+    const confidence = i % 5 === 0 ? 0.4 : 0.7 + Math.random() * 0.3;
+    files.push({
+      id: id++,
+      name,
+      path: `C:\\Users\\atle\\Downloads\\${name}`,
+      ext,
+      size: 20000 + Math.floor(Math.random() * 4000000),
+      ctime: ctime / 1000,
+      mtime: ctime / 1000,
+      hash: "mock" + i,
+      tags: [
+        { tag: course, source: "rule", confidence },
+        { tag: ext.replace(".", ""), source: "rule", confidence: 1.0 },
+      ],
+    });
+  }
+  const events = [];
+  const titles = [
+    ["ING2508 Lab: Kretsteknikk", "lab", "ING2508"],
+    ["ING1507 Forelesning", "lecture", "ING1507"],
+    ["ING2508 Innlevering måljournal", "deadline", "ING2508"],
+    ["INFOSEC101 Deadline: essay", "deadline", "INFOSEC101"],
+    ["ING1507 Lab", "lab", "ING1507"],
+  ];
+  titles.forEach((t, i) => {
+    const start = new Date(now + (i - 1) * day * 1.3);
+    events.push({
+      uid: "evt" + i, title: t[0], kind: t[1], course: t[2],
+      start: start.toISOString(), end: new Date(start.getTime() + 3600000).toISOString(), source: "canvas",
+    });
+  });
+  return { files, events };
+}
+
+/* ---------------------------------------------------------------------
+ * API helpers
+ * ------------------------------------------------------------------- */
+async function api(path, opts) {
+  const res = await fetch(API_BASE + path, Object.assign({ headers: { "Content-Type": "application/json" } }, opts));
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const ct = res.headers.get("content-type") || "";
+  return ct.includes("application/json") ? res.json() : res.text();
+}
+
+async function tryLoadFromServer() {
+  try {
+    const [files, tags, collections, weekEvents, status] = await Promise.all([
+      api("/files"), api("/tags"), api("/collections"), api("/week.json"), api("/status"),
+    ]);
+    state.files = files;
+    state.tags = tags;
+    state.collections = collections;
+    state.events = weekEvents;
+    state.status = status;
+    state.serverOnline = true;
+    document.getElementById("banner").style.display = "none";
+    refreshDuplicates();
+    refreshCleanup();
+    refreshStorage();
+    connectEvents();
+  } catch (e) {
+    const mock = buildMockData();
+    state.files = mock.files;
+    state.events = mock.events;
+    state.tags = computeTagsFromFiles(mock.files);
+    state.collections = [];
+    state.serverOnline = false;
+    document.getElementById("banner").style.display = "block";
+  }
+}
+
+function computeTagsFromFiles(files) {
+  const counts = {};
+  files.forEach(f => (f.tags || []).forEach(t => { counts[t.tag] = (counts[t.tag] || 0) + 1; }));
+  return Object.keys(counts).map(tag => ({ tag, count: counts[tag] }));
+}
+
+async function refreshDuplicates() {
+  if (!state.serverOnline) return;
+  try {
+    state.duplicates = await api("/duplicates");
+    state.nearDuplicates = await api("/near-duplicates");
+  } catch (e) { /* ignore */ }
+  renderTabCounts();
+  if (state.activeTab === "duplicates") renderCenter();
+}
+
+async function refreshCleanup() {
+  if (!state.serverOnline) return;
+  try { state.cleanup = await api("/cleanup"); } catch (e) { /* ignore */ }
+  renderTabCounts();
+  if (state.activeTab === "cleanup") renderCenter();
+}
+
+async function refreshStorage() {
+  if (!state.serverOnline) return;
+  try { state.storage = await api("/storage"); } catch (e) { /* ignore */ }
+  if (state.activeTab === "storage") renderCenter();
+}
+
+function connectEvents() {
+  try {
+    const es = new EventSource(API_BASE + "/events");
+    es.addEventListener("index-progress", (ev) => {
+      state.status = JSON.parse(ev.data);
+      renderProgress();
+    });
+    ["file-indexed", "file-removed", "files-moved", "files-deleted", "tags-changed"].forEach(evt => {
+      es.addEventListener(evt, () => tryLoadFromServer());
+    });
+  } catch (e) { /* SSE unsupported */ }
+  setInterval(() => { if (state.serverOnline) tryLoadFromServer(); }, 2000);
+}
+
+/* ---------------------------------------------------------------------
+ * Filtering / search
+ * ------------------------------------------------------------------- */
+function parseSearch(text) {
+  const tokens = text.trim().split(/\s+/).filter(Boolean);
+  const filters = { text: [], tag: null, ext: null, timeframe: null };
+  const knownExts = ["pdf", "docx", "pptx", "tex", "txt", "md", "png", "jpg", "exe"];
+  tokens.forEach(tok => {
+    const lower = tok.toLowerCase();
+    if (state.tags.some(t => t.tag.toLowerCase() === lower)) filters.tag = state.tags.find(t => t.tag.toLowerCase() === lower).tag;
+    else if (knownExts.includes(lower)) filters.ext = lower;
+    else if (lower === "week" || lower === "today") filters.timeframe = lower;
+    else if (["last", "week,"].includes(lower)) { /* part of "last week" */ }
+    else filters.text.push(tok);
+  });
+  return filters;
+}
+
+function filteredFiles() {
+  const filters = parseSearch(state.searchText);
+  return state.files.filter(f => {
+    if (state.activeTagFilter && !(f.tags || []).some(t => t.tag === state.activeTagFilter)) return false;
+    if (filters.tag && !(f.tags || []).some(t => t.tag === filters.tag)) return false;
+    if (filters.ext && f.ext && f.ext.replace(".", "") !== filters.ext) return false;
+    if (filters.text.length) {
+      const hay = f.name.toLowerCase();
+      if (!filters.text.every(t => hay.includes(t.toLowerCase()))) return false;
+    }
+    return true;
+  });
+}
+
+/* ---------------------------------------------------------------------
+ * Rendering: shell
+ * ------------------------------------------------------------------- */
+function renderProgress() {
+  const el = document.getElementById("progress");
+  if (state.status.scanning) {
+    el.textContent = `Indexing… ${state.status.done}/${state.status.total}`;
+  } else {
+    el.textContent = "";
+  }
+}
+
+function renderChips() {
+  const filters = parseSearch(state.searchText);
+  const chips = [];
+  if (filters.tag) chips.push(`tag: ${filters.tag}`);
+  if (filters.ext) chips.push(`type: ${filters.ext}`);
+  if (filters.timeframe) chips.push(filters.timeframe);
+  document.getElementById("chips").innerHTML = chips.map(c => `<span class="chip">${escapeHtml(c)}</span>`).join("");
+}
+
+function renderTabCounts() {
+  const lowConf = state.files.filter(f => (f.tags || []).some(t => t.confidence < 0.6)).length;
+  document.getElementById("review-count").textContent = lowConf ? `(${lowConf})` : "";
+  const dupCount = (state.duplicates || []).length + (state.nearDuplicates || []).length;
+  document.getElementById("dup-count").textContent = dupCount ? `(${dupCount})` : "";
+  const cleanupCount = (state.cleanup || []).length;
+  document.getElementById("cleanup-count").textContent = cleanupCount ? `(${cleanupCount})` : "";
+}
+
+function renderLeft() {
+  document.getElementById("collections-list").innerHTML = (state.collections || []).map(c =>
+    `<div class="side-item" data-collection="${escapeHtml(c.name)}"><span class="label">${escapeHtml(c.name)}</span></div>`
+  ).join("") || `<div class="tree-folder">No saved searches yet</div>`;
+
+  document.getElementById("tags-list").innerHTML = (state.tags || []).map(t => `
+    <div class="side-item ${state.activeTagFilter === t.tag ? "active" : ""}" data-tag="${escapeHtml(t.tag)}">
+      <span class="dot" style="background:${colorForCourse(t.tag)}"></span>
+      <span class="label">${escapeHtml(t.tag)}</span>
+      <span class="n">${t.count}</span>
+      <span class="icon-btn" data-open-tag="${escapeHtml(t.tag)}" title="Open in Explorer">⧉</span>
+    </div>`).join("");
+
+  const folders = state.serverOnline ? (state.watchedFolders || []) : ["Downloads", "Documents"];
+  document.getElementById("folders-list").innerHTML = folders.map(f => `<div class="tree-folder">📁 ${escapeHtml(String(f))}</div>`).join("");
+}
+
+/* ---------------------------------------------------------------------
+ * Rendering: center panel per tab
+ * ------------------------------------------------------------------- */
+function fileIcon(ext) {
+  const map = { ".pdf": "📕", ".docx": "📄", ".pptx": "📊", ".tex": "📝", ".txt": "📄", ".md": "📄",
+    ".png": "🖼", ".jpg": "🖼", ".jpeg": "🖼", ".exe": "⚙", ".msi": "⚙", ".zip": "🗜" };
+  return map[ext] || "📄";
+}
+
+function fmtSize(bytes) {
+  if (!bytes) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let i = 0, v = bytes;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+function fmtDate(ts) {
+  if (!ts) return "";
+  const d = new Date(ts * 1000);
+  return d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function renderCenter() {
+  const el = document.getElementById("center");
+  if (state.activeTab === "files" || state.activeTab === "review") {
+    renderFileList(el);
+  } else if (state.activeTab === "week") {
+    renderWeek(el);
+  } else if (state.activeTab === "duplicates") {
+    renderDuplicates(el);
+  } else if (state.activeTab === "cleanup") {
+    renderCleanup(el);
+  } else if (state.activeTab === "storage") {
+    renderStorage(el);
+  }
+}
+
+function renderFileList(el) {
+  let files = filteredFiles();
+  if (state.activeTab === "review") files = files.filter(f => (f.tags || []).some(t => t.confidence < 0.6));
+
+  if (!files.length) {
+    el.innerHTML = `<div id="empty-state">No files match. Try clearing filters, or start the local server to see your real files.</div>`;
+    return;
+  }
+
+  const rows = files.map(f => {
+    const selected = state.selected.has(f.id);
+    const tagChips = (f.tags || []).map(t => {
+      if (t.confidence < 0.6) return `<span class="tag-chip low-conf" title="${t.source} · ${(t.confidence*100).toFixed(0)}%">${escapeHtml(t.tag)} ?</span>`;
+      return `<span class="tag-chip" style="background:${colorForCourse(t.tag)}" title="${t.source} · ${(t.confidence*100).toFixed(0)}%">${escapeHtml(t.tag)}</span>`;
+    }).join("");
+    return `<tr data-id="${f.id}" class="${selected ? "selected" : ""}">
+      <td><div class="fname"><span class="ficon">${fileIcon(f.ext)}</span><span title="${escapeHtml(f.path)}">${escapeHtml(f.name)}</span></div></td>
+      <td class="muted">${fmtDate(f.ctime)}</td>
+      <td class="muted">${fmtSize(f.size)}</td>
+      <td><div class="tagrow">${tagChips}</div></td>
+    </tr>`;
+  }).join("");
+
+  el.innerHTML = `<table id="file-table">
+    <thead><tr><th>Name</th><th>Date</th><th>Size</th><th>Tags</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+
+  el.querySelectorAll("tbody tr").forEach(tr => {
+    tr.addEventListener("click", (ev) => onFileRowClick(ev, Number(tr.dataset.id)));
+    tr.addEventListener("dblclick", () => openFile(Number(tr.dataset.id)));
+    tr.addEventListener("contextmenu", (ev) => { ev.preventDefault(); showContextMenu(ev, Number(tr.dataset.id)); });
+  });
+}
+
+function renderWeek(el) {
+  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const now = new Date();
+  const monday = new Date(now); monday.setDate(now.getDate() - ((now.getDay() + 6) % 7)); monday.setHours(0,0,0,0);
+
+  const cols = days.map((label, i) => {
+    const dayStart = new Date(monday); dayStart.setDate(monday.getDate() + i);
+    const dayEnd = new Date(dayStart); dayEnd.setDate(dayStart.getDate() + 1);
+    const dayEvents = (state.events || []).filter(e => {
+      const s = new Date(e.start);
+      return s >= dayStart && s < dayEnd;
+    });
+    const cards = dayEvents.map(e => {
+      const isDeadline = e.kind === "deadline";
+      const hoursLeft = (new Date(e.start) - now) / 3600000;
+      const linkedFiles = state.files.filter(f => (f.tags || []).some(t => t.event_uid === e.uid));
+      const overdue = isDeadline && hoursLeft < 48 && hoursLeft > 0 &&
+        !linkedFiles.some(f => (Date.now()/1000 - f.mtime) < 3 * 86400);
+      const countLabel = linkedFiles.length ? `${linkedFiles.length} file(s)` : "no files";
+      const pkgBtn = isDeadline ? `<div><button class="btn" data-build-pkg="${e.uid}" style="margin-top:4px;font-size:10.5px;padding:3px 6px;">Build package</button></div>` : "";
+      return `<div class="event-card ${e.kind} ${overdue ? "overdue" : ""}" data-event="${e.uid}">
+        <div>${escapeHtml(e.title)}</div>
+        <div class="cnt">${e.course || ""} · ${countLabel}${isDeadline ? " · " + Math.max(0, Math.round(hoursLeft)) + "h left" : ""}</div>
+        ${pkgBtn}
+      </div>`;
+    }).join("");
+    return `<div class="day-col">
+      <div class="day-head">${label} ${dayStart.getDate()}</div>
+      ${cards || '<div class="muted" style="font-size:11px;">No events</div>'}
+    </div>`;
+  }).join("");
+
+  el.innerHTML = `<div class="panel-body"><div class="week-grid">${cols}</div></div>`;
+  el.querySelectorAll("[data-event]").forEach(card => {
+    card.addEventListener("click", (ev) => {
+      if (ev.target.closest("[data-build-pkg]")) return;
+      state.activeTab = "files";
+      state.activeTagFilter = null;
+      state.searchText = "event:" + card.dataset.event;
+      switchTab("files");
+    });
+  });
+  el.querySelectorAll("[data-build-pkg]").forEach(btn => {
+    btn.addEventListener("click", (ev) => { ev.stopPropagation(); buildPackage(btn.dataset.buildPkg); });
+  });
+}
+
+function renderDuplicates(el) {
+  const exactGroups = (state.duplicates || []).map(g => {
+    const rows = g.files.map(f => `
+      <div class="dup-file-row">
+        <input type="radio" name="keep-${g.hash}" ${f.id === g.suggested_keeper_id ? "checked" : ""} data-keep="${f.id}">
+        <span>${escapeHtml(f.name)}</span>
+        <span class="muted">${escapeHtml(f.path)}</span>
+      </div>`).join("");
+    return `<div class="card dup-group" data-hash="${g.hash}">
+      <div style="display:flex;justify-content:space-between;">
+        <strong>Exact duplicates (${g.files.length})</strong>
+        <span class="muted">${fmtSize(g.wasted_bytes)} to free</span>
+      </div>
+      ${rows}
+      <div class="action-grid">
+        <button class="btn" data-resolve-dup="${g.hash}">Keep selected, remove rest</button>
+      </div>
+    </div>`;
+  }).join("");
+
+  const nearGroups = (state.nearDuplicates || []).map(p => `
+    <div class="card">
+      <div><strong>Near duplicate</strong> <span class="muted">${(p.similarity * 100).toFixed(0)}% similar</span></div>
+      <div class="muted">${escapeHtml(p.a.name)} ⇄ ${escapeHtml(p.b.name)}</div>
+      <div class="action-grid">
+        <button class="btn" data-diff="${p.a.id},${p.b.id}">Show diff</button>
+      </div>
+    </div>`).join("");
+
+  el.innerHTML = `<div class="panel-body">
+    <div class="section-title">Exact duplicates</div>
+    ${exactGroups || '<div class="muted">No exact duplicates found.</div>'}
+    <div class="section-title">Near duplicates</div>
+    ${nearGroups || '<div class="muted">No near-duplicate text files found.</div>'}
+  </div>`;
+
+  el.querySelectorAll("[data-resolve-dup]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const hash = btn.dataset.resolveDup;
+      const checked = el.querySelector(`input[name="keep-${hash}"]:checked`);
+      if (!checked) return;
+      if (!confirm("Remove the other files in this group? They will go to the Recycle Bin.")) return;
+      if (state.serverOnline) {
+        await api(`/duplicates/${hash}/resolve`, { method: "POST", body: JSON.stringify({ keep_id: Number(checked.dataset.keep) }) });
+        showToast("Duplicates resolved");
+        refreshDuplicates();
+      } else {
+        showToast("Demo mode: no server connected");
+      }
+    });
+  });
+  el.querySelectorAll("[data-diff]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const [a, b] = btn.dataset.diff.split(",");
+      if (!state.serverOnline) { showToast("Demo mode: no server connected"); return; }
+      const result = await api(`/diff?a=${a}&b=${b}`);
+      alert((result.diff || []).join("\n") || "No differences.");
+    });
+  });
+}
+
+function renderCleanup(el) {
+  const rows = (state.cleanup || []).map(s => `
+    <div class="card" data-suggestion="${s.id}">
+      <div style="display:flex;justify-content:space-between;">
+        <span>${escapeHtml(s.path)}</span>
+        <span class="muted">${escapeHtml(s.action)}</span>
+      </div>
+      <div class="action-grid">
+        <button class="btn" data-approve="${s.id}">Approve</button>
+        <button class="btn" data-dismiss="${s.id}">Dismiss</button>
+      </div>
+    </div>`).join("");
+
+  const ruleRows = (state.rules || []).map(r => `
+    <div class="rule-row">
+      <span class="grow">${escapeHtml(r.name)} — ${escapeHtml(r.pattern || "*")} in ${escapeHtml(r.folder || "any")}, older than ${r.age_days || 0}d → ${escapeHtml(r.action)}</span>
+      <button class="btn" data-delete-rule="${r.id}">Delete</button>
+    </div>`).join("");
+
+  el.innerHTML = `<div class="panel-body">
+    <div class="section-title">Suggestions <button class="btn" id="approve-all" style="margin-left:8px;font-size:11px;">Approve all</button></div>
+    ${rows || '<div class="muted">No cleanup suggestions right now.</div>'}
+    <div class="section-title">Rules</div>
+    ${ruleRows || '<div class="muted">No rules defined yet.</div>'}
+    <div class="card">
+      <div class="section-title" style="margin-top:0;">New rule</div>
+      <input id="rule-name" placeholder="Name" style="width:100%;margin-bottom:6px;padding:5px;background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:4px;">
+      <input id="rule-pattern" placeholder="Pattern e.g. *.exe" style="width:100%;margin-bottom:6px;padding:5px;background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:4px;">
+      <input id="rule-folder" placeholder="Folder (substring, optional)" style="width:100%;margin-bottom:6px;padding:5px;background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:4px;">
+      <input id="rule-age" type="number" placeholder="Older than (days)" style="width:100%;margin-bottom:6px;padding:5px;background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:4px;">
+      <select id="rule-action" style="width:100%;margin-bottom:6px;padding:5px;background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:4px;">
+        <option value="delete">Suggest delete</option>
+        <option value="archive">Suggest archive</option>
+      </select>
+      <button class="btn primary" id="add-rule">Add rule</button>
+    </div>
+  </div>`;
+
+  el.querySelectorAll("[data-approve]").forEach(btn => btn.addEventListener("click", () => applyCleanup([Number(btn.dataset.approve)])));
+  el.querySelectorAll("[data-dismiss]").forEach(btn => btn.addEventListener("click", () => {
+    btn.closest("[data-suggestion]").remove();
+  }));
+  const approveAllBtn = document.getElementById("approve-all");
+  if (approveAllBtn) approveAllBtn.addEventListener("click", () => applyCleanup((state.cleanup || []).map(s => s.id)));
+
+  el.querySelectorAll("[data-delete-rule]").forEach(btn => btn.addEventListener("click", async () => {
+    if (!state.serverOnline) { showToast("Demo mode: no server connected"); return; }
+    await api("/rules", { method: "DELETE", body: JSON.stringify({ id: Number(btn.dataset.deleteRule) }) });
+    state.rules = await api("/rules");
+    renderCenter();
+  }));
+
+  const addRuleBtn = document.getElementById("add-rule");
+  if (addRuleBtn) addRuleBtn.addEventListener("click", async () => {
+    const payload = {
+      name: document.getElementById("rule-name").value || "New rule",
+      pattern: document.getElementById("rule-pattern").value,
+      folder: document.getElementById("rule-folder").value,
+      age_days: Number(document.getElementById("rule-age").value) || 0,
+      action: document.getElementById("rule-action").value,
+    };
+    if (!state.serverOnline) { showToast("Demo mode: no server connected"); return; }
+    await api("/rules", { method: "POST", body: JSON.stringify(payload) });
+    state.rules = await api("/rules");
+    refreshCleanup();
+  });
+}
+
+async function applyCleanup(ids) {
+  if (!ids.length) return;
+  if (!state.serverOnline) { showToast("Demo mode: no server connected"); return; }
+  await api("/cleanup/apply", { method: "POST", body: JSON.stringify({ ids }) });
+  showToast("Cleanup applied", true);
+  refreshCleanup();
+  tryLoadFromServer();
+}
+
+function renderStorage(el) {
+  const s = state.storage || { by_tag: {}, by_extension: {}, largest_files: [], total_bytes: 0 };
+  const maxTag = Math.max(1, ...Object.values(s.by_tag));
+  const maxExt = Math.max(1, ...Object.values(s.by_extension));
+
+  const tagBars = Object.entries(s.by_tag).map(([tag, bytes]) => `
+    <div class="storage-bar-row">
+      <div class="lbl">${escapeHtml(tag)}</div>
+      <div class="storage-bar-track"><div class="storage-bar-fill" style="width:${(bytes / maxTag) * 100}%;background:${colorForCourse(tag)}"></div></div>
+      <div class="val">${fmtSize(bytes)}</div>
+    </div>`).join("");
+
+  const extBars = Object.entries(s.by_extension).map(([ext, bytes]) => `
+    <div class="storage-bar-row">
+      <div class="lbl">${escapeHtml(ext)}</div>
+      <div class="storage-bar-track"><div class="storage-bar-fill" style="width:${(bytes / maxExt) * 100}%"></div></div>
+      <div class="val">${fmtSize(bytes)}</div>
+    </div>`).join("");
+
+  const largest = (s.largest_files || []).slice(0, 50).map(f => `
+    <div class="detail-row"><span class="k">${escapeHtml(f.name)}</span><span class="v">${fmtSize(f.size)}</span></div>`).join("");
+
+  el.innerHTML = `<div class="panel-body">
+    <div class="section-title">By tag / course</div>
+    ${tagBars || '<div class="muted">No data yet.</div>'}
+    <div class="section-title">By file type</div>
+    ${extBars || '<div class="muted">No data yet.</div>'}
+    <div class="section-title">50 largest files</div>
+    <div class="card">${largest || '<div class="muted">No data yet.</div>'}</div>
+  </div>`;
+}
+
+/* ---------------------------------------------------------------------
+ * Right panel (preview / details)
+ * ------------------------------------------------------------------- */
+async function renderRight() {
+  const el = document.getElementById("right");
+  const file = state.files.find(f => f.id === state.focusedId);
+  if (!file) {
+    el.innerHTML = `<div class="muted">Select a file to see details.</div>`;
+    return;
+  }
+
+  let previewInner = `<span style="font-size:36px;">${fileIcon(file.ext)}</span>`;
+  if (state.serverOnline) {
+    const rawUrl = `${API_BASE}/files/${file.id}/raw`;
+    if ([".png", ".jpg", ".jpeg", ".gif"].includes(file.ext)) previewInner = `<img src="${rawUrl}">`;
+    else if (file.ext === ".pdf") previewInner = `<iframe src="${rawUrl}"></iframe>`;
+    else if ([".txt", ".md", ".tex"].includes(file.ext)) {
+      try { const text = await api(`/files/${file.id}/raw`); previewInner = `<pre style="font-size:11px;white-space:pre-wrap;padding:8px;max-height:220px;overflow:auto;">${escapeHtml(String(text)).slice(0, 4000)}</pre>`; } catch (e) {}
+    }
+  }
+
+  const tagChips = (file.tags || []).map(t => `
+    <span class="tag-chip" style="background:${t.confidence < 0.6 ? "transparent" : colorForCourse(t.tag)};${t.confidence < 0.6 ? "border:1px dashed var(--text-faint);color:var(--text-dim);" : ""}" title="${t.source} · ${(t.confidence*100).toFixed(0)}%">
+      ${escapeHtml(t.tag)} <span data-remove-tag="${escapeHtml(t.tag)}" style="cursor:pointer;">✕</span>
+    </span>`).join("");
+
+  const linkedEvent = (file.tags || []).find(t => t.event_uid);
+
+  el.innerHTML = `
+    <div class="preview-box">${previewInner}</div>
+    <div class="detail-row"><span class="k">Name</span><span class="v">${escapeHtml(file.name)}</span></div>
+    <div class="detail-row"><span class="k">Path</span><span class="v" title="${escapeHtml(file.path)}">${escapeHtml(file.path)}</span></div>
+    <div class="detail-row"><span class="k">Size</span><span class="v">${fmtSize(file.size)}</span></div>
+    <div class="detail-row"><span class="k">Modified</span><span class="v">${fmtDate(file.mtime)}</span></div>
+    ${linkedEvent ? `<div class="detail-row"><span class="k">Linked event</span><span class="v">${escapeHtml(linkedEvent.event_uid)}</span></div>` : ""}
+    <div class="section-title">Tags</div>
+    <div id="tag-editor">${tagChips}</div>
+    <input id="tag-add-input" placeholder="Add tag and press Enter">
+    <div class="section-title">Versions</div>
+    <div id="version-list" class="muted">${state.serverOnline ? "Loading…" : "Version history requires the server."}</div>
+    <div class="section-title">Actions</div>
+    <div class="action-grid">
+      <button class="btn" data-act="open">Open</button>
+      <button class="btn" data-act="reveal">Show in Explorer</button>
+      <button class="btn" data-act="rename">Rename (F2)</button>
+      <button class="btn" data-act="move">Move…</button>
+      <button class="btn" data-act="copy-path">Copy path</button>
+      <button class="btn" data-act="delete">Delete</button>
+    </div>`;
+
+  el.querySelector("#tag-add-input").addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" && ev.target.value.trim()) { addTag(file.id, ev.target.value.trim()); ev.target.value = ""; }
+  });
+  el.querySelectorAll("[data-remove-tag]").forEach(x => x.addEventListener("click", () => removeTag(file.id, x.dataset.removeTag)));
+  el.querySelectorAll("[data-act]").forEach(btn => btn.addEventListener("click", () => runFileAction(btn.dataset.act, file)));
+
+  if (state.serverOnline) {
+    try {
+      const versions = await api(`/files/${file.id}/versions`);
+      const vlist = document.getElementById("version-list");
+      vlist.innerHTML = versions.length ? versions.map(v => `
+        <div class="version-item"><span>${new Date(v.created_at * 1000).toLocaleString()}</span>
+        <span><a href="#" data-restore-version="${v.id}">Restore</a></span></div>`).join("")
+        : '<span class="muted">No versions yet.</span>';
+      vlist.querySelectorAll("[data-restore-version]").forEach(a => a.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        await api(`/files/${file.id}/versions/${a.dataset.restoreVersion}/restore`, { method: "POST" });
+        showToast("Version restored");
+      }));
+    } catch (e) { /* ignore */ }
+  }
+}
+
+/* ---------------------------------------------------------------------
+ * Actions
+ * ------------------------------------------------------------------- */
+async function addTag(fileId, tag) {
+  if (!state.serverOnline) { showToast("Demo mode: no server connected"); return; }
+  await api(`/files/${fileId}/tags`, { method: "PATCH", body: JSON.stringify({ add: [tag] }) });
+  await tryLoadFromServer();
+  renderRight();
+}
+async function removeTag(fileId, tag) {
+  if (!state.serverOnline) { showToast("Demo mode: no server connected"); return; }
+  await api(`/files/${fileId}/tags`, { method: "PATCH", body: JSON.stringify({ remove: [tag] }) });
+  await tryLoadFromServer();
+  renderRight();
+}
+
+async function runFileAction(action, file) {
+  if (action === "copy-path") {
+    try { await navigator.clipboard.writeText(file.path); showToast("Path copied"); } catch (e) {}
+    return;
+  }
+  if (!state.serverOnline) { showToast("Demo mode: no server connected"); return; }
+  if (action === "open") await api(`/open/${file.id}`, { method: "POST" });
+  else if (action === "reveal") await api(`/files/${file.id}/reveal`, { method: "POST" });
+  else if (action === "rename") {
+    const name = prompt("New name", file.name);
+    if (name) { await api(`/files/${file.id}/rename`, { method: "POST", body: JSON.stringify({ new_name: name }) }); showToast("Renamed", true); tryLoadFromServer(); }
+  } else if (action === "move") {
+    const target = prompt("Move to folder (full path)");
+    if (target) { await api("/files/move", { method: "POST", body: JSON.stringify({ ids: [file.id], target_folder: target }) }); showToast("Moved", true); tryLoadFromServer(); }
+  } else if (action === "delete") {
+    deleteFiles([file.id], true);
+  }
+}
+
+async function deleteFiles(ids, confirmFirst) {
+  if (!ids.length) return;
+  if (confirmFirst && !confirm(`Send ${ids.length} file(s) to the Recycle Bin?`)) return;
+  if (!state.serverOnline) { showToast("Demo mode: no server connected"); return; }
+  await api("/files/delete", { method: "POST", body: JSON.stringify({ ids, skip_confirmation: !confirmFirst }) });
+  showToast(`${ids.length} file(s) deleted`, true);
+  state.selected.clear();
+  tryLoadFromServer();
+}
+
+async function openFile(id) {
+  state.focusedId = id;
+  renderRight();
+  if (!state.serverOnline) { showToast("Demo mode: no server connected"); return; }
+  await api(`/open/${id}`, { method: "POST" });
+}
+
+async function undo() {
+  if (!state.serverOnline) { showToast("Demo mode: no server connected"); return; }
+  const result = await api("/undo", { method: "POST" });
+  showToast(result.undone ? "Undone" : (result.reason || "Nothing to undo"));
+  tryLoadFromServer();
+}
+
+async function buildPackage(eventUid) {
+  if (!state.serverOnline) { showToast("Demo mode: no server connected"); return; }
+  const preview = await api("/package/preview", { method: "POST", body: JSON.stringify({ event_id: eventUid }) });
+  if (!preview.files.length) { showToast("No files linked to this deadline"); return; }
+  const fileIds = preview.files.map(f => f.id);
+  const result = await api("/package/build", { method: "POST", body: JSON.stringify({
+    event_id: eventUid, file_ids: fileIds, pattern: "{course}_{assignment}_{name}.{ext}",
+  }) });
+  showToast(`Package created: ${result.zip_path}`);
+}
+
+/* ---------------------------------------------------------------------
+ * Selection / context menu
+ * ------------------------------------------------------------------- */
+function onFileRowClick(ev, id) {
+  if (ev.ctrlKey || ev.metaKey) {
+    if (state.selected.has(id)) state.selected.delete(id); else state.selected.add(id);
+  } else if (ev.shiftKey && state.focusedId != null) {
+    const files = filteredFiles();
+    const ids = files.map(f => f.id);
+    const a = ids.indexOf(state.focusedId), b = ids.indexOf(id);
+    const [lo, hi] = a < b ? [a, b] : [b, a];
+    ids.slice(lo, hi + 1).forEach(x => state.selected.add(x));
+  } else {
+    state.selected.clear();
+    state.selected.add(id);
+  }
+  state.focusedId = id;
+  renderFileList(document.getElementById("center"));
+  renderRight();
+}
+
+let contextMenuEl = null;
+function showContextMenu(ev, id) {
+  if (!state.selected.has(id)) { state.selected.clear(); state.selected.add(id); state.focusedId = id; }
+  closeContextMenu();
+  const file = state.files.find(f => f.id === id);
+  const ids = Array.from(state.selected);
+  const menu = document.createElement("div");
+  menu.style.cssText = `position:fixed;left:${ev.clientX}px;top:${ev.clientY}px;background:var(--panel);` +
+    `border:1px solid var(--border);border-radius:6px;padding:4px;z-index:100;min-width:180px;box-shadow:0 4px 16px rgba(0,0,0,.5);`;
+  const items = [
+    ["Open", () => openFile(id)],
+    ["Show in Explorer", () => runFileAction("reveal", file)],
+    ["Open containing folder", () => state.serverOnline && api(`/files/${id}/open-folder`, { method: "POST" })],
+    ["Rename (F2)", () => runFileAction("rename", file)],
+    ["Copy path", () => runFileAction("copy-path", file)],
+    ["Move to folder…", () => runFileAction("move", file)],
+    ["Delete (Recycle Bin)", () => deleteFiles(ids, true)],
+    ["Delete permanently (Shift+Delete)", () => deleteFiles(ids, false)],
+  ];
+  menu.innerHTML = items.map((it, i) => `<div data-i="${i}" style="padding:6px 10px;border-radius:4px;cursor:pointer;">${it[0]}</div>`).join("");
+  document.body.appendChild(menu);
+  menu.querySelectorAll("[data-i]").forEach(row => {
+    row.addEventListener("mouseenter", () => row.style.background = "var(--panel-hover)");
+    row.addEventListener("mouseleave", () => row.style.background = "");
+    row.addEventListener("click", () => { items[Number(row.dataset.i)][1](); closeContextMenu(); });
+  });
+  contextMenuEl = menu;
+  document.addEventListener("click", closeContextMenu, { once: true });
+}
+function closeContextMenu() {
+  if (contextMenuEl) { contextMenuEl.remove(); contextMenuEl = null; }
+}
+
+/* ---------------------------------------------------------------------
+ * Toasts
+ * ------------------------------------------------------------------- */
+function showToast(message, withUndo) {
+  const wrap = document.getElementById("toast-wrap");
+  const toast = document.createElement("div");
+  toast.className = "toast";
+  toast.innerHTML = `<span>${escapeHtml(message)}</span>${withUndo ? '<button data-undo>Undo</button>' : ""}`;
+  wrap.appendChild(toast);
+  if (withUndo) toast.querySelector("[data-undo]").addEventListener("click", () => { undo(); toast.remove(); });
+  setTimeout(() => toast.remove(), 6000);
+}
+
+/* ---------------------------------------------------------------------
+ * Tabs / top bar wiring
+ * ------------------------------------------------------------------- */
+function switchTab(tab) {
+  state.activeTab = tab;
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
+  renderCenter();
+}
+
+function setupTopbar() {
+  const search = document.getElementById("search");
+  search.addEventListener("input", () => { state.searchText = search.value; renderChips(); renderCenter(); });
+
+  document.getElementById("follow-btn").addEventListener("click", () => {
+    state.follow = !state.follow;
+    document.getElementById("follow-btn").classList.toggle("active", state.follow);
+    if (state.follow) startFollowPolling(); else stopFollowPolling();
+  });
+
+  document.getElementById("save-search").addEventListener("click", async () => {
+    const name = prompt("Name this search");
+    if (!name) return;
+    if (state.serverOnline) await api("/collections", { method: "POST", body: JSON.stringify({ name, query: state.searchText }) });
+    state.collections.push({ name, query: state.searchText });
+    renderLeft();
+  });
+
+  document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => switchTab(t.dataset.tab)));
+
+  document.getElementById("tags-list").addEventListener("click", (ev) => {
+    const openBtn = ev.target.closest("[data-open-tag]");
+    if (openBtn) {
+      if (state.serverOnline) api("/explorer/tag-view", { method: "POST", body: JSON.stringify({ tag: openBtn.dataset.openTag }) });
+      else showToast("Demo mode: no server connected");
+      ev.stopPropagation();
+      return;
+    }
+    const item = ev.target.closest("[data-tag]");
+    if (item) {
+      state.activeTagFilter = state.activeTagFilter === item.dataset.tag ? null : item.dataset.tag;
+      renderLeft();
+      switchTab("files");
+    }
+  });
+}
+
+let followInterval = null;
+function startFollowPolling() {
+  followInterval = setInterval(async () => {
+    if (!state.serverOnline) return;
+    try {
+      const windows = await api("/explorer/windows");
+      if (windows.length) state.searchText = "folder:" + windows[0].folder;
+    } catch (e) {}
+  }, 1000);
+}
+function stopFollowPolling() { clearInterval(followInterval); }
+
+/* ---------------------------------------------------------------------
+ * Keyboard shortcuts
+ * ------------------------------------------------------------------- */
+document.addEventListener("keydown", (ev) => {
+  const inInput = ["INPUT", "TEXTAREA"].includes(document.activeElement.tagName);
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "k") {
+    ev.preventDefault();
+    document.getElementById("search").focus();
+    return;
+  }
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "z") {
+    ev.preventDefault(); undo(); return;
+  }
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "e") {
+    ev.preventDefault();
+    const file = state.files.find(f => f.id === state.focusedId);
+    if (file) runFileAction("reveal", file);
+    return;
+  }
+  if (inInput) return;
+  if (ev.key === "F2") {
+    const file = state.files.find(f => f.id === state.focusedId);
+    if (file) runFileAction("rename", file);
+  } else if (ev.key.toLowerCase() === "t") {
+    document.getElementById("tag-add-input")?.focus();
+  } else if (ev.key === "Delete") {
+    if (state.focusedId != null) deleteFiles(Array.from(state.selected.size ? state.selected : [state.focusedId]), !ev.shiftKey);
+  } else if (ev.key === "Enter") {
+    if (state.focusedId != null) openFile(state.focusedId);
+  } else if (ev.key === " ") {
+    ev.preventDefault();
+  } else if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+    const files = filteredFiles();
+    if (!files.length) return;
+    const idx = files.findIndex(f => f.id === state.focusedId);
+    const nextIdx = ev.key === "ArrowDown" ? Math.min(files.length - 1, idx + 1) : Math.max(0, idx - 1);
+    state.focusedId = files[Math.max(nextIdx, 0)].id;
+    state.selected = new Set([state.focusedId]);
+    renderFileList(document.getElementById("center"));
+    renderRight();
+  }
+});
+
+/* ---------------------------------------------------------------------
+ * Boot
+ * ------------------------------------------------------------------- */
+async function boot() {
+  setupTopbar();
+  await tryLoadFromServer();
+  renderProgress();
+  renderChips();
+  renderLeft();
+  renderTabCounts();
+  renderCenter();
+  renderRight();
+  if (location.hash === "#focus-search") document.getElementById("search").focus();
+}
+
+boot();
+})();
+</script>
+</body>
+</html>
