@@ -127,17 +127,17 @@ class Indexer:
         tagging.tag_from_calendar(file_hash, stat.st_ctime)
         tagging.tag_from_content(file_hash, text_content)
 
-        self._maybe_snapshot_version(file_hash, path, ext)
+        self._maybe_snapshot_version(file_id, file_hash, path, ext)
 
         events.publish("file-indexed", {"id": file_id, "path": str(path), "hash": file_hash})
         return file_id
 
-    def _maybe_snapshot_version(self, file_hash, path, ext):
+    def _maybe_snapshot_version(self, file_id, file_hash, path, ext):
         from . import versions as versions_module
         tags = tagging.get_tags(file_hash)
         if ext in config.VERSIONED_EXTENSIONS or any(t["tag"] == "report" for t in tags):
             try:
-                versions_module.snapshot(file_hash, path)
+                versions_module.snapshot(file_id, path)
             except Exception:
                 pass
 

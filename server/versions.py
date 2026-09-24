@@ -16,30 +16,34 @@ def should_version(file_row, tags) -> bool:
     return any(t["tag"] == "report" for t in tags)
 
 
-def snapshot(file_hash: str, path: Path):
+def snapshot(file_id: int, path: Path):
+    """Snapshot the current content of files.id=file_id. Versions are keyed
+    by that stable row id (survives renames/moves/edits), never by content
+    hash — every new version has a different hash by definition, so keying
+    on it would orphan every prior snapshot as soon as the file changes."""
     if not path.exists():
         return None
     content_hash = hash_file(path)
 
     with db.cursor() as cur:
         cur.execute(
-            "SELECT id FROM versions WHERE file_hash=? AND content_hash=? ORDER BY id DESC LIMIT 1",
-            (file_hash, content_hash),
+            "SELECT id FROM versions WHERE file_id=? AND content_hash=? ORDER BY id DESC LIMIT 1",
+            (file_id, content_hash),
         )
         if cur.fetchone():
             return None
 
-    dest_dir = config.VERSIONS_DIR / file_hash
+    dest_dir = config.VERSIONS_DIR / str(file_id)
     dest_dir.mkdir(parents=True, exist_ok=True)
     snapshot_path = dest_dir / f"{int(time.time())}_{content_hash[:12]}{path.suffix}"
     shutil.copy2(str(path), str(snapshot_path))
 
     with db.cursor() as cur:
         cur.execute(
-            "INSERT INTO versions (file_hash, content_hash, snapshot_path, created_at) VALUES (?, ?, ?, ?)",
-            (file_hash, content_hash, str(snapshot_path), time.time()),
+            "INSERT INTO versions (file_id, content_hash, snapshot_path, created_at) VALUES (?, ?, ?, ?)",
+            (file_id, content_hash, str(snapshot_path), time.time()),
         )
-        cur.execute("SELECT id, snapshot_path FROM versions WHERE file_hash=? ORDER BY id DESC", (file_hash,))
+        cur.execute("SELECT id, snapshot_path FROM versions WHERE file_id=? ORDER BY id DESC", (file_id,))
         rows = cur.fetchall()
         for old in rows[config.MAX_VERSIONS_PER_FILE:]:
             Path(old["snapshot_path"]).unlink(missing_ok=True)
@@ -48,11 +52,11 @@ def snapshot(file_hash: str, path: Path):
     return str(snapshot_path)
 
 
-def list_versions(file_hash: str):
+def list_versions(file_id: int):
     with db.cursor() as cur:
         cur.execute(
-            "SELECT id, content_hash, snapshot_path, created_at FROM versions WHERE file_hash=? ORDER BY id DESC",
-            (file_hash,),
+            "SELECT id, content_hash, snapshot_path, created_at FROM versions WHERE file_id=? ORDER BY id DESC",
+            (file_id,),
         )
         return [dict(r) for r in cur.fetchall()]
 

@@ -43,7 +43,7 @@ def find_exact_duplicates():
     return groups
 
 
-def _shingles(text: str, size=5):
+def _shingles(text: str, size=2):
     words = text.split()
     return {" ".join(words[i:i + size]) for i in range(max(len(words) - size + 1, 1))}
 
@@ -59,7 +59,13 @@ def similarity(text_a: str, text_b: str) -> float:
     else:
         jaccard = 0.0
     ratio = difflib.SequenceMatcher(None, text_a, text_b).ratio()
-    return max(jaccard, ratio)
+    # Average both signals: difflib's character-level ratio alone spikes on
+    # shared boilerplate/templates (e.g. two lecture-notes files with the
+    # same skeleton but different topics), which would otherwise flag
+    # structurally similar but substantively different documents as
+    # near-duplicates. Word-shingle jaccard alone is too brittle on short
+    # text (a single punctuation change can shift every shingle).
+    return (jaccard + ratio) / 2
 
 
 def find_near_duplicates(threshold=None):
