@@ -7,11 +7,16 @@ from . import config, db, fileops
 DEFAULT_TEMPLATE = "Studies/{course}/{subtag}"
 
 
-def _target_root():
+def target_root():
+    """The watched folder to root archived/sorted files under (prefers one
+    named 'Documents', falls back to the first watched folder)."""
     for folder in config.WATCHED_FOLDERS:
         if Path(folder).name.lower() == "documents":
             return Path(folder)
     return Path(config.WATCHED_FOLDERS[0])
+
+
+_target_root = target_root
 
 
 def _plan(tag: str, template: str = DEFAULT_TEMPLATE):
