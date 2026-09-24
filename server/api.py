@@ -359,11 +359,15 @@ def cleanup_apply():
             by_action.setdefault(s["action"], []).append(row["id"])
 
     results = {}
-    for action, file_ids in by_action.items():
-        if action == "delete":
-            results["delete"] = fileops.delete_files(file_ids)
-        elif action == "archive":
-            results["archive"] = fileops.move_files(file_ids, str(Path.home() / "Documents" / "Archive"))
+    try:
+        for action, file_ids in by_action.items():
+            if action == "delete":
+                results["delete"] = fileops.delete_files(file_ids)
+            elif action == "archive":
+                target = str(archive.target_root() / "Archive")
+                results["archive"] = fileops.move_files(file_ids, target)
+    except (PermissionError, FileNotFoundError) as exc:
+        return jsonify({"error": str(exc)}), 400
 
     rules.resolve_suggestions(payload["ids"])
     return jsonify(results)

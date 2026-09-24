@@ -37,7 +37,8 @@ def upsert_tag(file_hash: str, tag: str, source: str, confidence: float, event_u
             """INSERT INTO tags (file_hash, tag, source, confidence, event_uid, created_at)
                VALUES (?, ?, ?, ?, ?, ?)
                ON CONFLICT(file_hash, tag, source) DO UPDATE SET
-                 confidence=excluded.confidence, event_uid=excluded.event_uid""",
+                 confidence=MAX(tags.confidence, excluded.confidence),
+                 event_uid=COALESCE(excluded.event_uid, tags.event_uid)""",
             (file_hash, tag, source, confidence, event_uid, time.time()),
         )
     return True
