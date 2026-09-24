@@ -204,7 +204,10 @@
 /* ---------------------------------------------------------------------
  * State
  * ------------------------------------------------------------------- */
-const API_BASE = "http://localhost:5000";
+// Same-origin when served by the Flask app itself (recommended: open
+// http://localhost:5000/); falls back to an absolute URL when opened
+// directly as a file:// page, where relative fetches can't reach it.
+const API_BASE = location.protocol === "file:" ? "http://localhost:5000" : "";
 const COURSE_COLORS = ["#5b9dd9", "#9d7fd9", "#d97f9d", "#6fbf8c", "#d9b25b"];
 
 const state = {

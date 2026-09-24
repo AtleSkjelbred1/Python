@@ -43,10 +43,17 @@ python -m server.app
 This starts the single local Flask server (default `http://localhost:5000`)
 that serves both the file-sorting API and the `/week.json` / `/today/files`
 calendar endpoints used by the dashboard, so only one background process is
-needed. Open `web/filesorter.html` directly in a browser (or let the global
-hotkey open it as an app window) — it talks to the server over
-`http://localhost:5000` and falls back to sample data if the server isn't
-running.
+needed. It also serves the dashboard itself at `/` — open
+**`http://localhost:5000/`** in a browser (or let the global hotkey open it
+as an app window) to use it. This is the recommended way to open it: it
+keeps everything same-origin, so browser reloads and reconnects behave
+correctly.
+
+`web/filesorter.html` can still be opened directly as a `file://` page
+(e.g. to preview the UI with no server running) — it falls back to sample
+data if it can't reach `http://localhost:5000`. Reloading a `file://` page
+can occasionally misbehave in Chromium-based browsers, though, so prefer
+`http://localhost:5000/` for day-to-day use.
 
 ### Autostart on Windows (Task Scheduler)
 

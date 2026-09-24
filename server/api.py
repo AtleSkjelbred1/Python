@@ -7,6 +7,7 @@ from flask import Blueprint, current_app, jsonify, request, send_file, Response
 from . import (
     archive,
     calendar as calendar_source,
+    config,
     db,
     duplicates,
     events,
@@ -21,6 +22,17 @@ from . import (
 )
 
 bp = Blueprint("api", __name__)
+
+
+# --- dashboard --------------------------------------------------------
+
+@bp.route("/")
+def dashboard():
+    """Serves the frontend from the server itself, same-origin, instead of
+    requiring it to be opened as a file:// page. This avoids file://-origin
+    quirks in Chromium (reloading a file:// page can silently fail to
+    re-run its script) and makes fetch/SSE reconnection more reliable."""
+    return send_file(str(config.BASE_DIR / "web" / "filesorter.html"))
 
 
 # --- calendar / dashboard ------------------------------------------------
