@@ -96,9 +96,13 @@ def get_conn():
     conn = getattr(_local, "conn", None)
     if conn is None:
         config.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(config.DB_PATH), check_same_thread=False)
+        conn = sqlite3.connect(str(config.DB_PATH), check_same_thread=False, timeout=30)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
+        # WAL lets readers (API requests) proceed while the indexer thread is
+        # writing, instead of blocking behind its transactions.
+        conn.execute("PRAGMA journal_mode = WAL")
+        conn.execute("PRAGMA busy_timeout = 30000")
         _local.conn = conn
     return conn
 

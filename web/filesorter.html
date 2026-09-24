@@ -302,6 +302,7 @@ async function api(path, opts) {
 }
 
 async function tryLoadFromServer() {
+  const wasOnline = state.serverOnline;
   try {
     const [files, tags, collections, weekEvents, status] = await Promise.all([
       api("/files"), api("/tags"), api("/collections"), api("/week.json"), api("/status"),
@@ -316,16 +317,24 @@ async function tryLoadFromServer() {
     refreshDuplicates();
     refreshCleanup();
     refreshStorage();
-    connectEvents();
+    if (!wasOnline) connectEvents();
   } catch (e) {
-    const mock = buildMockData();
-    state.files = mock.files;
-    state.events = mock.events;
-    state.tags = computeTagsFromFiles(mock.files);
-    state.collections = [];
+    if (wasOnline) {
+      // Only fall back to mock data the first time we lose the server;
+      // once already offline, keep retrying without clobbering state.
+      const mock = buildMockData();
+      state.files = mock.files;
+      state.events = mock.events;
+      state.tags = computeTagsFromFiles(mock.files);
+      state.collections = [];
+    }
     state.serverOnline = false;
     document.getElementById("banner").style.display = "block";
   }
+  renderLeft();
+  renderTabCounts();
+  renderCenter();
+  if (state.focusedId != null) renderRight();
 }
 
 function computeTagsFromFiles(files) {
@@ -357,7 +366,12 @@ async function refreshStorage() {
   if (state.activeTab === "storage") renderCenter();
 }
 
+let sseConnected = false;
+let pollingStarted = false;
+
 function connectEvents() {
+  if (sseConnected) return;
+  sseConnected = true;
   try {
     const es = new EventSource(API_BASE + "/events");
     es.addEventListener("index-progress", (ev) => {
@@ -367,8 +381,18 @@ function connectEvents() {
     ["file-indexed", "file-removed", "files-moved", "files-deleted", "tags-changed"].forEach(evt => {
       es.addEventListener(evt, () => tryLoadFromServer());
     });
-  } catch (e) { /* SSE unsupported */ }
-  setInterval(() => { if (state.serverOnline) tryLoadFromServer(); }, 2000);
+    es.onerror = () => { sseConnected = false; es.close(); };
+  } catch (e) {
+    sseConnected = false; // SSE unsupported; polling below still covers updates
+  }
+}
+
+function startPolling() {
+  if (pollingStarted) return;
+  pollingStarted = true;
+  // Always retry, online or not, so the app recovers automatically once the
+  // server becomes reachable again instead of getting stuck on mock data.
+  setInterval(() => tryLoadFromServer(), 2000);
 }
 
 /* ---------------------------------------------------------------------
@@ -1061,6 +1085,7 @@ document.addEventListener("keydown", (ev) => {
 async function boot() {
   setupTopbar();
   await tryLoadFromServer();
+  startPolling();
   renderProgress();
   renderChips();
   renderLeft();
