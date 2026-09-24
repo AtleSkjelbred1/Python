@@ -385,12 +385,12 @@ const INPUT = new InputManager();
 // 120-weight fighter near the ledge, side smash KOs ~125%, up/down smash ~135-145%, back air/back throw
 // ~155-175%, tilts ~220%+, and jabs effectively never.
 const ARCH_COEF = {
-  power:   { dmg:1.14, kb:1.04, spd:0.80, range:1.16 },
-  speed:   { dmg:0.82, kb:0.94, spd:1.38, range:0.84 },
+  power:   { dmg:1.16, kb:1.04, spd:0.82, range:1.17 },
+  speed:   { dmg:0.82, kb:0.94, spd:1.34, range:0.86 },
   giant:   { dmg:1.36, kb:1.10, spd:0.68, range:1.42 },
-  zoner:   { dmg:0.96, kb:1.00, spd:1.04, range:1.00 },
+  zoner:   { dmg:1.02, kb:1.02, spd:1.06, range:1.04 },
   grappler:{ dmg:1.13, kb:1.05, spd:0.96, range:1.12 },
-  assassin:{ dmg:0.93, kb:0.98, spd:1.34, range:0.94 },
+  assassin:{ dmg:0.86, kb:0.95, spd:1.24, range:0.90 },
 };
 const BASE_MOVES = {
   jab1:{startup:3,active:3,recovery:6,dmg:2.5,bkb:5,kbg:0.85,angle:40,range:1.0,name:'Jab'},
@@ -494,7 +494,7 @@ const CHAR_DATA = [
     traits:'Wall jump, teleport recovery', desc:'Blindingly fast electric ninja. Short combos, teleport recovery, low weight.'},
   {id:'brakka',name:'Brakka',color:0x6b6459,accent:0xff7a33,weight:162,walkSpeed:2.0,runSpeed:3.5,jumpVel:12.2,doubleJumpVel:10.2,fallSpeed:17,fastFallSpeed:26,airSpeed:1.9,size:1.38,archetype:'giant',superArmorSmash:true,
     traits:'Super armor on smash attacks', desc:'A stone giant. The heaviest fighter, super armor on smash attacks, short jump.'},
-  {id:'seren',name:'Seren Ashveil',color:0xc94a2e,accent:0xffce54,weight:88,walkSpeed:2.8,runSpeed:4.6,jumpVel:14,doubleJumpVel:12,fallSpeed:13.5,fastFallSpeed:21,airSpeed:3.0,size:0.98,archetype:'zoner',meleeMult:0.8,
+  {id:'seren',name:'Seren Ashveil',color:0xc94a2e,accent:0xffce54,weight:92,walkSpeed:2.8,runSpeed:4.6,jumpVel:14,doubleJumpVel:12,fallSpeed:13.5,fastFallSpeed:21,airSpeed:3.0,size:0.98,archetype:'zoner',meleeMult:0.88,
     traits:'Projectiles and fire hazards; weak melee', desc:'Fire mage built for zoning with projectiles. Dangerous at range, fragile up close.'},
   {id:'rook',name:'Rook Harlan',color:0x4a4a52,accent:0xd94b4b,weight:120,walkSpeed:2.7,runSpeed:4.5,jumpVel:14,doubleJumpVel:12.5,fallSpeed:15,fastFallSpeed:23,airSpeed:2.7,size:1.06,archetype:'grappler',grabRange:1.5,throwMult:1.3,
     traits:'Long grab, +30% throw damage', desc:'Boxer with a mechanical arm. Grab and throw specialist with a charged punch.'},
