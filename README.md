@@ -2,6 +2,16 @@
 
 # Nettside:https://atleskjelbred1.github.io/Python/
 
+## Rift Clash (browser game)
+
+A 3D platform fighter in a single HTML file: six original characters, three
+stages, local 2-player or vs. a bot. Controls are listed in the in-game pause
+menu.
+
+- Play: https://atleskjelbred1.github.io/Python/web/smash-fighter.html
+- Source: [`web/smash-fighter.html`](web/smash-fighter.html) — or just open the
+  file in a browser (it loads Three.js from cdnjs, so it needs internet).
+
 ## File Sorter (local Windows app)
 
 A local, offline-first file organizer with a Flask backend and a single-file
