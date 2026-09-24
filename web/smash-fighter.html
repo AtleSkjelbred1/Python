@@ -100,6 +100,7 @@
 <body>
 
 <canvas id="game-canvas"></canvas>
+<div id="boot-status" style="position:fixed;left:8px;bottom:6px;z-index:98;font:11px monospace;color:#9aa4b8;pointer-events:none;">Starting… (JavaScript has not run yet)</div>
 
 <!-- ============ MAIN MENU ============ -->
 <div id="screen-mainmenu" class="screen">
@@ -268,6 +269,11 @@ window.__showError=function(msg){
     document.body.appendChild(el); }
   el.textContent+=(el.textContent?'\n':'')+msg;
 };
+window.__status={js:'ok',three:(window.THREE?'ok':'missing'),game:'not started',clicks:0};
+window.__renderStatus=function(){ var el=document.getElementById('boot-status'); var t=window.__status;
+  if(el) el.textContent='JS: '+t.js+' · Three.js: '+t.three+' · game: '+t.game+' · clicks: '+t.clicks; };
+document.addEventListener('pointerdown',function(){ window.__status.clicks++; window.__renderStatus(); },true);
+window.__renderStatus();
 window.addEventListener('error',function(e){ window.__showError('Error: '+(e.message||e)+(e.lineno?' (line '+e.lineno+')':'')); });
 </script>
 <script>
@@ -2502,7 +2508,12 @@ function poseAttack(f){
 }
 
 //////////////////////// BOOT ////////////////////////
-function boot(){ if(!window.__game) window.__game=new Game(); }
+function boot(){
+  if(window.__game) return;
+  window.__status.three=window.THREE?'ok':'missing'; window.__status.game='starting'; window.__renderStatus();
+  window.__game=new Game();
+  window.__status.game='running'; window.__renderStatus();
+}
 function whenThreeReady(start){
   if(window.THREE) return start();
   // cdnjs failed or was blocked: fall back to the same build on jsDelivr
