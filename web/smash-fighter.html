@@ -875,26 +875,67 @@ class Hitbox{
 }
 
 //////////////////////// PARTICLES / FX ////////////////////////
+// Particles live in two fixed-size GPU point buffers (normal + additive blending): one draw call each,
+// no per-particle meshes or materials. Rings, sparks and scripted effects stay as small meshes in `fx`.
+const PARTICLE_VIEW={h:720};
+class PointPool{
+  constructor(scene,cap,additive){
+    this.cap=cap; this.n=0; this.cursor=0;
+    this.pos=new Float32Array(cap*3); this.col=new Float32Array(cap*4); this.size=new Float32Array(cap);
+    this.vel=new Float32Array(cap*3); this.life=new Float32Array(cap); this.max=new Float32Array(cap); this.base=new Float32Array(cap);
+    this.grav=new Float32Array(cap); this.drag=new Float32Array(cap);
+    const g=new THREE.BufferGeometry();
+    g.setAttribute('position',new THREE.BufferAttribute(this.pos,3)); g.setAttribute('pcolor',new THREE.BufferAttribute(this.col,4)); g.setAttribute('psize',new THREE.BufferAttribute(this.size,1));
+    this.geo=g;
+    this.mat=new THREE.ShaderMaterial({transparent:true,depthWrite:false,blending:additive?THREE.AdditiveBlending:THREE.NormalBlending,
+      uniforms:{vh:{value:720}},
+      vertexShader:`attribute vec4 pcolor; attribute float psize; uniform float vh; varying vec4 vC;
+        void main(){ vC=pcolor; vec4 mv=modelViewMatrix*vec4(position,1.0); gl_Position=projectionMatrix*mv;
+          gl_PointSize=psize<=0.0?0.0:max(1.0,psize*projectionMatrix[1][1]*vh*0.5/max(0.1,-mv.z)); }`,
+      fragmentShader:`varying vec4 vC; void main(){ vec2 d=gl_PointCoord-0.5; float r=length(d); if(r>0.5) discard;
+          float a=vC.a*smoothstep(0.5,0.3,r); gl_FragColor=vec4(vC.rgb,a); }`});
+    this.points=new THREE.Points(g,this.mat); this.points.frustumCulled=false; scene.add(this.points);
+  }
+  add(x,y,z,vx,vy,vz,color,size,life,grav,drag){
+    // reuse a dead slot near the cursor; if all are busy, overwrite the oldest-ish one
+    let i=this.cursor, tries=0; while(this.life[i]>0 && tries<this.cap){ i=(i+1)%this.cap; tries++; }
+    this.cursor=(i+1)%this.cap;
+    const c=_pc.setHex(color);
+    this.pos[i*3]=x; this.pos[i*3+1]=y; this.pos[i*3+2]=z; this.vel[i*3]=vx; this.vel[i*3+1]=vy; this.vel[i*3+2]=vz;
+    this.col[i*4]=c.r; this.col[i*4+1]=c.g; this.col[i*4+2]=c.b; this.col[i*4+3]=1;
+    this.base[i]=size*2; this.size[i]=size*2; this.life[i]=life; this.max[i]=life; this.grav[i]=grav; this.drag[i]=drag;
+  }
+  update(){
+    let alive=0;
+    for(let i=0;i<this.cap;i++){
+      if(this.life[i]<=0){ if(this.size[i]!==0){ this.size[i]=0; this.col[i*4+3]=0; } continue; }
+      alive++;
+      const j=i*3, d=this.drag[i];
+      this.vel[j+1]-=this.grav[i]; this.vel[j]*=d; this.vel[j+1]*=d; this.vel[j+2]*=d;
+      this.pos[j]+=this.vel[j]; this.pos[j+1]+=this.vel[j+1]; this.pos[j+2]+=this.vel[j+2];
+      const k=Math.max(0,--this.life[i]/this.max[i]);
+      this.col[i*4+3]=k; this.size[i]=this.life[i]>0?this.base[i]*Math.max(0.15,k):0;
+    }
+    this.n=alive; this.mat.uniforms.vh.value=PARTICLE_VIEW.h;
+    this.geo.attributes.position.needsUpdate=true; this.geo.attributes.pcolor.needsUpdate=true; this.geo.attributes.psize.needsUpdate=true;
+  }
+}
+const _pc=new THREE.Color();
 class ParticleSystem{
-  constructor(scene){ this.scene=scene; this.pool=[]; this.fx=[]; this.geos={}; }
-  _geo(size){ const k=size.toFixed(3); if(!this.geos[k]) this.geos[k]=new THREE.SphereGeometry(size,5,4); return this.geos[k]; }
+  constructor(scene){ this.scene=scene; this.fx=[]; this.normal=new PointPool(scene,1200,false); this.glow=new PointPool(scene,1600,true); }
+  get count(){ return this.normal.n+this.glow.n; }
   spawn(pos,count,opts){
     opts=opts||{};
-    const geo=this._geo(opts.size||0.09);
+    const pool=opts.additive?this.glow:this.normal, size=opts.size||0.09, spd=opts.speed!=null?opts.speed:0.15, up=opts.upBias!=null?opts.upBias:1;
+    const grav=opts.grav!=null?opts.grav:0.01, drag=opts.drag||0.97;
     for(let i=0;i<count;i++){
       const color=Array.isArray(opts.color)?choice(opts.color):(opts.color!=null?opts.color:0xffffff);
-      const mat=new THREE.MeshBasicMaterial({color,transparent:true,opacity:1,depthWrite:false});
-      if(opts.additive) mat.blending=THREE.AdditiveBlending;
-      const mesh=new THREE.Mesh(geo,mat);
-      mesh.position.copy(pos);
-      if(opts.spread){ mesh.position.x+=rand(-opts.spread,opts.spread); mesh.position.y+=rand(-opts.spread,opts.spread)*0.6; }
-      const dir=new THREE.Vector3(rand(-1,1),rand(0.1,1.1)*(opts.upBias!=null?opts.upBias:1),rand(-0.4,0.4));
-      if(opts.dirX) dir.x=Math.abs(dir.x)*opts.dirX;
-      dir.normalize();
-      const life=Math.round((opts.life||30)*rand(0.7,1.2));
-      this.scene.add(mesh);
-      this.pool.push({mesh,vel:dir.multiplyScalar((opts.speed!=null?opts.speed:0.15)*rand(0.5,1.3)),life,maxLife:life,
-        grav:opts.grav!=null?opts.grav:0.01,drag:opts.drag||0.97});
+      let x=pos.x, y=pos.y; if(opts.spread){ x+=rand(-opts.spread,opts.spread); y+=rand(-opts.spread,opts.spread)*0.6; }
+      let vx,vy,vz;
+      if(opts.vel){ vx=opts.vel.x; vy=opts.vel.y; vz=opts.vel.z||0; }
+      else { let dx=rand(-1,1), dy=rand(0.1,1.1)*up, dz=rand(-0.4,0.4); if(opts.dirX) dx=Math.abs(dx)*opts.dirX;
+        const l=Math.hypot(dx,dy,dz)||1, s=spd*rand(0.5,1.3); vx=dx/l*s; vy=dy/l*s; vz=dz/l*s; }
+      pool.add(x,y,pos.z,vx,vy,vz,color,size,Math.round((opts.life||30)*rand(0.7,1.2)),grav,drag);
     }
   }
   trail(pos,color,size){ this.spawn(pos,1,{color,size:size||0.08,speed:0,grav:0,life:10,additive:true}); }
@@ -922,15 +963,7 @@ class ParticleSystem{
   // short-lived scripted effect: fn(obj,progress) each frame, then removed and cleaned up
   custom(obj,life,fn,cleanup){ this.fx.push({mesh:obj,life,maxLife:life,fn,cleanup}); }
   update(){
-    for(let i=this.pool.length-1;i>=0;i--){
-      const p=this.pool[i];
-      p.vel.y-=p.grav; p.vel.multiplyScalar(p.drag);
-      p.mesh.position.add(p.vel);
-      p.life--;
-      const k=clamp(p.life/p.maxLife,0,1);
-      p.mesh.material.opacity=k; p.mesh.scale.setScalar(Math.max(0.15,k));
-      if(p.life<=0){ this.scene.remove(p.mesh); p.mesh.material.dispose(); this.pool.splice(i,1); }
-    }
+    this.normal.update(); this.glow.update();
     for(let i=this.fx.length-1;i>=0;i--){
       const e=this.fx[i]; e.life--;
       const t=1-e.life/e.maxLife;
@@ -1964,7 +1997,7 @@ class PostFX{
     this.targets=[]; this.setSize();
   }
   setSize(){
-    const v=this.r.getDrawingBufferSize(new THREE.Vector2()), w=Math.max(1,v.x), h=Math.max(1,v.y);
+    const v=this.r.getDrawingBufferSize(new THREE.Vector2()), w=Math.max(1,v.x), h=Math.max(1,v.y); PARTICLE_VIEW.h=h;
     this.targets.forEach(t=>t.dispose());
     const opt={minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,format:THREE.RGBAFormat};
     this.rtScene=(this.r.capabilities.isWebGL2 && THREE.WebGLMultisampleRenderTarget) ? new THREE.WebGLMultisampleRenderTarget(w,h,opt) : new THREE.WebGLRenderTarget(w,h,opt);
@@ -3384,8 +3417,7 @@ class Game{
           if(!f.grounded) f.vel.x=clamp(f.vel.x+h.dir*0.32*k,-10,10);
           else if(f.state!=='shield') f.pos.x+=h.dir*0.028*k;
         }
-        if(this.frame%3===0) this.particles.spawn(new THREE.Vector3(-h.dir*22,rand(-2,14),rand(-1,1)),2,{color:[0x8fcf5a,0xd8e89a,0xffffff],speed:0,grav:0,life:60,size:0.07,drag:1,dirX:h.dir});
-        this.particles.pool.slice(-2).forEach(p=>{ if(p.vel.length()===0) p.vel.set(h.dir*0.75*Math.max(0.3,k),rand(-0.03,0.03),0); });
+        if(this.frame%3===0) for(let j=0;j<2;j++) this.particles.spawn(new THREE.Vector3(-h.dir*22,rand(-2,14),rand(-1,1)),1,{color:[0x8fcf5a,0xd8e89a,0xffffff],grav:0,life:60,size:0.07,drag:1,vel:{x:h.dir*0.75*Math.max(0.3,k),y:rand(-0.03,0.03),z:0}});
         if(h.t>c.warn+c.active) h.done=true;
         continue;
       }
