@@ -60,6 +60,7 @@
   .rtile .b1{ left:3px; background:#7fd0ff; color:#111; } .rtile .b2{ right:3px; background:#ff9b7f; color:#111; }
   .chip{ pointer-events:auto; cursor:pointer; padding:6px 14px; border-radius:16px; font-size:12px;
     background:#1a1e28; border:1px solid #333c4d; }
+  .chip.focus, .keycap.focus, .swatch.focus{ outline:2px solid #fff; outline-offset:2px; }
   .chip.active{ background:var(--accent); color:#111; border-color:var(--accent); font-weight:700; }
   /* -------- Stage select -------- */
   .stage-grid{ display:flex; gap:22px; }
@@ -556,6 +557,11 @@ const AUDIO = new AudioManager();
 
 //////////////////////// INPUT ////////////////////////
 // Sandboxed frames can deny the Gamepad API by permissions policy, which makes getGamepads() throw.
+// controller vibration for human players (Chrome/Edge: vibrationActuator dual-rumble)
+function rumble(f,strength,ms){
+  const idx=f&&f.control==='p1'?0:f&&f.control==='p2'?1:-1; if(idx<0) return;
+  try{ const gp=readGamepads()[idx], a=gp&&gp.vibrationActuator; if(a&&a.playEffect) a.playEffect('dual-rumble',{duration:ms,strongMagnitude:strength,weakMagnitude:Math.min(1,strength*1.2)}); }catch(e){}
+}
 function readGamepads(){ try{ return navigator.getGamepads?navigator.getGamepads():[]; }catch(e){ return []; } }
 const DEFAULT_KEYMAP = {
   p1:{ left:'KeyA',right:'KeyD',up:'KeyW',down:'KeyS',jump:'Space',attack:'KeyF',special:'KeyG',shield:'KeyH',grab:'KeyR',taunt:'KeyT' },
@@ -1010,6 +1016,7 @@ const ITEM_SHOOT=new Move('itemShoot',{name:'Rune Bolt',startup:6,active:2,recov
 const ITEM_THROW=new Move('itemThrow',{startup:5,active:2,recovery:10,dmg:0,noHitbox:true,itemThrow:true,name:'Item Throw'});
 const LEDGE_ATTACK=new Move('ledgeAttack',{startup:8,active:4,recovery:16,dmg:8,bkb:12,kbg:1.2,angle:30,range:1.2,name:'Ledge Attack'});
 const LOW_GFX={on:false};
+const FOCUS_SCREENS={menu:'screen-mainmenu',paused:'screen-pause',results:'screen-results',records:'screen-records',controls:'screen-controls'};
 const CAMERA_FX={shake:true};
 // three.js strips '.' from node names on load ('handslot.r' -> 'handslotr'), so look up both spellings
 function bone(root,name){ return root.getObjectByName(name)||root.getObjectByName(name.replace(/\./g,'')); }
@@ -2507,6 +2514,11 @@ class Game{
     if(st==='paused'&&(code==='KeyP'||code==='Escape')) return this._resume();
     if(this.replaying&&['Enter','Escape','Space','KeyF','Numpad1'].includes(code)) return this._endReplay();
     if(st==='records'&&code==='Escape') return this._toMainMenu();
+    if(FOCUS_SCREENS[st] && !(st==='controls'&&this._binding)){
+      const dir={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right'}[code];
+      if(dir){ this._navFocus(dir); return; }
+      if(code==='Enter' && document.querySelector('.focus') && this._focusables().some(e=>e.classList.contains('focus'))){ this._activateFocus(); return; }
+    }
     if(st==='menu'&&code==='Enter') return document.getElementById('btn-1v1').onclick();
     if(st==='charselect'){
       if(code==='KeyA') this._cycleChar('p1',-1); if(code==='KeyD') this._cycleChar('p1',1);
@@ -2526,7 +2538,7 @@ class Game{
     for(let i=0;i<2;i++){
       const gp=gps[i]; if(!gp) continue;
       const b=k=>!!(gp.buttons[k]&&gp.buttons[k].pressed);
-      const now={l:b(14)||gp.axes[0]<-0.6,r:b(15)||gp.axes[0]>0.6,a:b(0),back:b(1),start:b(9)};
+      const now={l:b(14)||gp.axes[0]<-0.6,r:b(15)||gp.axes[0]>0.6,u:b(12)||gp.axes[1]<-0.6,d:b(13)||gp.axes[1]>0.6,a:b(0),back:b(1),start:b(9)};
       const prev=this._menuPad[i], edge=k=>now[k]&&!prev[k];
       const st=this.state;
       if(edge('start')){ if(st==='battle') this._pause(); else if(st==='paused') this._resume(); }
@@ -2537,11 +2549,31 @@ class Game{
         const n=STAGES.length;
         if(edge('l')) this._selectStage((this.selection.stageIdx+n)%(n+1)); if(edge('r')) this._selectStage((this.selection.stageIdx+1)%(n+1));
         if(edge('a')) this._startMatch(); if(edge('back')) this._toCharSelect();
-      } else if(st==='menu'&&edge('a')) document.getElementById('btn-1v1').onclick();
-      else if(st==='results'&&edge('a')) this._rematch();
+      } else if(FOCUS_SCREENS[st]){
+        for(const [k,dir] of [['l','left'],['r','right'],['u','up'],['d','down']]) if(edge(k)) this._navFocus(dir);
+        if(edge('a')) this._activateFocus(); if(edge('back')) this._menuBack();
+      }
       this._menuPad[i]=now;
     }
   }
+  // spatial focus navigation for controller / arrow keys on button-and-chip screens
+  _focusables(){
+    const root=document.getElementById(FOCUS_SCREENS[this.state]); if(!root) return [];
+    return [...root.querySelectorAll('.menu-btn, .chip, .keycap, .swatch')].filter(e=>e.offsetParent!==null);
+  }
+  _navFocus(dir){
+    const els=this._focusables(); if(!els.length) return;
+    let cur=els.find(e=>e.classList.contains('focus'));
+    if(!cur){ this._setFocus(els[0]); return; }
+    const c=cur.getBoundingClientRect(), cx=c.left+c.width/2, cy=c.top+c.height/2; let best=null, bs=1e9;
+    for(const e of els){ if(e===cur) continue; const r=e.getBoundingClientRect(), dx=r.left+r.width/2-cx, dy=r.top+r.height/2-cy;
+      const main=dir==='left'?-dx:dir==='right'?dx:dir==='up'?-dy:dy, side=dir==='left'||dir==='right'?Math.abs(dy):Math.abs(dx);
+      if(main<=4) continue; const s=main+side*2.2; if(s<bs){ bs=s; best=e; } }
+    if(best){ this._setFocus(best); AUDIO.playClick(); }
+  }
+  _setFocus(e){ document.querySelectorAll('.focus').forEach(x=>x.classList.remove('focus')); e.classList.add('focus'); e.scrollIntoView({block:'nearest'}); }
+  _activateFocus(){ const e=this._focusables().find(x=>x.classList.contains('focus')); if(e){ e.click(); return true; } this._navFocus('down'); return false; }
+  _menuBack(){ const st=this.state; if(st==='paused') this._resume(); else if(st==='results'||st==='records'||st==='controls') this._toMainMenu(); }
   _selectStage(i){
     this.selection.stageIdx=i;
     [...document.getElementById('stage-grid').children].forEach((c,j)=>c.classList.toggle('sel',j===i));
@@ -3011,6 +3043,7 @@ class Game{
     this.bloomPulse=Math.max(this.bloomPulse,clamp(dmg/18,0.12,1.1)+(move.special?0.3:0));
     this.cameraRig.kick(kb>85?clamp((kb-60)/80,0.25,1.2):0.08);
     if(kb>80 && !defender.cd.armorAll) fighterVoice(defender,'hurt');
+    rumble(defender,clamp(0.25+dmg*0.03,0.25,1),clamp(60+dmg*6,60,240)); if(this.fighters.includes(attacker)) rumble(attacker,0.2,50);
     if(kb>95) this.cameraRig.punch=Math.max(this.cameraRig.punch,clamp((kb-95)/90,0.3,1));
     if(defender===this.f2) this._lastHit={name:move.name||move.id,dmg,kb:Math.round(kb),hitstun:defender.hitstun,speed:+(kb*KB_TO_VEL).toFixed(1)};
     if(move.ultimate){
@@ -3292,7 +3325,7 @@ class Game{
     this.particles.spawn(at,70,{color:[f.cd.accent,0xffffff,0xffee88],speed:0.55,life:40,upBias:1,grav:0.004,additive:true,size:0.11});
     this.particles.ring(at,f.cd.accent,7,30,0.18); this.particles.ring(at,0xffffff,4,20,0.1);
     this.flash=0.3; this.flashColor=f.cd.accent; this.bloomPulse=2; this.cameraRig.kick(1.4);
-    AUDIO.playKO(); AUDIO.playCrowd(); fighterVoice(f,'ko');
+    AUDIO.playKO(); AUDIO.playCrowd(); fighterVoice(f,'ko'); rumble(f,1,450);
     if(this._frameHits) this._frameHits.push({ko:true,at:at.clone(),col:f.cd.accent});
     if(f.pos.y>b.t){ // knocked out through the top: a twinkle far away in the sky
       const star=new THREE.Vector3(clamp(f.pos.x*0.6,-14,14),b.t-6,-45);
