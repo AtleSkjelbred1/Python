@@ -184,6 +184,7 @@
   <div id="loading-note" style="font-size:12px;letter-spacing:3px;color:#ffb347;margin-bottom:12px;">LOADING FIGHTERS…</div>
   <div class="row"><div id="btn-1v1" class="menu-btn" style="min-width:230px;">VERSUS (2 PLAYERS)</div><div id="btn-ffa" class="menu-btn" style="min-width:230px;">FREE-FOR-ALL (4)</div></div>
   <div class="row"><div id="btn-cpu" class="menu-btn" style="min-width:230px;">VS BOT</div><div id="btn-arcade" class="menu-btn" style="min-width:230px;">ARCADE</div></div>
+  <div class="row"><div id="btn-homerun" class="menu-btn" style="min-width:230px;">HOME-RUN CONTEST</div></div>
   <div class="row"><div id="btn-training" class="menu-btn" style="min-width:150px;">TRAINING</div><div id="btn-records" class="menu-btn" style="min-width:150px;">RECORDS</div><div id="btn-controls" class="menu-btn" style="min-width:150px;">CONTROLS</div></div>
   <div class="panel settings-grid" style="margin-top:14px;">
     <span class="sl">STOCKS</span><div id="stock-chips" class="cs-mode-select"></div>
@@ -807,6 +808,14 @@ const STAGES = [
     blast:{l:-26,r:26,t:22,b:-18}, sky:0x0c1016, fog:0x111822 },
 ];
 
+// Home-Run Contest: a small arena fenced by barriers that drop when the 10 s timer ends, then a 1 km runway.
+const HOMERUN_STAGE={ id:'homerun', name:'Home-Run Field', desc:'', theme:'homerun',
+  platforms:[{x:0,y:-1,w:12,h:3,solid:true},{x:506.6,y:-9,w:1000,h:2,solid:true,noUnder:true,noLedge:true,runway:true},
+    {x:6.35,y:4,w:0.5,h:10,solid:true,barrier:true,noUnder:true,noLedge:true},{x:-6.35,y:4,w:0.5,h:10,solid:true,barrier:true,noUnder:true,noLedge:true}],
+  blast:{l:-40,r:1100,t:90,b:-40}, sky:0x6fb3e0, fog:0x9ccbe8, bloom:{threshold:0.97,strength:0.18} };
+const SANDBAG_CD=Object.assign({},CHAR_DATA.find(c=>c.id==='rattle'),{name:'Sandbag',weight:100,sandbag:true,traits:'',desc:''});
+const HR_TIME=600, HR_EDGE=6.6;
+
 //////////////////////// HITBOX ////////////////////////
 class Hitbox{
   constructor(owner,move,x,y,radius,facing){
@@ -1206,7 +1215,7 @@ class Fighter{
       const accel=this.cd.airSpeed*2.2, maxA=this.cd.airSpeed*2.4;
       if(cmd.left) this.vel.x=Math.max(-maxA,this.vel.x-accel*dt*3);
       else if(cmd.right) this.vel.x=Math.min(maxA,this.vel.x+accel*dt*3);
-      else this.vel.x=lerp(this.vel.x,0,0.05);
+      else if(!this.cd.sandbag) this.vel.x=lerp(this.vel.x,0,0.05); // the sandbag keeps its momentum
       if(downP && this.vel.y<=2 && !this.fastFalling){ this.fastFalling=true; this.vel.y=-this.cd.fastFallSpeed; }
       if(this.state==='doublejump'){ if(++this.stateTimer>22) this.state=this.vel.y>0?'jump':'fall'; }
       else this.state=this.vel.y>0?'jump':'fall';
@@ -1304,7 +1313,7 @@ class Fighter{
     const grabbable = this.state!=='attack' || (this.action && (this.action.move.recoveryMove||this.action.move.teleport) && this.vel.y<0);
     if(!this.grounded && this.vel.y<0 && this.ledge===null && this.ledgeCooldown<=0 && this.hitstun<=0 && this.shieldBroken<=0 && grabbable && !this.pose){
       for(const p of world.platforms){
-        if(!p.solid) continue;
+        if(!p.solid||p.noLedge) continue;
         const top=p.y+p.h/2;
         for(const [ex,out] of [[p.x-p.w/2,-1],[p.x+p.w/2,1]]){
           if(world.occupiedLedges && world.occupiedLedges.includes(ex)) continue;
@@ -1538,7 +1547,7 @@ class StageObj{
     const scene=this.scene, th=this.data.theme;
     scene.background=new THREE.Color(this.data.sky);
     scene.fog=new THREE.Fog(this.data.fog,40,170);
-    const meadow=th==='meadow', crypt=th==='crypt';
+    const homerun=th==='homerun', meadow=th==='meadow'||homerun, crypt=th==='crypt';
     scene.add(new THREE.HemisphereLight(th==='volcano'?0xffc49a:(meadow?0xdcecff:(crypt?0x9fb8e0:0xd4e4ff)),th==='volcano'?0x3a1a10:(meadow?0x3d5a2a:(crypt?0x0c1014:0x2a2620)),meadow?0.7:(crypt?0.6:0.75)));
     const sun=new THREE.DirectionalLight(th==='storm'?0xc8d4ff:(th==='volcano'?0xffd2a8:(crypt?0xb8d4ff:0xfff2d8)),th==='storm'?0.9:(meadow?1.1:(crypt?0.75:1.2)));
     sun.position.set(-14,22,14); sun.castShadow=true; sun.shadow.mapSize.set(2048,1024); sun.shadow.bias=-0.0005;
@@ -1548,10 +1557,14 @@ class StageObj{
     rim.position.set(10,6,-18); scene.add(rim);
     const std=o=>new THREE.MeshStandardMaterial(o);
     const add=(name,x,y,z,sc,ry)=>{ const o=MODELS.prop(name); o.position.set(x,y,z); if(Array.isArray(sc)) o.scale.set(sc[0],sc[1],sc[2]); else o.scale.setScalar(sc||1); o.rotation.y=ry||0; scene.add(o); return o; };
-    const bodyCol={fortress:0x6f7584,volcano:0x4d3a2e,storm:0x59606b,meadow:0x7a5f42,crypt:0x3a4150}[th];
-    const topTile={fortress:'floor_tile_large',volcano:'floor_dirt_large_rocky',storm:'floor_dirt_large_rocky',meadow:null,crypt:'floor_tile_large'}[th];
+    const bodyCol={fortress:0x6f7584,volcano:0x4d3a2e,storm:0x59606b,meadow:0x7a5f42,crypt:0x3a4150,homerun:0x7a5f42}[th];
+    const topTile={fortress:'floor_tile_large',volcano:'floor_dirt_large_rocky',storm:'floor_dirt_large_rocky',meadow:null,crypt:'floor_tile_large',homerun:null}[th];
     for(const p of this.platforms){
       const top=p.y+p.h/2;
+      if(p.barrier){ // glassy force field that fences the arena until time is up
+        p.mesh=new THREE.Mesh(new THREE.BoxGeometry(p.w,p.h,3.4),new THREE.MeshBasicMaterial({color:0x8fd8ff,transparent:true,opacity:0.22,depthWrite:false,blending:THREE.AdditiveBlending}));
+        p.mesh.position.set(p.x,p.y,0); scene.add(p.mesh); continue;
+      }
       const body=new THREE.Mesh(new THREE.BoxGeometry(p.w,p.h,3.4),std({color:p.solid?bodyCol:0x5b4130,roughness:0.9}));
       body.position.set(p.x,p.y-0.02,0); body.receiveShadow=body.castShadow=true; scene.add(body);
       const n=Math.max(1,Math.round(p.w/4)), tw=p.w/n;
@@ -1564,7 +1577,7 @@ class StageObj{
         const cols=Math.round(p.w/2), cw=p.w/cols;
         for(let i=0;i<cols;i++) add('floor_foundation_front',p.x-p.w/2+cw*(i+0.5),top-Math.min(p.h,2.4),0.62,[cw/2,Math.min(p.h,2.4)/2,1]);
       }
-      if(p.solid){
+      if(p.solid && !p.noUnder){
         const under=new THREE.Mesh(new THREE.CylinderGeometry(p.w*0.46,p.w*0.12,th==='storm'?22:8,7),std({color:bodyCol,roughness:0.95,flatShading:true}));
         under.scale.z=0.3; under.position.set(p.x,p.y-p.h/2-(th==='storm'?11:4),-0.3); under.receiveShadow=true; scene.add(under);
       }
@@ -1572,7 +1585,26 @@ class StageObj{
     const m=this.main, top=m.y+m.h/2, L=m.x-m.w/2, R=m.x+m.w/2;
     this.torchLights=[];
     const torch=(x,y,z)=>{ add('torch_lit',x,y,z,1.3); if(LOW_GFX.on) return; const l=new THREE.PointLight(crypt?0x5fd8ff:0xff9a40,crypt?1.1:0.6,crypt?9:7,2); l.position.set(x,y+1.1,z+0.6); scene.add(l); this.torchLights.push(l); };
-    if(crypt){
+    if(homerun){
+      const lake=new THREE.Mesh(new THREE.PlaneGeometry(1400,200),std({color:0x3d8fc9,roughness:0.35,metalness:0.1}));
+      lake.rotation.x=-Math.PI/2; lake.position.set(500,-14,0); scene.add(lake);
+      // distance boards every 25 m along the runway
+      const board=txt=>{ const c=document.createElement('canvas'); c.width=256; c.height=128; const x=c.getContext('2d');
+        x.fillStyle='#f4ead2'; x.fillRect(0,0,256,128); x.strokeStyle='#7a5f42'; x.lineWidth=10; x.strokeRect(5,5,246,118);
+        x.fillStyle='#3a2a18'; x.font='bold 64px Arial'; x.textAlign='center'; x.textBaseline='middle'; x.fillText(txt,128,68);
+        return new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c)}); };
+      const postMat=std({color:0x6b4a2b,roughness:1});
+      for(let d=25;d<=1000;d+=25){
+        const x=HR_EDGE+d, g=new THREE.Group();
+        const post=new THREE.Mesh(new THREE.BoxGeometry(0.2,3,0.2),postMat); post.position.y=1.5; g.add(post);
+        const b=new THREE.Mesh(new THREE.PlaneGeometry(2.4,1.2),board(d+' m')); b.position.y=3.4; g.add(b);
+        g.position.set(x,-8,-2); scene.add(g);
+        if(d%100===0) add('flag_yellow',x+0.4,-8,-2,8);
+      }
+      for(let i=0;i<40;i++) add(i%3?'trees_A_medium':'trees_B_medium',HR_EDGE+10+i*25+rand(-6,6),-8,-7-rand(0,4),rand(2.4,3.4));
+      add('building_windmill_green',-16,-8,-14,6); add('mountain_A_grass_trees',-60,-14,-120,30);
+      this.clouds=[]; for(let i=0;i<14;i++){ const c=add(i%2?'cloud_small':'cloud_big',rand(-60,300),rand(14,34),rand(-110,-60),rand(3,5)); this.clouds.push(c); }
+    } else if(crypt){
       // back wall of arches and pillars, a second row deeper in the fog, and ghost-fire torches
       ['wall_arched','wall','wall_broken','wall_arched'].forEach((w,i)=>add(w,L+2+i*4,top,-2.4,[1,0.9,1]));
       add('pillar_decorated',L-0.3,top,-2.2,0.9); add('pillar_decorated',R+0.3,top,-2.2,0.9);
@@ -2146,6 +2178,7 @@ class Game{
     $('btn-resume').onclick=()=>this._resume();
     $('btn-restart').onclick=()=>this._startMatch(true);
     $('btn-arcade').onclick=()=>{ this.settings.mode='arcade'; this._toCharSelect(); };
+    $('btn-homerun').onclick=()=>{ this.settings.mode='homerun'; this._toCharSelect(); };
     $('btn-ffa').onclick=()=>{ this.settings.mode='ffa'; this._toCharSelect(); };
     this.ffaP2='bot'; this.ffaTeams=false;
     this._chipRow($('ffa-teams'),[{label:'FREE-FOR-ALL',value:false},{label:'2 vs 2 (P1+P2 vs CPUs)',value:true}],false,v=>{ this.ffaTeams=v; AUDIO.playClick(); this._toCharSelect(); });
@@ -2239,7 +2272,7 @@ class Game{
     this.state='charselect'; this._showScreen('charselect');
     const mode=this.settings.mode;
     document.getElementById('p2-label').textContent=mode==='cpu'?'BOT ('+this.settings.botDifficulty.toUpperCase()+')':(mode==='training'?'TRAINING DUMMY':(mode==='arcade'?'ARCADE: 5 RANDOM RIVALS':
-      (mode==='ffa'?(this.ffaP2==='bot'?'CPU ('+this.settings.botDifficulty.toUpperCase()+') + 2 RANDOM CPUs':'PLAYER 2 + 2 RANDOM CPUs'):'PLAYER 2')));
+      (mode==='homerun'?'SANDBAG — 10 SECONDS, THEN SEND IT FLYING':mode==='ffa'?(this.ffaP2==='bot'?'CPU ('+this.settings.botDifficulty.toUpperCase()+') + 2 RANDOM CPUs':'PLAYER 2 + 2 RANDOM CPUs'):'PLAYER 2')));
     document.getElementById('ffa-p2').classList.toggle('hidden',mode!=='ffa');
     document.getElementById('ffa-teams').classList.toggle('hidden',mode!=='ffa');
     document.getElementById('btn-to-stage').innerHTML=mode==='arcade'?'START ARCADE &#8594;':'NEXT: SELECT STAGE &#8594;';
@@ -2325,7 +2358,8 @@ class Game{
       `<tr><td>Longest combo</td><td class="num">${d.longestCombo} hits${d.longestComboChar?' · '+d.longestComboChar:''}</td></tr>`+
       `<tr><td>Fastest win</td><td class="num">${fmt(d.fastestWin)}${d.fastestWinChar?' · '+d.fastestWinChar:''}</td></tr>`+
       `<tr><td>Most damage in one match</td><td class="num">${d.mostDamage}%</td></tr>`+
-      `<tr><td>Arcade</td><td class="num">${d.arcadeClears||0} clears · best ${d.arcadeBest||0} / 5 rounds</td></tr></table>`;
+      `<tr><td>Arcade</td><td class="num">${d.arcadeClears||0} clears · best ${d.arcadeBest||0} / 5 rounds</td></tr>`+
+      `<tr><td>Home-Run best</td><td class="num">${(()=>{ const hr=d.homerun||{}, k=Object.keys(hr).sort((a,b)=>hr[b]-hr[a])[0]; return k?hr[k].toFixed(1)+' m · '+CHAR_DATA.find(c=>c.id===k).name:'—'; })()}</td></tr></table>`;
     h+='<div class="rec-h">FIGHTERS</div><table class="rec-table"><tr><th>Fighter</th><th>Played</th><th>Wins</th><th>Win rate</th></tr>';
     CHAR_DATA.forEach(cd=>{ const c=d.chars[cd.id]||{played:0,wins:0}; h+=`<tr><td>${cd.name}</td><td class="num">${c.played}</td><td class="num">${c.wins}</td><td class="num">${c.played?Math.round(100*c.wins/c.played)+'%':'—'}</td></tr>`; });
     h+='</table><div class="rec-h">COLOURS</div><table class="rec-table"><tr><th></th><th>Colour</th><th>How to unlock</th><th>Progress</th></tr>';
@@ -2381,7 +2415,7 @@ class Game{
     rig.setChar(this._previewCd(who),this._isRandom(who)?0x161616:this._tintOf(who));
     return url;
   }
-  _toStageSelect(){ if(this.settings.mode==='arcade') return this._startArcade(); this.state='stageselect'; this._showScreen('stageselect'); AUDIO.playClick(); this._stageThumbs(); }
+  _toStageSelect(){ if(this.settings.mode==='arcade') return this._startArcade(); if(this.settings.mode==='homerun') return this._startHomerun(); this.state='stageselect'; this._showScreen('stageselect'); AUDIO.playClick(); this._stageThumbs(); }
   // renders each stage once into its card the first time stage select opens
   _stageThumbs(){
     if(this._thumbsDone) return; this._thumbsDone=true;
@@ -2395,6 +2429,10 @@ class Game{
       scene.traverse(o=>{ if(o.userData.shared) return; if(o.geometry) o.geometry.dispose(); if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(q=>q.dispose()); });
     });
     r.dispose(); if(r.forceContextLoss) r.forceContextLoss();
+  }
+  _startHomerun(){
+    this.p1char=CHAR_DATA[this.selection.p1]||choice(CHAR_DATA); this.p2char=SANDBAG_CD; this.stageData=HOMERUN_STAGE; this.extraChars=[];
+    this._startMatch(true);
   }
   // ---------- arcade: five rounds against random rivals, getting harder ----------
   _startArcade(){
@@ -2449,12 +2487,13 @@ class Game{
     this.scene=new THREE.Scene();
     this.stage=new StageObj(this.scene,this.stageData);
     this.particles=new ParticleSystem(this.scene);
-    this.isTraining=this.settings.mode==='training';
+    this.isTraining=this.settings.mode==='training'; this.isHomerun=this.settings.mode==='homerun';
+    this.hr=this.isHomerun?{t:HR_TIME,phase:'hit',fly:0,dist:0}:null;
     // who is in the match and who controls them: 'p1'/'p2' keyboard+pad, 'bot', or the training 'dummy'
     const arc=mode==='arcade'&&this.arcade;
     const botDiff=arc?this.arcade.diffs[this.arcade.round]:this.settings.botDifficulty;
     const roster=[{cd:this.p1char,tint:this._tintOf('p1'),control:'p1'},
-      {cd:this.p2char,tint:this._tintOf('p2'),control:this.isTraining?'dummy':(mode==='cpu'||arc||(ffa&&this.ffaP2==='bot'))?'bot':'p2'}];
+      {cd:this.p2char,tint:mode==='homerun'?0xd8b98a:this._tintOf('p2'),control:(this.isTraining||mode==='homerun')?'dummy':(mode==='cpu'||arc||(ffa&&this.ffaP2==='bot'))?'bot':'p2'}];
     this.extraChars.forEach(cd=>roster.push({cd,tint:null,control:'bot'}));
     const spare=[0x9ec2ff,0xff9a9a,0x9ef0b4,0xffd98a,0x6a6a78];
     roster.forEach((r,i)=>{ // repeated fighters get distinct colours so everyone stays readable
@@ -2464,7 +2503,7 @@ class Game{
     const n=roster.length, xs=n===2?[-4,4]:[-6,-2,2,6];
     this.fighters=roster.map((r,i)=>{
       const f=new Fighter(this.scene,r.cd,xs[i]<0?-1:1,'p'+(i+1),r.tint);
-      f.idx=i; f.control=r.control; f.stocks=this.isTraining?Infinity:(arc?2:this.settings.stocks);
+      f.idx=i; f.control=r.control; f.stocks=(this.isTraining||this.isHomerun)?Infinity:(arc?2:this.settings.stocks);
       f.ai=r.control==='bot'?new AIController(f,botDiff):null;
       f.team=ffa&&this.ffaTeams?(i<2?0:1):null;
       return f;
@@ -2484,11 +2523,11 @@ class Game{
     if(arc) this.arcade.won=false;
     this.ai=this.f2.ai; this._targets=new Map();
     this._dummyAI=null; this._lastMove=null; this._lastHit=null;
-    this.hazards=[]; this.hazardsOn=this.settings.hazards&&!this.isTraining; this.hazardTimer=Math.round(rand(420,660));
+    this.hazards=[]; this.hazardsOn=this.settings.hazards&&!this.isTraining&&!this.isHomerun; this.hazardTimer=Math.round(rand(420,660));
     this.replayBuf=[]; this._frameHits=[]; this.replaying=false; this.replayFrames=null; this.matchFrames=0;
     if(this.viz){ this.viz=null; }
     this.projectiles=[]; this.clones=[];
-    this.items=[]; this.crates=[]; this.itemsOn=this.settings.items&&!this.isTraining; this.crateTimer=Math.round(rand(300,480));
+    this.items=[]; this.crates=[]; this.itemsOn=this.settings.items&&!this.isTraining&&!this.isHomerun; this.crateTimer=Math.round(rand(300,480));
     this.timeLeft=this.settings.timeLimit; this.suddenDeath=false;
     this.matchOver=false; this.cinematic=null; this.endTimer=0; this.frame=0;
     this.bloomPulse=0; this.flash=0;
@@ -2921,7 +2960,8 @@ class Game{
     AUDIO.playKO(); AUDIO.playCrowd();
     if(this._frameHits) this._frameHits.push({ko:true,at:at.clone(),col:f.cd.accent});
     this._dropHeld(f,true);
-    if(this.isTraining){ f.respawn(0,this.stage.respawnY); return; }
+    if(this.isHomerun && f===this.f2){ if(this.hr.phase==='fly') this._homerunDone(); else f.respawn(0,this.stage.respawnY); return; }
+    if(this.isTraining||this.isHomerun){ f.respawn(0,this.stage.respawnY); return; }
     // the KO goes to whoever hit them last (in 1v1, always the opponent)
     const others=this.fighters.filter(o=>o!==f), credit=(f.lastHitBy&&this.frame-f.lastHitAt<600)?f.lastHitBy:(others.length===1?others[0]:null);
     f.lastHitBy=null;
@@ -2955,6 +2995,30 @@ class Game{
     this._targets.set(f,{t,at:this.frame}); return t;
   }
   // tied on stocks when time runs out: one stock each at 300%, first KO wins
+  _updateHomerun(){
+    const H=this.hr, bag=this.f2;
+    if(H.phase==='hit'){
+      if(--H.t<=0){ // time: drop the barriers
+        H.phase='fly'; this.stage.platforms=this.stage.platforms.filter(p=>{ if(p.barrier){ p.mesh.visible=false; return false; } return true; });
+        this._bigText('TIME!',true); this._countT.push(setTimeout(()=>this._hideBigText(),700)); AUDIO.playCount(0);
+      }
+      this.cameraRig.update(this.fighters,1/60);
+      return;
+    }
+    if(H.phase==='fly'){
+      H.fly++; H.dist=Math.max(0,bag.pos.x-HR_EDGE);
+      const far=bag.pos.x>HR_EDGE+2;
+      this.cameraRig.update(this.fighters,1/60,far?{x:bag.pos.x,y:bag.pos.y+1.5,dist:16}:null);
+      const settled=bag.grounded && bag.hitstun<=0 && Math.abs(bag.vel.x)<0.3 && bag.onPlatform && bag.onPlatform.runway;
+      if(settled || H.fly>900 || (!far && H.fly>150 && bag.grounded && bag.hitstun<=0)) this._homerunDone();
+    }
+  }
+  _homerunDone(){
+    const H=this.hr; if(H.phase==='done') return; H.phase='done';
+    const m=Math.round(H.dist*10)/10, d=PROFILE.data; d.homerun=d.homerun||{};
+    const prev=d.homerun[this.p1char.id]||0; H.record=m>prev; if(H.record){ d.homerun[this.p1char.id]=m; PROFILE.save(); }
+    H.final=m; this._endMatch(this.f1,'homerun');
+  }
   _suddenDeath(){
     this.suddenDeath=true; this.timeLeft=0;
     this.fighters.forEach((f,i)=>{ f.stocks=1; f.respawn(i?3:-3,this.stage.respawnY); f.percent=300; f.respawnTimer=60; });
@@ -2977,6 +3041,7 @@ class Game{
     this.bloomPulse=1.2;
   }
   _recordProfile(winner){
+    if(this.isHomerun){ document.getElementById('unlock-note').textContent=''; return; }
     const d=PROFILE.data, before=COLOR_UNLOCKS.filter(c=>PROFILE.unlocked(c)).map(c=>c.id);
     const humans=this.fighters.filter(f=>f.control==='p1'||f.control==='p2');
     d.matches++;
@@ -3207,6 +3272,7 @@ class Game{
   // ---------- training ----------
   _dummyCmd(){
     const f=this.f2, mode=this.training.dummy, cmd=Object.assign({},EMPTY_CMD);
+    if(this.isHomerun) return cmd;
     if(mode==='cpu'){ if(!this._dummyAI) this._dummyAI=new AIController(f,'easy'); return this._dummyAI.decide(this.f1,this.stage,this.projectiles); }
     const m=this.stage.main, top=m.y+m.h/2, L=m.x-m.w/2, R=m.x+m.w/2;
     if(!f.grounded && (f.pos.x<L||f.pos.x>R||f.pos.y<top-1)){ // recover like a player would
@@ -3288,10 +3354,16 @@ class Game{
     const $=id=>document.getElementById(id);
     $('winner-banner').textContent=this.winner.team!=null?(TEAM_NAMES[this.winner.team]+' TEAM WINS!'):this.winner.cd.name+' WINS!';
     $('win-quote').textContent='“'+choice(VICTORY_QUOTES[this.winner.cd.id]||[''])+'”';
+    if(this.isHomerun){
+      const H=this.hr, best=(PROFILE.data.homerun||{})[this.p1char.id]||0;
+      $('winner-banner').textContent=H.final.toFixed(1)+' m'+(H.record?'  —  NEW RECORD!':'');
+      $('win-quote').textContent=this.p1char.name+' · best '+best.toFixed(1)+' m';
+    }
     const A=this.settings.mode==='arcade'&&this.arcade;
     $('btn-rematch').textContent=A?(A.cleared?'FINISH':(A.won?'NEXT ROUND':'RETRY ROUND')):'REMATCH';
     if(A) $('winner-banner').textContent=A.cleared?'ARCADE CLEAR!':(A.won?'ROUND '+(A.round+1)+' CLEAR!':'DEFEAT — ROUND '+(A.round+1)+' / 5');
     const F=this.fighters, ord=n=>['1st','2nd','3rd','4th'][n-1], cell=fn=>F.map(f=>`<td>${fn(f)}</td>`).join('');
+    if(this.isHomerun){ $('results-table').innerHTML=''; $('btn-rematch').textContent='TRY AGAIN'; return; }
     $('results-table').innerHTML=`<tr><th></th>${F.map(f=>`<th style="color:${hex6(f.cd.accent)}">${f.cd.name}${f.control==='bot'?' (CPU)':''}</th>`).join('')}</tr>`+
       (F.length>2?`<tr><td style="opacity:.6;">Place</td>${cell(f=>ord(f.placed||F.length))}</tr>`:'')+
       `<tr><td style="opacity:.6;">Damage Dealt</td>${cell(f=>f.statDamageDealt.toFixed(1)+'%')}</tr>`+
@@ -3352,7 +3424,7 @@ class Game{
       }
       if(f.state==='stunned' && this.frame%10===0) this.particles.spawn(new THREE.Vector3(f.pos.x,f.pos.y+2.1*f.cd.size,0.3),2,{color:0xffe066,speed:0.04,life:20,grav:0,additive:true});
     }
-    this.cameraRig.update(this.fighters,dt);
+    if(this.hr) this._updateHomerun(); else this.cameraRig.update(this.fighters,dt);
     this.matchFrames++;
     for(const f of this.fighters) if(!this.matchOver) this._checkKO(f);
     if(!this.isTraining){ this.replayBuf.push(this._snapshot()); if(this.replayBuf.length>150) this.replayBuf.shift(); }
@@ -3414,7 +3486,8 @@ class Game{
       $('hudult-'+n).style.width=f.ultMeter+'%'; $('hudult-'+n).classList.toggle('full',f.ultMeter>=100);
       $('hudultlabel-'+n).style.opacity=f.ultMeter>=100?1:0;
     });
-    if(this.suddenDeath){ $('hud-timer').textContent='SUDDEN DEATH'; $('hud-timer').style.display=''; }
+    if(this.hr){ const H=this.hr; $('hud-timer').textContent=H.phase==='hit'?(Math.max(0,H.t)/60).toFixed(1)+' s':(H.phase==='done'?H.final:H.dist).toFixed(1)+' m'; $('hud-timer').style.display=''; }
+    else if(this.suddenDeath){ $('hud-timer').textContent='SUDDEN DEATH'; $('hud-timer').style.display=''; }
     else if(this.settings.timeLimit>0){
       const t=Math.max(0,Math.ceil(this.timeLeft)); $('hud-timer').textContent=Math.floor(t/60)+':'+String(t%60).padStart(2,'0');
       $('hud-timer').style.display='';
