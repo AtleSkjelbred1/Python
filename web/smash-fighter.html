@@ -693,10 +693,10 @@ function scaleMove(id,base,coef,extra){
 // Special move definitions per character (id -> {n,side,up,down})
 const SPECIALS = {
   kael:{
-    n:{name:'Sword Wave',startup:14,active:6,recovery:20,dmg:9,bkb:9,kbg:1.8,angle:30,range:1.5,projectile:true,speed:9,pvis:'wave',color:0xc9a24b},
+    n:{name:'Sword Wave',startup:15,active:6,recovery:22,dmg:8,bkb:9,kbg:1.8,angle:30,range:1.5,projectile:true,speed:9,pvis:'wave',color:0xc9a24b},
     side:{name:'Charging Strike',startup:10,active:8,recovery:18,dmg:12,bkb:11,kbg:2.4,angle:25,range:1.4,dash:8,armor:true,color:0xc9a24b},
     up:{name:'Sky Cleave',startup:8,active:6,recovery:16,dmg:10,bkb:9,kbg:2.6,angle:80,range:1.2,recoveryMove:true,vel:18,color:0xc9a24b},
-    down:{name:'Guard Stance',startup:5,active:16,recovery:22,dmg:0,noHitbox:true,counter:true,counterMult:1.4,color:0x8fb8ff},
+    down:{name:'Guard Stance',startup:5,active:14,recovery:24,dmg:0,noHitbox:true,counter:true,counterMult:1.25,color:0x8fb8ff},
   },
   nyx:{
     n:{name:'Volt Dash',startup:6,active:6,recovery:12,dmg:7,bkb:7,kbg:1.9,angle:25,range:1.1,dash:10,color:0x2be6ff},
@@ -773,13 +773,13 @@ const ULTIMATES = {
   rattle:{name:'Bone Avalanche',style:'lunge'},
 };
 const CHAR_DATA = [
-  {id:'kael',name:'Kael Ironwarden',color:0x3a5a8c,accent:0xc9a24b,weight:130,walkSpeed:2.5,runSpeed:4.3,jumpVel:14.2,doubleJumpVel:12.2,fallSpeed:15,fastFallSpeed:24,airSpeed:2.4,size:1.16,archetype:'power',
+  {id:'kael',name:'Kael Ironwarden',color:0x3a5a8c,accent:0xc9a24b,weight:124,walkSpeed:2.5,runSpeed:4.3,jumpVel:14.2,doubleJumpVel:12.2,fallSpeed:15,fastFallSpeed:24,airSpeed:2.4,size:1.16,archetype:'power',
     traits:'Guard Stance counters melee and reflects projectiles', desc:'Heavy knight with a greatsword. Slow but hits like a truck; counters and reflects attacks.'},
   {id:'nyx',name:'Nyx Voltara',color:0x8a3ac9,accent:0x2be6ff,weight:78,walkSpeed:3.6,runSpeed:6.7,jumpVel:16.2,doubleJumpVel:14.2,fallSpeed:13,fastFallSpeed:22,airSpeed:4.1,size:0.92,archetype:'speed',wallJump:true,
     traits:'Wall jump, teleport recovery', desc:'Hooded electric duelist with twin daggers. Blindingly fast, short combos, teleport recovery, low weight.'},
   {id:'brakka',name:'Brakka',color:0x6b6459,accent:0xff7a33,weight:162,walkSpeed:2.0,runSpeed:3.5,jumpVel:12.2,doubleJumpVel:10.2,fallSpeed:17,fastFallSpeed:26,airSpeed:1.9,size:1.38,archetype:'giant',superArmorSmash:true,
     traits:'Super armor on smash attacks', desc:'A hulking axe-wielding giant. The heaviest fighter, super armor on smash attacks, short jump.'},
-  {id:'seren',name:'Seren Ashveil',color:0xc94a2e,accent:0xffce54,weight:92,walkSpeed:2.8,runSpeed:4.6,jumpVel:14,doubleJumpVel:12,fallSpeed:13.5,fastFallSpeed:21,airSpeed:3.0,size:0.98,archetype:'zoner',meleeMult:0.96,
+  {id:'seren',name:'Seren Ashveil',color:0xc94a2e,accent:0xffce54,weight:96,walkSpeed:2.8,runSpeed:4.6,jumpVel:14,doubleJumpVel:12,fallSpeed:13.5,fastFallSpeed:21,airSpeed:3.0,size:0.98,archetype:'zoner',meleeMult:0.96,
     traits:'Projectiles and fire hazards; weak melee', desc:'Fire mage built for zoning with projectiles. Dangerous at range, fragile up close.'},
   {id:'rook',name:'Rook Harlan',color:0x4a4a52,accent:0xd94b4b,weight:120,walkSpeed:2.7,runSpeed:4.5,jumpVel:14,doubleJumpVel:12.5,fallSpeed:15,fastFallSpeed:23,airSpeed:2.7,size:1.06,archetype:'grappler',grabRange:1.5,throwMult:1.3,
     traits:'Long grab, +30% throw damage', desc:'Armoured skeleton brawler. Grab and throw specialist with a charged punch.'},
@@ -2708,8 +2708,9 @@ class Game{
       `<tr><td>Most damage in one match</td><td class="num">${d.mostDamage}%</td></tr>`+
       `<tr><td>Arcade</td><td class="num">${d.arcadeClears||0} clears · best ${d.arcadeBest||0} / 6 rounds</td></tr>`+
       `<tr><td>Home-Run best</td><td class="num">${(()=>{ const hr=d.homerun||{}, k=Object.keys(hr).sort((a,b)=>hr[b]-hr[a])[0]; return k?hr[k].toFixed(1)+' m · '+CHAR_DATA.find(c=>c.id===k).name:'—'; })()}</td></tr></table>`;
-    h+='<div class="rec-h">FIGHTERS</div><table class="rec-table"><tr><th>Fighter</th><th>Played</th><th>Wins</th><th>Win rate</th></tr>';
-    CHAR_DATA.forEach(cd=>{ const c=d.chars[cd.id]||{played:0,wins:0}; h+=`<tr><td>${cd.name}</td><td class="num">${c.played}</td><td class="num">${c.wins}</td><td class="num">${c.played?Math.round(100*c.wins/c.played)+'%':'—'}</td></tr>`; });
+    h+='<div class="rec-h">FIGHTERS</div><table class="rec-table"><tr><th>Fighter</th><th>Played</th><th>Wins</th><th>Win rate</th><th>Home-Run</th></tr>';
+    CHAR_DATA.forEach(cd=>{ const c=d.chars[cd.id]||{played:0,wins:0}, hr=(d.homerun||{})[cd.id];
+      h+=`<tr><td style="color:${hex6(cd.accent)}">${cd.name}</td><td class="num">${c.played}</td><td class="num">${c.wins}</td><td class="num">${c.played?Math.round(100*c.wins/c.played)+'%':'—'}</td><td class="num">${hr?hr.toFixed(1)+' m':'—'}</td></tr>`; });
     h+='</table><div class="rec-h">COLOURS</div><table class="rec-table"><tr><th></th><th>Colour</th><th>How to unlock</th><th>Progress</th></tr>';
     COLOR_UNLOCKS.forEach(c=>{ const open=PROFILE.unlocked(c), pr=c.progress?c.progress(d):null;
       h+=`<tr><td><div class="swatch" style="background:${c.tint!=null?hex6(c.tint):'#888'};cursor:default"></div></td><td>${c.name}</td><td>${c.goal||'Always available'}</td><td class="num">${open?'Unlocked':pr[0]+' / '+pr[1]}</td></tr>`; });
@@ -4087,7 +4088,10 @@ const MODELS={
     const parse=key=>new Promise((res,rej)=>loader.parse(b64ToBuffer(window.RC_ASSETS[key]),'',res,rej));
     const share=root=>root.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; o.frustumCulled=false; } o.userData.shared=true; });
     (await parse('anims')).animations.forEach(c=>{ this.clips[c.name]=c; });
-    for(const id of ['kael','nyx','brakka','seren','rook','vex','wren','morrow','rattle','Skeleton_Blade','Skeleton_Staff','Skeleton_Axe']){ const g=await parse(id); share(g.scene); this.templates[id]=g.scene; }
+    const ids=['kael','nyx','brakka','seren','rook','vex','wren','morrow','rattle','Skeleton_Blade','Skeleton_Staff','Skeleton_Axe'], note=document.getElementById('loading-note');
+    for(let i=0;i<ids.length;i++){ const id=ids[i]; if(note) note.textContent='LOADING FIGHTERS… '+Math.round(100*(i+1)/(ids.length+3))+'%';
+      const g=await parse(id); share(g.scene); this.templates[id]=g.scene; }
+    if(note) note.textContent='LOADING STAGES…';
     const props=await parse('props'); share(props.scene); this.props=props.scene;
     const items=await parse('items'); share(items.scene); this.items=items.scene;
     // the meadow props ship without their texture: they share the Hexagon-pack atlas already inside `props`
