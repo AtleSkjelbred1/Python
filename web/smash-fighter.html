@@ -224,6 +224,7 @@
     <span class="sl">GRAPHICS</span><div id="gfx-chips" class="cs-mode-select"></div>
     <span class="sl">TAP JUMP</span><div id="tapjump-chips" class="cs-mode-select"></div>
     <span class="sl">SCREEN SHAKE</span><div id="shake-chips" class="cs-mode-select"></div>
+    <span class="sl">ANNOUNCER</span><div id="voice-chips" class="cs-mode-select"></div>
     <span class="sl" style="grid-column:1">CPU LEVEL</span><div id="diff-chips" class="cs-mode-select" style="grid-column:span 3"></div>
   </div>
 </div>
@@ -578,6 +579,17 @@ class AudioManager{
   }
 }
 const AUDIO = new AudioManager();
+// announcer: the browser's speech synthesis calls the countdown and the result (silently absent where unsupported)
+const ANNOUNCER = {
+  on:true, voice:null,
+  _pick(){ if(this.voice||typeof speechSynthesis==='undefined') return; const vs=speechSynthesis.getVoices().filter(v=>/^en/i.test(v.lang));
+    this.voice=vs.find(v=>/male|daniel|george|david|alex|fred/i.test(v.name)&&!/female/i.test(v.name))||vs[0]||null; },
+  say(text,opt){ if(!this.on||typeof speechSynthesis==='undefined'||typeof SpeechSynthesisUtterance==='undefined') return;
+    try{ this._pick(); if(!(opt&&opt.queue)) speechSynthesis.cancel();
+      const u=new SpeechSynthesisUtterance(text); if(this.voice) u.voice=this.voice;
+      u.rate=(opt&&opt.rate)||1.05; u.pitch=(opt&&opt.pitch)||0.55; u.volume=0.9; speechSynthesis.speak(u); }catch(e){} },
+  stop(){ try{ if(typeof speechSynthesis!=='undefined') speechSynthesis.cancel(); }catch(e){} }
+};
 
 //////////////////////// INPUT ////////////////////////
 // Sandboxed frames can deny the Gamepad API by permissions policy, which makes getGamepads() throw.
@@ -1023,6 +1035,7 @@ class ParticleSystem{
 const GRAVITY_ACCEL = 32;   // units/s^2
 const KB_TO_VEL = 0.09;     // knockback score -> launch speed (units/s)
 const KB_DECAY = 0.35;      // launch speed lost per frame while in hitstun (units/s)
+const COYOTE_FRAMES = 5;     // grace frames to still ground-jump after walking off an edge
 const JUMP_HOLD_FRAMES = 14; // how long a held jump button keeps reducing gravity
 const JUMP_HOLD_GRAVITY = 0.4;
 // Smash-style knockback: grows with the target's percent and the hit's damage, shrinks with weight.
@@ -1069,7 +1082,7 @@ class Fighter{
     this.grounded=false; this.onPlatform=null;
     this.jumpsLeft=1; this.airDodged=false; this.upSpecialUsed=false; this.wallJumpUsed=false;
     this.fastFalling=false; this.helpless=false; this.touchingWall=0; this.dropThrough=0; this._prevDown=false;
-    this.state='fall'; this.stateTimer=0; this.landTimer=0; this.jumpSquat=0;
+    this.state='fall'; this.stateTimer=0; this.landTimer=0; this.jumpSquat=0; this.coyote=0;
     this.action=null; this.actionPhase=null; this.actionFrame=0; this.chargeFrames=0; this._chargeHeld=false;
     this._multiIdx=-1; this._landedHit=false; this._lastJab=null; this._countered=false;
     this.jabWindow=0;
@@ -1401,8 +1414,14 @@ class Fighter{
         this.state=cmd.down?'crouch':'idle';
       }
     } else {
+      if(this.coyote>0) this.coyote--;
       if(cmd.jumpP){
-        if(this.cd.wallJump && this.touchingWall && !this.wallJumpUsed){
+        if(this.coyote>0){
+          // walked off an edge a moment ago: still allow the full ground jump
+          this._consume('jumpP'); this.coyote=0;
+          this.vel.y=this.cd.jumpVel; this.fastFalling=false; this.jumpHold=JUMP_HOLD_FRAMES;
+          this.state='jump'; this.stateTimer=0; this.events.push({type:'jump'});
+        } else if(this.cd.wallJump && this.touchingWall && !this.wallJumpUsed){
           this.vel.y=this.cd.jumpVel*0.95; this.vel.x=-this.touchingWall*6; this.facing=-this.touchingWall; this.jumpHold=JUMP_HOLD_FRAMES;
           this.wallJumpUsed=true; this.fastFalling=false; this.state='jump'; this.events.push({type:'walljump'});
         } else if(this.jumpsLeft>0){
@@ -1462,7 +1481,7 @@ class Fighter{
   }
   _onLand(){
     this.squash=this.state==='hitstun'?0.8:(this.fastFalling?0.64:0.75);
-    this.airDodged=false; this.jumpsLeft=1; this.upSpecialUsed=false; this.wallJumpUsed=false; this.fastFalling=false;
+    this.airDodged=false; this.jumpsLeft=1; this.upSpecialUsed=false; this.wallJumpUsed=false; this.fastFalling=false; this.coyote=0;
     this.events.push({type:'land',heavy:this.cd.weight>=140});
     if(this.hitstun>0){
       if(this.tumble && this._techBuf>0){ // tech: recover on the spot or roll toward the held direction
@@ -1516,7 +1535,7 @@ class Fighter{
       }
     }
     if(this.grounded && !wasGrounded) this._onLand();
-    if(!this.grounded && wasGrounded && (this.state==='idle'||this.state==='walk'||this.state==='run'||this.state==='crouch')) this.state='fall';
+    if(!this.grounded && wasGrounded && (this.state==='idle'||this.state==='walk'||this.state==='run'||this.state==='crouch')){ this.state='fall'; this.coyote=COYOTE_FRAMES; }
     // ledge grab
     const grabbable = this.state!=='attack' || (this.action && (this.action.move.recoveryMove||this.action.move.teleport) && this.vel.y<0);
     if(!this.grounded && this.vel.y<0 && this.ledge===null && this.ledgeCooldown<=0 && this.hitstun<=0 && this.shieldBroken<=0 && grabbable && !this.pose){
@@ -2471,7 +2490,7 @@ class Game{
     this.camera.position.set(0,8,26);
     this.postfx=new PostFX(this.renderer);
     window.addEventListener('resize',()=>this._resize()); this._resize();
-    this.settings=Object.assign({stocks:3,timeLimit:0,mode:'vs',botDifficulty:5,rules:'stock',hazards:true,items:true,music:true,graphics:'high',tapJump:true,shake:true},this._loadSettings());
+    this.settings=Object.assign({stocks:3,timeLimit:0,mode:'vs',botDifficulty:5,rules:'stock',hazards:true,items:true,music:true,graphics:'high',tapJump:true,shake:true,voice:true},this._loadSettings());
     this.selection={p1:0,p2:1,stageIdx:0,colors:{p1:'default',p2:'default'}};
     this.training={dummy:'stand',hitboxes:true};
     PROFILE.load();
@@ -2486,7 +2505,7 @@ class Game{
     requestAnimationFrame(t=>this._loop(t));
   }
   _loadSettings(){ try{ return JSON.parse(localStorage.getItem('riftclash.settings.v1'))||{}; }catch(e){ return {}; } }
-  _saveSettings(){ try{ const s=this.settings; localStorage.setItem('riftclash.settings.v1',JSON.stringify({stocks:s.stocks,timeLimit:s.timeLimit,botDifficulty:s.botDifficulty,hazards:s.hazards,items:s.items,music:s.music,graphics:s.graphics,tapJump:s.tapJump,rules:s.rules,shake:s.shake})); }catch(e){} }
+  _saveSettings(){ try{ const s=this.settings; localStorage.setItem('riftclash.settings.v1',JSON.stringify({stocks:s.stocks,timeLimit:s.timeLimit,botDifficulty:s.botDifficulty,hazards:s.hazards,items:s.items,music:s.music,graphics:s.graphics,tapJump:s.tapJump,rules:s.rules,shake:s.shake,voice:s.voice})); }catch(e){} }
   // LOW trades shadows and resolution for frame rate on weaker machines
   _applyGraphics(){
     const low=this.settings.graphics==='low'; LOW_GFX.on=low;
@@ -2524,6 +2543,8 @@ class Game{
     TAP_JUMP.on=S.tapJump;
     this._chipRow($('shake-chips'),[{label:'ON',value:true},{label:'OFF',value:false}],S.shake,v=>{ set('shake')(v); CAMERA_FX.shake=v; });
     CAMERA_FX.shake=S.shake;
+    this._chipRow($('voice-chips'),[{label:'ON',value:true},{label:'OFF',value:false}],S.voice,v=>{ set('voice')(v); ANNOUNCER.on=v; if(v) ANNOUNCER.say('Rift Clash!'); else ANNOUNCER.stop(); });
+    ANNOUNCER.on=S.voice;
     AUDIO.musicOn=S.music; this._applyGraphics();
     $('btn-1v1').onclick=()=>{ this.settings.mode='vs'; this._toCharSelect(); };
     $('btn-cpu').onclick=()=>{ this.settings.mode='cpu'; this._toCharSelect(); };
@@ -2683,7 +2704,7 @@ class Game{
     document.getElementById('touch').classList.toggle('active',id==='__hud__');
     document.getElementById('hud').classList.toggle('hidden',!(id==='__hud__'||id==='pause'));
   }
-  _toMainMenu(){ if(this.online && NET.open){ NET.send({t:'menu'}); } if(this._savedTimeLimit!=null){ this.settings.timeLimit=this._savedTimeLimit; this._savedTimeLimit=null; } this.online=false; this.netGuest=false; this.state='menu'; this._showScreen('mainmenu'); this._teardownScene(); AUDIO.stopMusic(); if(AUDIO.ctx) AUDIO.startMusic('menu'); }
+  _toMainMenu(){ if(this.online && NET.open){ NET.send({t:'menu'}); } if(this._savedTimeLimit!=null){ this.settings.timeLimit=this._savedTimeLimit; this._savedTimeLimit=null; } this.online=false; this.netGuest=false; this.state='menu'; this._showScreen('mainmenu'); this._teardownScene(); AUDIO.stopMusic(); ANNOUNCER.stop(); if(AUDIO.ctx) AUDIO.startMusic('menu'); }
   _toCharSelect(){
     if(AUDIO.ctx && (!AUDIO.music||AUDIO.music.theme!=='menu')) AUDIO.startMusic('menu');
     this.state='charselect'; this._showScreen('charselect');
@@ -3088,7 +3109,7 @@ class Game{
     this._matchRunning=false; this._countT=[];
     let t=0;
     seq.forEach(([txt,d],i)=>{
-      this._countT.push(setTimeout(()=>{ this._bigText(txt); AUDIO.playCount(i===3?0:3-i); if(i===3){ this._matchRunning=true; AUDIO.playCrowd(); AUDIO.startMusic(this.stageData.theme); } },t));
+      this._countT.push(setTimeout(()=>{ this._bigText(txt); AUDIO.playCount(i===3?0:3-i); ANNOUNCER.say(['Three','Two','One','Go!'][i],i===3?{rate:1.15,pitch:0.7}:null); if(i===3){ this._matchRunning=true; AUDIO.playCrowd(); AUDIO.startMusic(this.stageData.theme); } },t));
       t+=d;
     });
     this._countT.push(setTimeout(()=>this._hideBigText(),t));
@@ -3168,7 +3189,7 @@ class Game{
       const d=sp*sp/(2*KB_DECAY*60), b=this.stage.blast, x=defender.pos.x+ax*d, y=defender.pos.y+1+Math.max(0,ay)*d;
       if(x<b.l||x>b.r||y>b.t||(this.stamina&&defender.percent>=STAMINA_HP)){ this.slowmo={t:50,f:defender}; this.flash=Math.max(this.flash,0.35); this.flashColor=0xffffff; AUDIO.playUltimate(); }
     }
-    defender.grounded=false; defender.onPlatform=null;
+    defender.grounded=false; defender.onPlatform=null; defender.coyote=0;
     defender.hitstun=Math.round(clamp(kb*0.34,6,80))+(move.stun||0); defender.hitstunStart=(defender.hitstunStart||0)+1;
     defender.state='hitstun'; defender.tumble=kb>75;
     defender.squash=kb>60?0.78:0.9;
@@ -3513,7 +3534,7 @@ class Game{
       f.interrupt(); f.eliminated=true; f.group.visible=false; f.placed=this.fighters.filter(o=>!o.eliminated).length+1;
       const alive=this.fighters.filter(o=>!o.eliminated), teams=new Set(alive.map(o=>o.team==null?o:o.team));
       if(teams.size<=1){ this._endMatch(alive[0]||credit||others[0],'ko'); return; }
-      this._bigText(f.cd.name.split(' ')[0].toUpperCase()+' IS OUT!',true); this._countT.push(setTimeout(()=>this._hideBigText(),1100));
+      this._bigText(f.cd.name.split(' ')[0].toUpperCase()+' IS OUT!',true); ANNOUNCER.say(f.cd.name.split(' ')[0]+' is out!'); this._countT.push(setTimeout(()=>this._hideBigText(),1100));
       return;
     }
     const spots=[0,-3,3,-6], used=this.fighters.filter(o=>o!==f&&o.state==='respawn').length;
@@ -3566,7 +3587,7 @@ class Game{
   _suddenDeath(){
     this.suddenDeath=true; this.timeLeft=0;
     this.fighters.forEach((f,i)=>{ f.stocks=1; f.respawn(i?3:-3,this.stage.respawnY); f.percent=300; f.respawnTimer=60; });
-    this._bigText('SUDDEN DEATH!'); this._countT.push(setTimeout(()=>this._hideBigText(),1400));
+    this._bigText('SUDDEN DEATH!'); ANNOUNCER.say('Sudden death!'); this._countT.push(setTimeout(()=>this._hideBigText(),1400));
     AUDIO.playUltimate(); this.flash=0.3; this.flashColor=0xff3030;
   }
   _endMatch(winner,reason){
@@ -3583,6 +3604,8 @@ class Game{
     if(reason==='ko' && this.replayBuf.length>40) this.replayFrames=this.replayBuf.slice(-120);
     this._recordProfile(winner);
     this._bigText(reason==='time'?'TIME!':'GAME!'); AUDIO.stopMusic();
+    if(!this.isTraining){ ANNOUNCER.say(reason==='time'?'Time!':'Game!',{rate:1,pitch:0.6});
+      if(!this.isHomerun) ANNOUNCER.say(winner.team!=null&&this.fighters.length>2?(winner.team===0?'Red':'Blue')+' team wins!':winner.cd.name.split(' ')[0]+' wins!',{queue:true,rate:0.95,pitch:0.6}); }
     AUDIO.tone(220,0.9,'sawtooth',0.35,55); setTimeout(()=>AUDIO.playCrowd(),300);
     this.bloomPulse=1.2;
   }
