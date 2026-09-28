@@ -216,6 +216,7 @@
     <div class="cs-col">
       <h2 id="p2-label" style="color:#ff9b7f">PLAYER 2</h2>
       <div id="ffa-p2" class="cs-mode-select hidden" style="margin:0;"></div>
+      <div id="ffa-teams" class="cs-mode-select hidden" style="margin:0;"></div>
       <canvas id="cs-canvas-2" class="cs-preview" width="230" height="230"></canvas>
       <div class="cs-arrows">
         <div class="cs-arrow" id="cs2-left">&#10094;</div>
@@ -748,6 +749,7 @@ const MOVE_NOTES={
   morrow:['Slow soul orb that controls space.','Bone spikes burst from the ground a few steps ahead.','Teleport in any direction — your recovery.','Siphon around you; heals you for part of the damage dealt.','A wave of grave magic around you.'],
   rattle:['Tosses a bone in an arc.','Rolling multi-hit dash with a launching finisher.','Skull hop with a rising chop — your recovery.','Collapses into a pile of bones (untouchable), then bursts back together.','Buries a rival under an avalanche of bones.'],
 };
+const TEAM_NAMES=['RED','BLUE'], TEAM_COLORS=[0xff5a5a,0x4aa3ff];
 const VICTORY_QUOTES={
   kael:['An oath kept is a blade that never dulls.','Stand up. Again, if you must.'],
   nyx:['Blink and you missed it. You blinked.','Too slow — the storm does not wait.'],
@@ -2108,7 +2110,8 @@ class Game{
     $('btn-restart').onclick=()=>this._startMatch(true);
     $('btn-arcade').onclick=()=>{ this.settings.mode='arcade'; this._toCharSelect(); };
     $('btn-ffa').onclick=()=>{ this.settings.mode='ffa'; this._toCharSelect(); };
-    this.ffaP2='bot';
+    this.ffaP2='bot'; this.ffaTeams=false;
+    this._chipRow($('ffa-teams'),[{label:'FREE-FOR-ALL',value:false},{label:'2 vs 2 (P1+P2 vs CPUs)',value:true}],false,v=>{ this.ffaTeams=v; AUDIO.playClick(); this._toCharSelect(); });
     this._chipRow($('ffa-p2'),[{label:'P2: CPU',value:'bot'},{label:'P2: HUMAN',value:'p2'}],'bot',v=>{ this.ffaP2=v; AUDIO.playClick(); this._toCharSelect(); });
     $('btn-quit').onclick=()=>this._toMainMenu();
     $('btn-rematch').onclick=()=>this._rematch();
@@ -2194,6 +2197,7 @@ class Game{
     document.getElementById('p2-label').textContent=mode==='cpu'?'BOT ('+this.settings.botDifficulty.toUpperCase()+')':(mode==='training'?'TRAINING DUMMY':(mode==='arcade'?'ARCADE: 5 RANDOM RIVALS':
       (mode==='ffa'?(this.ffaP2==='bot'?'CPU ('+this.settings.botDifficulty.toUpperCase()+') + 2 RANDOM CPUs':'PLAYER 2 + 2 RANDOM CPUs'):'PLAYER 2')));
     document.getElementById('ffa-p2').classList.toggle('hidden',mode!=='ffa');
+    document.getElementById('ffa-teams').classList.toggle('hidden',mode!=='ffa');
     document.getElementById('btn-to-stage').innerHTML=mode==='arcade'?'START ARCADE &#8594;':'NEXT: SELECT STAGE &#8594;';
     this._refreshCharUI('p1'); this._refreshCharUI('p2');
   }
@@ -2396,9 +2400,13 @@ class Game{
       const f=new Fighter(this.scene,r.cd,xs[i]<0?-1:1,'p'+(i+1),r.tint);
       f.idx=i; f.control=r.control; f.stocks=this.isTraining?Infinity:(arc?2:this.settings.stocks);
       f.ai=r.control==='bot'?new AIController(f,botDiff):null;
+      f.team=ffa&&this.ffaTeams?(i<2?0:1):null;
       return f;
     });
     this.f1=this.fighters[0]; this.f2=this.fighters[1];
+    this.fighters.forEach(f=>{ if(f.team==null) return; // coloured ring at the feet marks each team
+      const ring=new THREE.Mesh(new THREE.TorusGeometry(0.55*f.cd.size,0.05,6,32),new THREE.MeshBasicMaterial({color:TEAM_COLORS[f.team],transparent:true,opacity:0.85,depthWrite:false}));
+      ring.rotation.x=Math.PI/2; ring.position.y=0.04; f.group.add(ring); });
     if(this._gfxChanged){ this._gfxChanged=false; this.scene.traverse(o=>{ if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.needsUpdate=true); }); }
     const top=this.stage.main.y+this.stage.main.h/2;
     this.fighters.forEach((f,i)=>{ f.pos.set(xs[i],top,0); f.facing=xs[i]<0?1:-1; f.grounded=true; f.state='idle'; });
@@ -2437,7 +2445,7 @@ class Game{
       const k=i+1, tag=f.control==='bot'?'CPU':(f.control==='dummy'?'DUMMY':'P'+k);
       const el=document.createElement('div'); el.className='portrait-hud'; el.id='hud-p'+k;
       el.innerHTML=`<img class="hud-portrait" id="hudport-${k}" alt=""><div class="hud-info">
-        <div class="hud-name"><span class="hud-tag" style="background:${tagCol[i]}">${tag}</span><span id="hudname-${k}"></span></div>
+        <div class="hud-name"><span class="hud-tag" style="background:${f.team!=null?hex6(TEAM_COLORS[f.team]):tagCol[i]}">${tag}</span><span id="hudname-${k}"></span></div>
         <div class="hud-pct" id="hudpct-${k}">0%</div><div class="hud-stocks" id="hudstocks-${k}"></div>
         <div class="hud-ult-bar"><div class="hud-ult-fg" id="hudult-${k}" style="width:0%"></div></div>
         <div class="hud-ult-label" id="hudultlabel-${k}">ULTIMATE READY</div></div>`;
@@ -2550,6 +2558,7 @@ class Game{
     if(defender.lastAttacker===attacker && defender.comboTimer>0){ defender.comboCount++; defender.comboDamage+=dmg; }
     else { defender.comboCount=1; defender.comboDamage=dmg; }
     defender.lastAttacker=attacker; defender.comboTimer=defender.hitstun+hs+12;
+    if(this.fighters.includes(attacker)){ defender.lastHitBy=attacker; defender.lastHitAt=this.frame; }
     attacker.statLongestCombo=Math.max(attacker.statLongestCombo,defender.comboCount);
     this._showCombo(defender); this._hudShake(defender,dmg);
     // sound + particles by the attack's element
@@ -2713,7 +2722,7 @@ class Game{
     for(const p of this.projectiles){
       if(p.dead||p.armed>0) continue;
       for(const t of this.fighters){
-        if(t===p.owner||t.eliminated) continue;
+        if(!this._foes(p.owner,t)||t.eliminated) continue;
         if(p.kind==='trap'){
           if(t.hurtDist(p.pos.x,p.pos.y+0.3)<p.radius+t.hurtR && t.invuln<=0){
             p.dead=true;
@@ -2759,7 +2768,7 @@ class Game{
     this.bloomPulse=Math.max(this.bloomPulse,big?1.6:1.1); this.flash=Math.max(this.flash,big?0.2:0.1); this.flashColor=0xffd9a0;
     this.cameraRig.kick(big?1.0:0.6); AUDIO.playExplosion(big);
     for(const t of this.fighters){
-      if(t===p.owner||t.eliminated) continue;
+      if(!this._foes(p.owner,t)||t.eliminated) continue;
       const cy=clamp(p.pos.y,t.pos.y+0.45*t.cd.size,t.pos.y+1.6*t.cd.size);
       if(t.hurtDist(p.pos.x,cy)<r+t.hurtR) this._applyHit(p.owner,t,p.move,{x:p.pos.x,y:cy},{remote:true,dir:Math.sign(t.pos.x-p.pos.x)||1});
     }
@@ -2848,18 +2857,20 @@ class Game{
     this._dropHeld(f,true);
     if(this.isTraining){ f.respawn(0,this.stage.respawnY); return; }
     // the KO goes to whoever hit them last (in 1v1, always the opponent)
-    const others=this.fighters.filter(o=>o!==f), credit=this.fighters.includes(f.lastAttacker)?f.lastAttacker:(others.length===1?others[0]:null);
+    const others=this.fighters.filter(o=>o!==f), credit=(f.lastHitBy&&this.frame-f.lastHitAt<600)?f.lastHitBy:(others.length===1?others[0]:null);
+    f.lastHitBy=null;
     f.stocks--; if(credit) credit.statKOs++;
     if(f.stocks<=0){
       f.interrupt(); f.eliminated=true; f.group.visible=false; f.placed=this.fighters.filter(o=>!o.eliminated).length+1;
-      const alive=this.fighters.filter(o=>!o.eliminated);
-      if(alive.length<=1){ this._endMatch(alive[0]||credit||others[0],'ko'); return; }
+      const alive=this.fighters.filter(o=>!o.eliminated), teams=new Set(alive.map(o=>o.team==null?o:o.team));
+      if(teams.size<=1){ this._endMatch(alive[0]||credit||others[0],'ko'); return; }
       this._bigText(f.cd.name.split(' ')[0].toUpperCase()+' IS OUT!',true); this._countT.push(setTimeout(()=>this._hideBigText(),1100));
       return;
     }
     const spots=[0,-3,3,-6], used=this.fighters.filter(o=>o!==f&&o.state==='respawn').length;
     f.respawn(spots[used%4],this.stage.respawnY);
   }
+  _foes(a,b){ return a!==b && (a.team==null || a.team!==b.team); }
   _commandFor(f){
     if(f.control==='p1') return INPUT.getCommands('p1',0);
     if(f.control==='p2') return INPUT.getCommands('p2',1);
@@ -2870,7 +2881,7 @@ class Game{
   _targetFor(f){
     const c=this._targets.get(f);
     if(c && this.frame-c.at<30 && !c.t.eliminated) return c.t;
-    const others=this.fighters.filter(o=>o!==f&&!o.eliminated);
+    const others=this.fighters.filter(o=>this._foes(f,o)&&!o.eliminated);
     if(!others.length) return c?c.t:f;
     const score=o=>Math.hypot(o.pos.x-f.pos.x,o.pos.y-f.pos.y)+(o.state==='respawn'?20:0);
     const t=others.reduce((b,o)=>score(o)<score(b)?o:b);
@@ -2886,9 +2897,12 @@ class Game{
   }
   _endMatch(winner,reason){
     if(this.matchOver) return;
-    this.matchOver=true; this.state='gameend'; this.endTimer=0; this.winner=winner; this.losers=this.fighters.filter(f=>f!==winner); this.loser=this.losers[0];
-    winner.placed=1;
-    this.losers.filter(f=>!f.placed).sort((a,b)=>b.stocks-a.stocks||a.percent-b.percent).forEach((f,i)=>f.placed=i+2);
+    this.matchOver=true; this.state='gameend'; this.endTimer=0; this.winner=winner;
+    this.winners=winner.team==null?[winner]:this.fighters.filter(f=>f.team===winner.team);
+    this.losers=this.fighters.filter(f=>!this.winners.includes(f)); this.loser=this.losers[0];
+    this.winners.forEach(f=>f.placed=1);
+    this.losers.filter(f=>!f.placed).sort((a,b)=>b.stocks-a.stocks||a.percent-b.percent).forEach((f,i)=>f.placed=i+1+this.winners.length);
+    if(winner.team!=null) this.losers.forEach(f=>f.placed=2);
     this.cinematic=null;
     if(reason==='ko' && this.replayBuf.length>40) this.replayFrames=this.replayBuf.slice(-120);
     this._recordProfile(winner);
@@ -2901,12 +2915,12 @@ class Game{
     const humans=this.fighters.filter(f=>f.control==='p1'||f.control==='p2');
     d.matches++;
     for(const f of humans){
-      const c=PROFILE.char(f.cd.id); c.played++; if(f===winner) c.wins++;
+      const c=PROFILE.char(f.cd.id); c.played++; if(this.winners.includes(f)) c.wins++;
       d.kos+=f.statKOs;
       if(f.statLongestCombo>d.longestCombo){ d.longestCombo=f.statLongestCombo; d.longestComboChar=f.cd.name; }
       d.mostDamage=Math.max(d.mostDamage,Math.round(f.statDamageDealt));
     }
-    if(humans.includes(winner)){
+    if(humans.some(f=>this.winners.includes(f))){
       d.wins++;
       const sec=Math.round(this.matchFrames/60);
       if(d.fastestWin==null||sec<d.fastestWin){ d.fastestWin=sec; d.fastestWinChar=winner.cd.name; }
@@ -3198,13 +3212,13 @@ class Game{
       f.interrupt(); f.eliminated=false; f.group.visible=true; f.hitstun=0; f.hitstop=0; f.tumble=false; f.invuln=0; f.respawnInvuln=0;
       f.pos.set(m.x+x,top,0); f.vel.set(0,0,0); f.grounded=true; f.facing=facing; f.pose=pose; f.state=pose; f.walkCycle=0;
     };
-    place(this.winner,-1.4,1,'victory');
-    [...this.losers].sort((a,b)=>a.placed-b.placed).forEach((f,i)=>place(f,[1.8,3.6,-3.4][i],i===2?1:-1,'defeat'));
+    this.winners.forEach((f,i)=>place(f,[-1.4,-3.2][i],1,'victory'));
+    [...this.losers].sort((a,b)=>a.placed-b.placed).forEach((f,i)=>place(f,[1.8,3.6,-4.8][i],i===2?1:-1,'defeat'));
     this.particles.spawn(new THREE.Vector3(m.x-1.4,top+3,0.5),60,{color:[this.winner.cd.accent,0xffffff,0xffd166],speed:0.25,life:60,grav:0.004,additive:true});
     AUDIO.playFanfare();
     this._hideBigText();
     const $=id=>document.getElementById(id);
-    $('winner-banner').textContent=this.winner.cd.name+' WINS!';
+    $('winner-banner').textContent=this.winner.team!=null?(TEAM_NAMES[this.winner.team]+' TEAM WINS!'):this.winner.cd.name+' WINS!';
     $('win-quote').textContent='“'+choice(VICTORY_QUOTES[this.winner.cd.id]||[''])+'”';
     const A=this.settings.mode==='arcade'&&this.arcade;
     $('btn-rematch').textContent=A?(A.cleared?'FINISH':(A.won?'NEXT ROUND':'RETRY ROUND')):'REMATCH';
@@ -3249,8 +3263,8 @@ class Game{
     const ledges=this.fighters.map(f=>f.ledge).filter(x=>x!==null);
     for(const f of live) f.update(dt,cmds.get(f),{platforms:this.stage.platforms,opp:this._targetFor(f),items:this.items,occupiedLedges:ledges});
     for(const f of live) this._updateGrab(f,cmds.get(f));
-    for(const a of live) for(const b of live) if(a!==b) this._resolveHitbox(a,b);
-    for(const a of live) for(const b of live) if(a!==b) this._resolveGrab(a,b);
+    for(const a of live) for(const b of live) if(this._foes(a,b)) this._resolveHitbox(a,b);
+    for(const a of live) for(const b of live) if(this._foes(a,b)) this._resolveGrab(a,b);
     for(const f of live) this._spawnFromActions(f);
     for(const f of live) this._handleEvents(f);
     this._updateClones();
@@ -3279,7 +3293,11 @@ class Game{
       this.timeLeft-=dt;
       if(this.timeLeft<=0){
         const alive=this.fighters.filter(f=>!f.eliminated), best=Math.max(...alive.map(f=>f.stocks)), top=alive.filter(f=>f.stocks===best);
-        if(top.length===1) this._endMatch(top[0],'time');
+        if(alive.some(f=>f.team!=null)){
+          const sum=t=>alive.filter(f=>f.team===t).reduce((s,f)=>s+f.stocks*1000-f.percent,0);
+          this._endMatch(alive.find(f=>f.team===(sum(0)>=sum(1)?0:1))||alive[0],'time');
+        }
+        else if(top.length===1) this._endMatch(top[0],'time');
         else if(this.fighters.length===2) this._suddenDeath();
         else this._endMatch(top.reduce((w,f)=>f.percent<w.percent?f:w),'time');
       }
