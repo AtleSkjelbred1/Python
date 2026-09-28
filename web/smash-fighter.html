@@ -1696,7 +1696,7 @@ class Projectile{
   }
   destroy(){
     this.scene.remove(this.mesh);
-    this.mesh.traverse(o=>{ if(o.userData.shared) return; if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); });
+    this.mesh.traverse(o=>{ if(o.userData.shared) return; if(o.userData.keepMat){ o.geometry.dispose(); return; } if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); });
   }
 }
 
@@ -1709,6 +1709,8 @@ class StageObj{
     this.main=this.platforms.find(p=>p.solid);
     this.respawnY=Math.max(...this.platforms.map(p=>p.y+p.h/2))+5;
     this._buildVisuals();
+    if(this.clouds) this.clouds.forEach(c=>c.userData.batch=false); // clouds drift, keep them separate
+    this._batchStatic();
     // moving platforms: 'x' movers drift sideways, 'y' movers are lifts; riders are carried by _dx/_dy
     this.movers=(data.movers||(data.moving?[Object.assign({axis:'x'},data.moving)]:[])).map(d=>{
       const mv=Object.assign({dir:d.startDir||1,offset:d.start||0},d);
@@ -1724,6 +1726,35 @@ class StageObj{
       mv.plat={x,y,w:d.w,h:d.h,solid:false,_moving:true,_dx:0,_dy:0}; this.platforms.push(mv.plat);
       return mv;
     });
+  }
+  // Merge every static prop that shares a material into one world-space mesh: far fewer draw calls.
+  // Positions/normals/uvs may be quantized (normalized integers), so they are expanded to floats here.
+  _batchStatic(){
+    const scene=this.scene, groups=new Map(), roots=scene.children.filter(o=>o.userData.batch);
+    scene.updateMatrixWorld(true);
+    const norm=a=>{ const arr=a.array; return !a.normalized?1:arr instanceof Int16Array?1/32767:arr instanceof Uint16Array?1/65535:arr instanceof Int8Array?1/127:arr instanceof Uint8Array?1/255:1; };
+    for(const r of roots) r.traverse(o=>{ if(o.isMesh && !o.isSkinnedMesh){ const k=o.material.uuid; if(!groups.has(k)) groups.set(k,{mat:o.material,list:[]}); groups.get(k).list.push(o); } });
+    const v=new THREE.Vector3(), nm=new THREE.Matrix3();
+    for(const {mat,list} of groups.values()){
+      if(list.length<2) continue;
+      // walk the index with getX(): r128's toNonIndexed() misreads interleaved (quantized) attributes
+      let total=0; const parts=list.map(o=>{ const g=o.geometry, n=g.index?g.index.count:g.attributes.position.count; total+=n; return [o,g,n]; });
+      const P=new Float32Array(total*3), N=new Float32Array(total*3), U=new Float32Array(total*2); let off=0, hasUV=true;
+      for(const [o,g,cnt] of parts){
+        const pa=g.attributes.position, na=g.attributes.normal, ua=g.attributes.uv, ps=norm(pa), ns=na?norm(na):1, us=ua?norm(ua):1, ix=g.index;
+        if(!ua) hasUV=false; nm.getNormalMatrix(o.matrixWorld);
+        for(let t=0;t<cnt;t++,off++){ const i=ix?ix.getX(t):t;
+          v.set(pa.getX(i)*ps,pa.getY(i)*ps,pa.getZ(i)*ps).applyMatrix4(o.matrixWorld); P[off*3]=v.x; P[off*3+1]=v.y; P[off*3+2]=v.z;
+          if(na){ v.set(na.getX(i)*ns,na.getY(i)*ns,na.getZ(i)*ns).applyMatrix3(nm).normalize(); N[off*3]=v.x; N[off*3+1]=v.y; N[off*3+2]=v.z; }
+          if(ua){ U[off*2]=ua.getX(i)*us; U[off*2+1]=ua.getY(i)*us; }
+        }
+      }
+      const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.BufferAttribute(P,3)); geo.setAttribute('normal',new THREE.BufferAttribute(N,3));
+      if(hasUV) geo.setAttribute('uv',new THREE.BufferAttribute(U,2));
+      const mesh=new THREE.Mesh(geo,mat); mesh.castShadow=mesh.receiveShadow=true; mesh.matrixAutoUpdate=false; mesh.userData.keepMat=true; scene.add(mesh);
+      for(const o of list){ o.visible=false; o.parent.remove(o); }
+    }
+    for(const r of roots){ let any=false; r.traverse(o=>{ if(o.isMesh) any=true; }); if(!any) scene.remove(r); }
   }
   _buildVisuals(){
     const scene=this.scene, th=this.data.theme;
@@ -1748,7 +1779,7 @@ class StageObj{
       if(this.data.tod==='night'){ this.stars=this._points(400,0xffffff,0.35,[-160,160],[10,90],[-150,-110]); }
     }
     const std=o=>new THREE.MeshStandardMaterial(o);
-    const add=(name,x,y,z,sc,ry)=>{ const o=MODELS.prop(name); o.position.set(x,y,z); if(Array.isArray(sc)) o.scale.set(sc[0],sc[1],sc[2]); else o.scale.setScalar(sc||1); o.rotation.y=ry||0; scene.add(o); return o; };
+    const add=(name,x,y,z,sc,ry)=>{ const o=MODELS.prop(name); o.position.set(x,y,z); if(Array.isArray(sc)) o.scale.set(sc[0],sc[1],sc[2]); else o.scale.setScalar(sc||1); o.rotation.y=ry||0; o.userData.batch=true; scene.add(o); return o; };
     const bodyCol={fortress:0x6f7584,volcano:0x4d3a2e,storm:0x59606b,meadow:0x7a5f42,crypt:0x3a4150,homerun:0x7a5f42}[th];
     const topTile={fortress:'floor_tile_large',volcano:'floor_dirt_large_rocky',storm:'floor_dirt_large_rocky',meadow:null,crypt:'floor_tile_large',homerun:null}[th];
     for(const p of this.platforms){
@@ -2641,7 +2672,7 @@ class Game{
       const rl=new THREE.DirectionalLight(0x88aaff,0.7); rl.position.set(-3,2,-4); scene.add(rl);
       const rig={scene,renderer,cam,fighter:null,
         setChar:(cd,tint)=>{
-          if(rig.fighter){ scene.remove(rig.fighter.group); rig.fighter.group.traverse(o=>{ if(o.userData.shared) return; if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }); }
+          if(rig.fighter){ scene.remove(rig.fighter.group); rig.fighter.group.traverse(o=>{ if(o.userData.shared) return; if(o.userData.keepMat){ o.geometry.dispose(); return; } if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }); }
           if(rig.fighter) rig.fighter.group.traverse(o=>{ if(o.userData.tintMat) o.material.dispose(); });
           rig.fighter=new Fighter(scene,cd,1,who,tint); rig.fighter.group.position.set(0,-0.9,0);
         }};
@@ -2685,7 +2716,7 @@ class Game{
       cam.position.set(0,top+5.5,24); cam.lookAt(0,top+2.2,0); r.render(scene,cam);
       const card=document.getElementById('stage-grid').children[i];
       card.style.background=`linear-gradient(180deg,rgba(0,0,0,0) 45%,rgba(0,0,0,.75)),url(${r.domElement.toDataURL('image/jpeg',0.85)}) center/cover`;
-      scene.traverse(o=>{ if(o.userData.shared) return; if(o.geometry) o.geometry.dispose(); if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(q=>q.dispose()); });
+      scene.traverse(o=>{ if(o.userData.shared) return; if(o.userData.keepMat){ o.geometry.dispose(); return; } if(o.geometry) o.geometry.dispose(); if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(q=>q.dispose()); });
     });
     r.dispose(); if(r.forceContextLoss) r.forceContextLoss();
   }
@@ -2843,7 +2874,7 @@ class Game{
   _teardownScene(){
     if(this._countT) this._countT.forEach(clearTimeout);
     if(!this.scene) return;
-    this.scene.traverse(o=>{ if(o.userData.tintMat) o.material.dispose(); if(o.userData.shared) return; if(o.geometry) o.geometry.dispose(); if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose()); });
+    this.scene.traverse(o=>{ if(o.userData.tintMat) o.material.dispose(); if(o.userData.shared) return; if(o.userData.keepMat){ o.geometry.dispose(); return; } if(o.geometry) o.geometry.dispose(); if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose()); });
     this.scene=null;
   }
   _bigText(text,small){
@@ -3474,7 +3505,7 @@ class Game{
         }
         if(h.pillar){ const k=(h.t-c.warn)/c.active; h.pillar.scale.set(1-k*0.5,Math.min(1,k*4),1-k*0.5); h.pillar.position.y=h.top+c.h*Math.min(1,k*4)/2; }
       }
-      if(h.t>c.warn+c.active+12){ h.done=true; h.objs.forEach(o=>{ this.scene.remove(o); if(o.userData.shared) return; if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }); }
+      if(h.t>c.warn+c.active+12){ h.done=true; h.objs.forEach(o=>{ this.scene.remove(o); if(o.userData.shared) return; if(o.userData.keepMat){ o.geometry.dispose(); return; } if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }); }
     }
     this.hazards=this.hazards.filter(h=>!h.done);
     this.stage.hazardZones=this.hazards.filter(h=>h.cfg.kind!=='wind').map(h=>({x:h.x,r:h.cfg.r+0.9}));
@@ -3905,7 +3936,7 @@ class Game{
   }
   _disposeMenuScene(){
     const M=this.menuScene; if(!M) return; this.menuScene=null;
-    M.scene.traverse(o=>{ if(o.userData.tintMat) o.material.dispose(); if(o.userData.shared) return; if(o.geometry) o.geometry.dispose(); if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose()); });
+    M.scene.traverse(o=>{ if(o.userData.tintMat) o.material.dispose(); if(o.userData.shared) return; if(o.userData.keepMat){ o.geometry.dispose(); return; } if(o.geometry) o.geometry.dispose(); if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose()); });
   }
   _renderMenu(dt){
     const M=this.menuScene; if(!M) return;
