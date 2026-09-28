@@ -242,6 +242,7 @@
 <div id="screen-stageselect" class="screen hidden">
   <h2 style="letter-spacing:4px;margin-bottom:18px;">SELECT STAGE</h2>
   <div class="stage-grid" id="stage-grid"></div>
+  <div class="row" style="margin-top:14px;"><span style="opacity:.7;font-size:12px;letter-spacing:1px;">TIME OF DAY (Fortress &amp; Meadow)</span><div id="tod-chips" class="cs-mode-select" style="margin:0 0 0 10px"></div></div>
   <div class="row" style="margin-top:22px;">
     <div id="btn-back-cs" class="menu-btn" style="min-width:180px;">&#8592; BACK</div>
     <div id="btn-start-match" class="menu-btn" style="min-width:180px;">START MATCH!</div>
@@ -1625,13 +1626,23 @@ class StageObj{
     scene.background=new THREE.Color(this.data.sky);
     scene.fog=new THREE.Fog(this.data.fog,40,170);
     const homerun=th==='homerun', meadow=th==='meadow'||homerun, crypt=th==='crypt';
-    scene.add(new THREE.HemisphereLight(th==='volcano'?0xffc49a:(meadow?0xdcecff:(crypt?0x9fb8e0:0xd4e4ff)),th==='volcano'?0x3a1a10:(meadow?0x3d5a2a:(crypt?0x0c1014:0x2a2620)),meadow?0.7:(crypt?0.6:0.75)));
+    const hemi=new THREE.HemisphereLight(th==='volcano'?0xffc49a:(meadow?0xdcecff:(crypt?0x9fb8e0:0xd4e4ff)),th==='volcano'?0x3a1a10:(meadow?0x3d5a2a:(crypt?0x0c1014:0x2a2620)),meadow?0.7:(crypt?0.6:0.75));
+    scene.add(hemi);
     const sun=new THREE.DirectionalLight(th==='storm'?0xc8d4ff:(th==='volcano'?0xffd2a8:(crypt?0xb8d4ff:0xfff2d8)),th==='storm'?0.9:(meadow?1.1:(crypt?0.75:1.2)));
     sun.position.set(-14,22,14); sun.castShadow=true; sun.shadow.mapSize.set(2048,1024); sun.shadow.bias=-0.0005;
     Object.assign(sun.shadow.camera,{left:-30,right:30,top:25,bottom:-15});
     scene.add(sun);
     const rim=new THREE.DirectionalLight(th==='volcano'?0xff6a2a:(th==='storm'?0x88aaff:0x9fc2ff),th==='volcano'?1.1:0.7);
     rim.position.set(10,6,-18); scene.add(rim);
+    // time of day (sunny stages only): re-colour sky, fog and lights
+    const TOD={sunset:{sky:0xe0875a,fog:0xd8906a,hs:0xffc8a0,hg:0x4a3028,hi:0.62,sun:0xffa060,si:1.15,sp:[-22,9,12],rim:0xff9a60},
+               night:{sky:0x0d1630,fog:0x152040,hs:0x7088c0,hg:0x0c1018,hi:0.42,sun:0xa8c0ff,si:0.6,sp:[-10,24,10],rim:0x6080ff}}[this.data.tod];
+    if(TOD && (th==='fortress'||th==='meadow')){
+      scene.background.setHex(TOD.sky); scene.fog.color.setHex(TOD.fog);
+      hemi.color.setHex(TOD.hs); hemi.groundColor.setHex(TOD.hg); hemi.intensity=TOD.hi;
+      sun.color.setHex(TOD.sun); sun.intensity=TOD.si; sun.position.set(...TOD.sp); rim.color.setHex(TOD.rim);
+      if(this.data.tod==='night'){ this.stars=this._points(400,0xffffff,0.35,[-160,160],[10,90],[-150,-110]); }
+    }
     const std=o=>new THREE.MeshStandardMaterial(o);
     const add=(name,x,y,z,sc,ry)=>{ const o=MODELS.prop(name); o.position.set(x,y,z); if(Array.isArray(sc)) o.scale.set(sc[0],sc[1],sc[2]); else o.scale.setScalar(sc||1); o.rotation.y=ry||0; scene.add(o); return o; };
     const bodyCol={fortress:0x6f7584,volcano:0x4d3a2e,storm:0x59606b,meadow:0x7a5f42,crypt:0x3a4150,homerun:0x7a5f42}[th];
@@ -1663,7 +1674,7 @@ class StageObj{
     this.torchLights=[];
     const torch=(x,y,z)=>{ add('torch_lit',x,y,z,1.3); if(LOW_GFX.on) return; const l=new THREE.PointLight(crypt?0x5fd8ff:0xff9a40,crypt?1.1:0.6,crypt?9:7,2); l.position.set(x,y+1.1,z+0.6); scene.add(l); this.torchLights.push(l); };
     if(homerun){
-      const lake=new THREE.Mesh(new THREE.PlaneGeometry(1400,200),std({color:0x3d8fc9,roughness:0.35,metalness:0.1}));
+      const lake=new THREE.Mesh(new THREE.PlaneGeometry(1400,200),std({color:0x3d8fc9,roughness:0.75,metalness:0}));
       lake.rotation.x=-Math.PI/2; lake.position.set(500,-14,0); scene.add(lake);
       // distance boards every 25 m along the runway
       const board=txt=>{ const c=document.createElement('canvas'); c.width=256; c.height=128; const x=c.getContext('2d');
@@ -1719,7 +1730,7 @@ class StageObj{
       this.lavaLight=new THREE.PointLight(0xff5522,1.4,45); this.lavaLight.position.set(0,-3,5); scene.add(this.lavaLight);
       this.embers=this._points(260,0xffa040,0.14,[-30,30],[-7,20],[-15,6]);
     } else if(meadow){
-      const lake=new THREE.Mesh(new THREE.PlaneGeometry(260,160),std({color:0x3d8fc9,roughness:0.35,metalness:0.1}));
+      const lake=new THREE.Mesh(new THREE.PlaneGeometry(260,160),std({color:this.data.tod==='night'?0x13284a:(this.data.tod==='sunset'?0x6a6a8a:0x3d8fc9),roughness:0.75,metalness:0}));
       lake.rotation.x=-Math.PI/2; lake.position.y=-14; scene.add(lake);
       add('mountain_A_grass_trees',-62,-14,-135,30); add('mountain_C_grass',58,-14,-128,30,0.8); add('mountain_A_grass_trees',8,-14,-160,36,2);
       add('hills_B_trees',-26,-14,-48,12); add('building_windmill_green',-25,1.2,-50,9);
@@ -2303,6 +2314,8 @@ class Game{
       c.onclick=()=>this._selectStage(i);
       grid.appendChild(c);
     });
+    this.tod='day';
+    this._chipRow(document.getElementById('tod-chips'),['day','sunset','night','random'].map(v=>({label:v.toUpperCase(),value:v})),'day',v=>{ this.tod=v; AUDIO.playClick(); });
     const rc=document.createElement('div'); rc.className='stage-card'; rc.style.background='radial-gradient(circle at 50% 40%,#3a3f55,#10131c)';
     rc.innerHTML='<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:64px;opacity:.5">?</div><div class="nm">Random</div><div class="desc">Any of the stages above.</div>';
     rc.onclick=()=>this._selectStage(STAGES.length); grid.appendChild(rc);
@@ -2587,6 +2600,8 @@ class Game{
     if(!isRematch||!this.p1char){
       const pick=i=>CHAR_DATA[i]||choice(CHAR_DATA); // an index past the roster means "random"
       this.p1char=pick(this.selection.p1); this.p2char=this._p2Override||pick(this.selection.p2); this.stageData=STAGES[this.selection.stageIdx]||choice(STAGES);
+      const tod=this.tod==='random'?choice(['day','sunset','night']):(this.tod||'day');
+      if(tod!=='day' && (this.stageData.theme==='fortress'||this.stageData.theme==='meadow')) this.stageData=Object.assign({},this.stageData,{tod,bloom:tod==='night'?undefined:this.stageData.bloom});
       this.extraChars=ffa?[choice(CHAR_DATA),choice(CHAR_DATA)]:[];
     }
     this._teardownScene(); AUDIO.stopMusic(); this._applyGraphics();
