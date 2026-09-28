@@ -470,7 +470,7 @@ class AudioManager{
   startMusic(theme){
     this.stopMusic(); if(!this.musicOn) return; this.ensure();
     const menu=theme==='menu';
-    const T={menu:{root:57,scale:[0,2,4,7,9],bpm:92},fortress:{root:57,scale:[0,3,5,7,10],bpm:124},volcano:{root:50,scale:[0,1,5,7,8],bpm:136},storm:{root:52,scale:[0,2,3,7,10],bpm:128},meadow:{root:60,scale:[0,2,4,7,9],bpm:118}}[theme]||{root:57,scale:[0,3,5,7,10],bpm:124};
+    const T={menu:{root:57,scale:[0,2,4,7,9],bpm:92},fortress:{root:57,scale:[0,3,5,7,10],bpm:124},volcano:{root:50,scale:[0,1,5,7,8],bpm:136},storm:{root:52,scale:[0,2,3,7,10],bpm:128},meadow:{root:60,scale:[0,2,4,7,9],bpm:118},crypt:{root:50,scale:[0,3,5,6,10],bpm:112}}[theme]||{root:57,scale:[0,3,5,7,10],bpm:124};
     const m={T,step:0,next:this.now+0.1,spb:60/T.bpm/4,timer:null};
     const hz=n=>440*Math.pow(2,(n-69)/12), deg=d=>T.root+T.scale[((d%5)+5)%5]+12*Math.floor(d/5);
     const bassline=[0,0,3,0,0,4,3,2], arp=[0,2,4,7,4,2,5,3];
@@ -800,6 +800,11 @@ const STAGES = [
   { id:'meadow', name:'Windmill Meadow', desc:'A sunny village green with three ledges and gusting wind.', theme:'meadow',
     platforms:[{x:0,y:-1,w:18,h:3,solid:true},{x:-5.6,y:4.3,w:4.6,h:0.5,solid:false},{x:5.6,y:4.3,w:4.6,h:0.5,solid:false},{x:0,y:8.4,w:4.6,h:0.5,solid:false}],
     blast:{l:-26,r:26,t:23,b:-18}, sky:0x6fb3e0, fog:0x9ccbe8, bloom:{threshold:0.97,strength:0.18} },
+  { id:'crypt', name:'Sunken Crypt', desc:'Ghost-lit lifts rise and fall beside a spike-trapped floor.', theme:'crypt',
+    platforms:[{x:0,y:-1,w:16,h:3,solid:true},{x:0,y:5,w:5,h:0.5,solid:false}],
+    movers:[{axis:'y',x:-10.2,w:3.4,h:0.5,from:-3.5,to:6.5,speed:2.4,pause:0.9,glow:0x3fd9ff,body:0x2a3440,deck:'floor_tile_large'},
+            {axis:'y',x:10.2,w:3.4,h:0.5,from:-3.5,to:6.5,speed:2.4,pause:0.9,start:10,startDir:-1,glow:0x3fd9ff,body:0x2a3440,deck:'floor_tile_large'}],
+    blast:{l:-26,r:26,t:22,b:-18}, sky:0x0c1016, fog:0x111822 },
 ];
 
 //////////////////////// HITBOX ////////////////////////
@@ -1265,6 +1270,7 @@ class Fighter{
     if(this.state==='ledge'||this.state==='respawn') return;
     const prevY=this.pos.y;
     if(this.grounded && this.onPlatform && this.onPlatform._dx) this.pos.x+=this.onPlatform._dx;
+    if(this.grounded && this.onPlatform && this.onPlatform._dy) this.pos.y+=this.onPlatform._dy;
     if(!this.grounded){
       // holding jump early in a rising jump lowers gravity, so a held jump climbs higher than a tapped one
       let g=GRAVITY_ACCEL;
@@ -1512,26 +1518,29 @@ class StageObj{
     this.main=this.platforms.find(p=>p.solid);
     this.respawnY=Math.max(...this.platforms.map(p=>p.y+p.h/2))+5;
     this._buildVisuals();
-    if(data.moving){
-      this.moving=Object.assign({},data.moving,{dir:1,offset:0});
-      this.movingMesh=new THREE.Mesh(new THREE.BoxGeometry(data.moving.w,data.moving.h,3.2),
-        new THREE.MeshStandardMaterial({color:0x4a3a30,roughness:0.6,metalness:0.4,emissive:0x552200,emissiveIntensity:0.2}));
-      this.movingMesh.receiveShadow=this.movingMesh.castShadow=true;
-      this.movingMesh.position.set(data.moving.from,data.moving.y,0);
-      const glowStrip=new THREE.Mesh(new THREE.BoxGeometry(data.moving.w,0.07,3.22),new THREE.MeshBasicMaterial({color:0xff6a1a}));
-      glowStrip.position.y=-data.moving.h/2; this.movingMesh.add(glowStrip);
-      const deck=MODELS.prop('floor_wood_large'); deck.scale.set(data.moving.w/4,1,0.85); deck.position.y=data.moving.h/2-0.05; this.movingMesh.add(deck);
-      scene.add(this.movingMesh);
-      this.platforms.push({x:data.moving.from,y:data.moving.y,w:data.moving.w,h:data.moving.h,solid:false,_moving:true,_dx:0});
-    }
+    // moving platforms: 'x' movers drift sideways, 'y' movers are lifts; riders are carried by _dx/_dy
+    this.movers=(data.movers||(data.moving?[Object.assign({axis:'x'},data.moving)]:[])).map(d=>{
+      const mv=Object.assign({dir:d.startDir||1,offset:d.start||0},d);
+      const mesh=new THREE.Mesh(new THREE.BoxGeometry(d.w,d.h,3.2),
+        new THREE.MeshStandardMaterial({color:d.body||0x4a3a30,roughness:0.6,metalness:0.4,emissive:d.glow||0x552200,emissiveIntensity:0.2}));
+      mesh.receiveShadow=mesh.castShadow=true;
+      const glowStrip=new THREE.Mesh(new THREE.BoxGeometry(d.w,0.07,3.22),new THREE.MeshBasicMaterial({color:d.glow||0xff6a1a}));
+      glowStrip.position.y=-d.h/2; mesh.add(glowStrip);
+      const deck=MODELS.prop(d.deck||'floor_wood_large'); deck.scale.set(d.w/4,1,0.85); deck.position.y=d.h/2-0.05; mesh.add(deck);
+      scene.add(mesh); mv.mesh=mesh;
+      const x=d.axis==='x'?d.from:d.x, y=d.axis==='y'?d.from:d.y;
+      mesh.position.set(x,y,0);
+      mv.plat={x,y,w:d.w,h:d.h,solid:false,_moving:true,_dx:0,_dy:0}; this.platforms.push(mv.plat);
+      return mv;
+    });
   }
   _buildVisuals(){
     const scene=this.scene, th=this.data.theme;
     scene.background=new THREE.Color(this.data.sky);
     scene.fog=new THREE.Fog(this.data.fog,40,170);
-    const meadow=th==='meadow';
-    scene.add(new THREE.HemisphereLight(th==='volcano'?0xffc49a:(meadow?0xdcecff:0xd4e4ff),th==='volcano'?0x3a1a10:(meadow?0x3d5a2a:0x2a2620),meadow?0.7:0.75));
-    const sun=new THREE.DirectionalLight(th==='storm'?0xc8d4ff:(th==='volcano'?0xffd2a8:0xfff2d8),th==='storm'?0.9:(meadow?1.1:1.2));
+    const meadow=th==='meadow', crypt=th==='crypt';
+    scene.add(new THREE.HemisphereLight(th==='volcano'?0xffc49a:(meadow?0xdcecff:(crypt?0x9fb8e0:0xd4e4ff)),th==='volcano'?0x3a1a10:(meadow?0x3d5a2a:(crypt?0x0c1014:0x2a2620)),meadow?0.7:(crypt?0.6:0.75)));
+    const sun=new THREE.DirectionalLight(th==='storm'?0xc8d4ff:(th==='volcano'?0xffd2a8:(crypt?0xb8d4ff:0xfff2d8)),th==='storm'?0.9:(meadow?1.1:(crypt?0.75:1.2)));
     sun.position.set(-14,22,14); sun.castShadow=true; sun.shadow.mapSize.set(2048,1024); sun.shadow.bias=-0.0005;
     Object.assign(sun.shadow.camera,{left:-30,right:30,top:25,bottom:-15});
     scene.add(sun);
@@ -1539,8 +1548,8 @@ class StageObj{
     rim.position.set(10,6,-18); scene.add(rim);
     const std=o=>new THREE.MeshStandardMaterial(o);
     const add=(name,x,y,z,sc,ry)=>{ const o=MODELS.prop(name); o.position.set(x,y,z); if(Array.isArray(sc)) o.scale.set(sc[0],sc[1],sc[2]); else o.scale.setScalar(sc||1); o.rotation.y=ry||0; scene.add(o); return o; };
-    const bodyCol={fortress:0x6f7584,volcano:0x4d3a2e,storm:0x59606b,meadow:0x7a5f42}[th];
-    const topTile={fortress:'floor_tile_large',volcano:'floor_dirt_large_rocky',storm:'floor_dirt_large_rocky',meadow:null}[th];
+    const bodyCol={fortress:0x6f7584,volcano:0x4d3a2e,storm:0x59606b,meadow:0x7a5f42,crypt:0x3a4150}[th];
+    const topTile={fortress:'floor_tile_large',volcano:'floor_dirt_large_rocky',storm:'floor_dirt_large_rocky',meadow:null,crypt:'floor_tile_large'}[th];
     for(const p of this.platforms){
       const top=p.y+p.h/2;
       const body=new THREE.Mesh(new THREE.BoxGeometry(p.w,p.h,3.4),std({color:p.solid?bodyCol:0x5b4130,roughness:0.9}));
@@ -1562,8 +1571,22 @@ class StageObj{
     }
     const m=this.main, top=m.y+m.h/2, L=m.x-m.w/2, R=m.x+m.w/2;
     this.torchLights=[];
-    const torch=(x,y,z)=>{ add('torch_lit',x,y,z,1.3); if(LOW_GFX.on) return; const l=new THREE.PointLight(0xff9a40,0.6,7,2); l.position.set(x,y+1.1,z+0.6); scene.add(l); this.torchLights.push(l); };
-    if(th==='fortress'){
+    const torch=(x,y,z)=>{ add('torch_lit',x,y,z,1.3); if(LOW_GFX.on) return; const l=new THREE.PointLight(crypt?0x5fd8ff:0xff9a40,crypt?1.1:0.6,crypt?9:7,2); l.position.set(x,y+1.1,z+0.6); scene.add(l); this.torchLights.push(l); };
+    if(crypt){
+      // back wall of arches and pillars, a second row deeper in the fog, and ghost-fire torches
+      ['wall_arched','wall','wall_broken','wall_arched'].forEach((w,i)=>add(w,L+2+i*4,top,-2.4,[1,0.9,1]));
+      add('pillar_decorated',L-0.3,top,-2.2,0.9); add('pillar_decorated',R+0.3,top,-2.2,0.9);
+      for(let row=0;row<3;row++) for(let i=0;i<10;i++) add(row===1&&i%3===1?'wall_arched':(row===2&&i%4===0?'wall_broken':'wall'),-40+i*8.8,-9+row*8.6,-16,[2.2,2.2,1]);
+      for(let i=0;i<8;i++){ const c=add('column',-31+i*9,-9,-13,[3.2,7.5,3.2]); }
+      const chainMat=std({color:0x39414d,metalness:0.8,roughness:0.4});
+      for(let i=0;i<6;i++){ const ch=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,14,5),chainMat); ch.position.set(-20+i*8,top+14,-6); scene.add(ch); }
+      const moon=new THREE.SpotLight(0x8fc8ff,1.2,70,0.5,0.6); moon.position.set(0,34,6); moon.target.position.set(0,top,0); scene.add(moon,moon.target);
+      add('banner_patternB_blue',L+6,top,-2.3,[1,0.9,1]); add('banner_patternB_blue',R-6,top,-2.3,[1,0.9,1]);
+      torch(L+4,top+2.3,-2); torch(R-4,top+2.3,-2); torch(m.x,top+2.3,-2);
+      add('rubble_large',L+1.3,top,-1.2,0.5); add('barrel_large',R-1.4,top,-1.3,0.5); add('weaponrack',m.x+2.5,top,-1.6,7);
+      add('floor_tile_big_grate',m.x,top-0.04,-0.2,[0.7,1,0.6]);
+      this.mist=this._points(220,0x7fe0ff,0.16,[-30,30],[-18,4],[-12,6]);
+    } else if(th==='fortress'){
       ['wall_arched','wall','wall_broken','wall_arched','wall'].forEach((w,i)=>add(w,L+2+i*4,top,-2.3,[1,0.8,1]));
       add('pillar_decorated',L-0.4,top,-2.2,0.8); add('pillar_decorated',R+0.4,top,-2.2,0.8);
       add('banner_patternA_red',L+6,top,-2.3,[1,0.8,1]); add('banner_patternB_blue',R-6,top,-2.3,[1,0.8,1]); add('banner_shield_red',m.x,top,-2.3,[0.9,0.8,1]);
@@ -1630,16 +1653,22 @@ class StageObj{
   }
   update(dt){
     this.time+=dt;
-    if(this.moving){
-      const mv=this.moving, span=mv.to-mv.from;
-      mv.offset+=mv.dir*mv.speed*dt;
-      if(mv.offset>span){ mv.offset=span; mv.dir=-1; }
-      if(mv.offset<0){ mv.offset=0; mv.dir=1; }
-      const x=mv.from+mv.offset, mp=this.platforms.find(p=>p._moving);
-      mp._dx=x-mp.x; mp.x=x; this.movingMesh.position.x=x;
+    for(const mv of this.movers){
+      const span=mv.to-mv.from;
+      if(mv.wait>0) mv.wait-=dt; else mv.offset+=mv.dir*mv.speed*dt;
+      if(mv.offset>span){ mv.offset=span; mv.dir=-1; mv.wait=mv.pause||0; }
+      if(mv.offset<0){ mv.offset=0; mv.dir=1; mv.wait=mv.pause||0; }
+      const v=mv.from+mv.offset, p=mv.plat;
+      if(mv.axis==='y'){ p._dy=v-p.y; p._dx=0; p.y=v; } else { p._dx=v-p.x; p._dy=0; p.x=v; }
+      mv.mesh.position.set(p.x,p.y,0);
     }
     if(this.clouds) this.clouds.forEach((c,i)=>{ c.position.x+=dt*(0.4+i%3*0.2); if(c.position.x>70) c.position.x=-70; });
     if(this.torchLights) this.torchLights.forEach((l,i)=>{ l.intensity=0.6+Math.sin(this.time*9+i*2)*0.08+Math.sin(this.time*23+i)*0.05; });
+    if(this.mist){
+      const a=this.mist.geometry.attributes.position.array;
+      for(let i=0;i<a.length;i+=3){ a[i+1]+=dt*rand(0.3,0.9); a[i]+=Math.sin(this.time*0.6+i)*0.006; if(a[i+1]>4) a[i+1]=-18; }
+      this.mist.geometry.attributes.position.needsUpdate=true;
+    }
     if(this.pollen){
       const a=this.pollen.geometry.attributes.position.array, w=this.wind||0;
       for(let i=0;i<a.length;i+=3){ a[i]+=dt*(0.4+w*14)+Math.sin(this.time*0.7+i)*0.004; a[i+1]+=Math.sin(this.time+i*0.3)*0.006; if(a[i]>30) a[i]=-30; if(a[i]<-30) a[i]=30; }
@@ -2010,6 +2039,8 @@ const HAZARDS={
   storm:{kind:'lightning',name:'Lightning Strike',warn:60,active:10,r:1.2,h:30,color:0xbfe0ff,
     move:new Move('lightning',{name:'Lightning Strike',dmg:12,bkb:26,kbg:1.3,angle:75,stun:20,color:0xbfe0ff,special:true})},
   meadow:{kind:'wind',name:'Gust',warn:90,active:200},
+  crypt:{kind:'spikes',name:'Spike Trap',warn:70,active:14,r:1.2,h:2.2,color:0x7fe0ff,
+    move:new Move('spiketrap',{name:'Spike Trap',dmg:10,bkb:30,kbg:1.3,angle:82,color:0x9fe8ff,special:true})},
   fortress:{kind:'boulder',name:'Catapult Boulder',warn:85,active:6,r:1.6,h:2.4,color:0xffd27a,
     move:new Move('boulder',{name:'Catapult Boulder',dmg:13,bkb:28,kbg:1.4,angle:55,color:0xd9b88a,special:true})},
 };
@@ -2130,7 +2161,7 @@ class Game{
     const grid=$('stage-grid');
     STAGES.forEach((s,i)=>{
       const c=document.createElement('div'); c.className='stage-card'+(i===0?' sel':'');
-      c.style.background=s.theme==='volcano'?'linear-gradient(180deg,#3a1810,#ff5500 160%)':(s.theme==='storm'?'linear-gradient(180deg,#232b3c,#0c1018)':(s.theme==='meadow'?'linear-gradient(180deg,#5aa7df,#3f7d2e 130%)':'linear-gradient(180deg,#2b3550,#0d1420)'));
+      c.style.background=s.theme==='crypt'?'linear-gradient(180deg,#0c1016,#1e3848 160%)':s.theme==='volcano'?'linear-gradient(180deg,#3a1810,#ff5500 160%)':(s.theme==='storm'?'linear-gradient(180deg,#232b3c,#0c1018)':(s.theme==='meadow'?'linear-gradient(180deg,#5aa7df,#3f7d2e 130%)':'linear-gradient(180deg,#2b3550,#0d1420)'));
       c.innerHTML=`<div class="nm">${s.name}</div><div class="desc">${s.desc}</div>`;
       c.onclick=()=>this._selectStage(i);
       grid.appendChild(c);
@@ -3023,6 +3054,8 @@ class Game{
           pillar.position.set(h.x,h.top+c.h/2,0.2); this.scene.add(pillar); h.pillar=pillar; h.objs.push(pillar);
           this.particles.spawn(at,40,{color:[0xff5a1a,0xffc04a,0x3a2a20],speed:0.3,life:40,grav:0.008,upBias:2.2,additive:true});
           AUDIO.playFire(); AUDIO.playStone(); this.cameraRig.kick(0.5); this.bloomPulse=Math.max(this.bloomPulse,1);
+        } else if(c.kind==='spikes'){
+          this._spikes(h.x,h.top,0x7fe0ff); this.cameraRig.kick(0.4); this.bloomPulse=Math.max(this.bloomPulse,0.8);
         } else if(c.kind==='lightning'){
           const pts=[]; let bx=h.x+rand(-2,2);
           for(let y=h.top+30;y>h.top;y-=rand(1.5,3)){ pts.push(new THREE.Vector3(bx,y,0.3)); bx+=rand(-1,1); } pts.push(new THREE.Vector3(h.x,h.top,0.3));
@@ -3053,7 +3086,7 @@ class Game{
   // ---------- items ----------
   _settle(o,dt){ // simple gravity + landing on platform tops for crates and loose items
     if(o.grounded && o.plat && !this.stage.platforms.includes(o.plat)) o.grounded=false;
-    if(o.grounded){ if(o.plat&&o.plat._dx) o.pos.x+=o.plat._dx; if(o.plat && Math.abs(o.pos.x-o.plat.x)>o.plat.w/2+0.1) o.grounded=false; else { o.vel.x*=0.8; return; } }
+    if(o.grounded){ if(o.plat&&o.plat._dx) o.pos.x+=o.plat._dx; if(o.plat&&o.plat._dy) o.pos.y+=o.plat._dy; if(o.plat && Math.abs(o.pos.x-o.plat.x)>o.plat.w/2+0.1) o.grounded=false; else { o.vel.x*=0.8; return; } }
     const py=o.pos.y; o.vel.y-=GRAVITY_ACCEL*0.8*dt; o.vel.y=Math.max(o.vel.y,-16); o.pos.addScaledVector(o.vel,dt);
     for(const p of this.stage.platforms){
       const top=p.y+p.h/2;
