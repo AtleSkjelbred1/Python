@@ -949,6 +949,8 @@ const BUFFER_FRAMES=6, BUFFER_KEYS=['attackP','specialP','jumpP','grabP'];
 const ITEM_THROW=new Move('itemThrow',{startup:5,active:2,recovery:10,dmg:0,noHitbox:true,itemThrow:true,name:'Item Throw'});
 const LEDGE_ATTACK=new Move('ledgeAttack',{startup:8,active:4,recovery:16,dmg:8,bkb:12,kbg:1.2,angle:30,range:1.2,name:'Ledge Attack'});
 const LOW_GFX={on:false};
+// three.js strips '.' from node names on load ('handslot.r' -> 'handslotr'), so look up both spellings
+function bone(root,name){ return root.getObjectByName(name)||root.getObjectByName(name.replace(/\./g,'')); }
 function addRim(mat,u){
   mat.onBeforeCompile=sh=>{
     sh.uniforms.rimColor=u.color; sh.uniforms.rimStrength=u.strength;
@@ -999,8 +1001,19 @@ class Fighter{
     // readability, hit flashes and the respawn shimmer
     const c=this.tint!=null?new THREE.Color(this.tint):null; this.rimU={color:{value:new THREE.Color(0xffffff)},strength:{value:0.28}};
     model.traverse(o=>{ if(o.isMesh){ o.material=o.material.clone(); if(c) o.material.color.multiply(c); o.userData.tintMat=true; addRim(o.material,this.rimU); } });
-    if(cd.weapon){ const slot=model.getObjectByName('handslot.r'); if(slot) slot.add(MODELS.templates[cd.weapon].clone()); }
-    this.trailSource=model.getObjectByName('handslot.r')||model;
+    if(cd.weapon){ const slot=bone(model,'handslot.r'); if(slot) slot.add(MODELS.templates[cd.weapon].clone()); }
+    this.trailSource=bone(model,'handslot.r')||model;
+    // weapon tip in hand-slot space: the corner of the held weapon's bounds farthest from the grip
+    this.tipLocal=new THREE.Vector3(0,0.35,0);
+    if(this.trailSource!==model){
+      model.updateMatrixWorld(true); const box=new THREE.Box3(), inv=new THREE.Matrix4().copy(this.trailSource.matrixWorld).invert();
+      this.trailSource.traverse(o=>{ if(o.isMesh&&o!==this.trailSource){
+        // quantized (normalized integer) positions: r128 bounds use the raw integers, so rescale them
+        const a=o.geometry.attributes.position, arr=a.array, s=!a.normalized?1:arr instanceof Int16Array?1/32767:arr instanceof Uint16Array?1/65535:arr instanceof Int8Array?1/127:1/255;
+        o.geometry.computeBoundingBox(); const b=o.geometry.boundingBox.clone(); b.min.multiplyScalar(s); b.max.multiplyScalar(s);
+        box.union(b.applyMatrix4(o.matrixWorld).applyMatrix4(inv)); } });
+      if(!box.isEmpty()){ let best=0; for(const x of [box.min.x,box.max.x]) for(const y of [box.min.y,box.max.y]) for(const z of [box.min.z,box.max.z]){ const v=new THREE.Vector3(x,y,z); if(v.length()>best){ best=v.length(); this.tipLocal.copy(v); } } }
+    }
     this.headBone=model.getObjectByName('head')||model;
     this.anim=new AnimRig(model);
     this.shieldMesh=new THREE.Mesh(new THREE.SphereGeometry(1.0*s,16,12),new THREE.MeshStandardMaterial({color:0x6fd0ff,transparent:true,opacity:0.3,emissive:0x2288ff,emissiveIntensity:0.9,depthWrite:false}));
@@ -1503,6 +1516,32 @@ class Fighter{
     const hb=new Hitbox(this,m,this.pos.x+this.facing*ox,this.pos.y+oy,radius,this.facing);
     hb.key=this.action.key;
     return hb;
+  }
+}
+
+//////////////////////// SWING TRAIL ////////////////////////
+// A ribbon between the hand and the weapon tip over the last few rendered frames, fading with age.
+class SwingTrail{
+  constructor(scene){
+    this.N=14; this.pts=[]; this.scene=scene;
+    this.geo=new THREE.BufferGeometry();
+    this.pos=new Float32Array(this.N*2*3); this.col=new Float32Array(this.N*2*3);
+    this.geo.setAttribute('position',new THREE.BufferAttribute(this.pos,3)); this.geo.setAttribute('color',new THREE.BufferAttribute(this.col,3));
+    const idx=[]; for(let i=0;i<this.N-1;i++){ const a=i*2; idx.push(a,a+1,a+2, a+1,a+3,a+2); } this.geo.setIndex(idx);
+    this.mesh=new THREE.Mesh(this.geo,new THREE.MeshBasicMaterial({vertexColors:true,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
+    this.mesh.frustumCulled=false; this.mesh.visible=false; scene.add(this.mesh); this.color=new THREE.Color();
+  }
+  push(base,tip,color,on){
+    if(on) this.pts.unshift([base.clone(),tip.clone()]); else if(this.pts.length) this.pts.pop();
+    if(this.pts.length>this.N) this.pts.length=this.N;
+    this.mesh.visible=this.pts.length>1; if(!this.mesh.visible) return;
+    this.color.setHex(color);
+    for(let i=0;i<this.N;i++){
+      const p=this.pts[Math.min(i,this.pts.length-1)], k=i<this.pts.length?Math.pow(1-i/this.N,1.6):0;
+      this.pos.set([p[0].x,p[0].y,p[0].z],i*6); this.pos.set([p[1].x,p[1].y,p[1].z],i*6+3);
+      this.col.set([this.color.r*k*0.25,this.color.g*k*0.25,this.color.b*k*0.25],i*6); this.col.set([this.color.r*k,this.color.g*k,this.color.b*k],i*6+3);
+    }
+    this.geo.attributes.position.needsUpdate=true; this.geo.attributes.color.needsUpdate=true;
   }
 }
 
@@ -3431,7 +3470,7 @@ class Game{
     }
     AUDIO.playPickup();
     this.scene.remove(it.glow); it.glow.geometry.dispose(); it.glow.material.dispose();
-    const slot=f.model.getObjectByName('handslot.l')||f.model;
+    const slot=bone(f.model,'handslot.l')||f.model;
     it.mesh.position.set(0,0,0); it.mesh.rotation.set(0,0,0); it.mesh.scale.setScalar(T.scale*1.0);
     slot.add(it.mesh); f.held=it; this.items=this.items.filter(x=>x!==it);
   }
@@ -3746,6 +3785,13 @@ class Game{
       const stretch=f.grounded?1:1+Math.min(0.1,Math.abs(f.vel.y)/220);
       const sy=f.squash*stretch, sx=1/Math.sqrt(sy);
       f.group.scale.set(sx,sy,sx);
+      if(!f.isClone && f.trailSource){ // weapon ribbon during swings
+        if(!f.swing) f.swing=new SwingTrail(this.scene);
+        const m=f.action&&f.action.move, on=f.state==='attack'&&m&&!m.noHitbox&&!m.projectile&&!m.counter&&(f.actionPhase==='active'||(f.actionPhase==='recovery'&&f.actionFrame-m.startup-m.active<4));
+        if(on||f.swing.pts.length){ f.group.updateMatrixWorld(true);
+          const base=new THREE.Vector3(), tip=f.tipLocal.clone(); f.trailSource.getWorldPosition(base); f.trailSource.localToWorld(tip);
+          f.swing.push(base,tip,(m&&m.color)||f.cd.accent,on); }
+      }
       if(f.rimU && !f.isClone){
         const inv=f.respawnInvuln>0, hit=f._hitFlash>0;
         f.rimU.color.value.setHex(hit?0xffffff:(inv?0x9fe0ff:(f.team!=null?TEAM_COLORS[f.team]:0xffffff)));
@@ -3807,7 +3853,7 @@ const MODELS={
   // moment lands exactly on the move's first active frame.
   _measureHits(){
     const probe=THREE.SkeletonUtils.clone(this.templates.kael), mixer=new THREE.AnimationMixer(probe);
-    const ends=['handslot.r','handslot.l','foot.r','foot.l'].map(n=>probe.getObjectByName(n)).filter(Boolean);
+    const ends=['handslot.r','handslot.l','foot.r','foot.l'].map(n=>bone(probe,n)).filter(Boolean);
     const N=40;
     for(const name in this.clips){
       const clip=this.clips[name], a=mixer.clipAction(clip); a.play();
