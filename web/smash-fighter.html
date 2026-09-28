@@ -2166,6 +2166,9 @@ class Game{
       c.onclick=()=>this._selectStage(i);
       grid.appendChild(c);
     });
+    const rc=document.createElement('div'); rc.className='stage-card'; rc.style.background='radial-gradient(circle at 50% 40%,#3a3f55,#10131c)';
+    rc.innerHTML='<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:64px;opacity:.5">?</div><div class="nm">Random</div><div class="desc">Any of the stages above.</div>';
+    rc.onclick=()=>this._selectStage(STAGES.length); grid.appendChild(rc);
     window.addEventListener('keydown',e=>this._menuKey(e.code));
     this._refreshGamepadStatus();
     setInterval(()=>this._refreshGamepadStatus(),1000);
@@ -2188,8 +2191,8 @@ class Game{
       if(code==='Enter') this._toStageSelect(); if(code==='Escape') this._toMainMenu();
     } else if(st==='stageselect'){
       const n=STAGES.length;
-      if(code==='KeyA'||code==='ArrowLeft') this._selectStage((this.selection.stageIdx+n-1)%n);
-      if(code==='KeyD'||code==='ArrowRight') this._selectStage((this.selection.stageIdx+1)%n);
+      if(code==='KeyA'||code==='ArrowLeft') this._selectStage((this.selection.stageIdx+n)%(n+1));
+      if(code==='KeyD'||code==='ArrowRight') this._selectStage((this.selection.stageIdx+1)%(n+1));
       if(code==='Enter') this._startMatch(); if(code==='Escape') this._toCharSelect();
     } else if(st==='results'){
       if(code==='Enter') this._rematch(); if(code==='Escape') this._toMainMenu();
@@ -2209,7 +2212,7 @@ class Game{
         if(edge('a')) this._toStageSelect(); if(edge('back')) this._toMainMenu();
       } else if(st==='stageselect'){
         const n=STAGES.length;
-        if(edge('l')) this._selectStage((this.selection.stageIdx+n-1)%n); if(edge('r')) this._selectStage((this.selection.stageIdx+1)%n);
+        if(edge('l')) this._selectStage((this.selection.stageIdx+n)%(n+1)); if(edge('r')) this._selectStage((this.selection.stageIdx+1)%(n+1));
         if(edge('a')) this._startMatch(); if(edge('back')) this._toCharSelect();
       } else if(st==='menu'&&edge('a')) document.getElementById('btn-1v1').onclick();
       else if(st==='results'&&edge('a')) this._rematch();
@@ -2242,9 +2245,20 @@ class Game{
     document.getElementById('btn-to-stage').innerHTML=mode==='arcade'?'START ARCADE &#8594;':'NEXT: SELECT STAGE &#8594;';
     this._refreshCharUI('p1'); this._refreshCharUI('p2');
   }
-  _cycleChar(who,dir){ this.selection[who]=(this.selection[who]+dir+CHAR_DATA.length)%CHAR_DATA.length; this._refreshCharUI(who); }
+  _cycleChar(who,dir){ const n=CHAR_DATA.length+1; this.selection[who]=(this.selection[who]+dir+n)%n; this._refreshCharUI(who); }
+  _isRandom(who){ return !CHAR_DATA[this.selection[who]]; }
+  _previewCd(who){ return CHAR_DATA[this.selection[who]]||(this._randPreview||(this._randPreview=choice(CHAR_DATA))); }
   _refreshCharUI(who){
-    const cd=CHAR_DATA[this.selection[who]], n=who==='p1'?1:2, $=id=>document.getElementById(id);
+    const n=who==='p1'?1:2, $=id=>document.getElementById(id);
+    if(this._isRandom(who)){
+      $('cs'+n+'-name').textContent='Random';
+      $('cs'+n+'-stats').innerHTML='<div style="margin-top:6px;">A random fighter is picked when the match starts.</div>';
+      $('cs'+n+'-moves').innerHTML=''; $('cs'+n+'-swatches').innerHTML='';
+      this._randPreview=choice(CHAR_DATA);
+      if(this._previewRigs) this._previewRigs[who].setChar(this._randPreview,0x161616);
+      this._markRoster(); return;
+    }
+    const cd=CHAR_DATA[this.selection[who]];
     $('cs'+n+'-name').textContent=cd.name;
     $('cs'+n+'-stats').innerHTML=
       this._statBar('Power',{giant:0.95,power:0.85,grappler:0.65,zoner:0.45,assassin:0.4,speed:0.35,ranger:0.45,brawler:0.4}[cd.archetype])+
@@ -2264,6 +2278,9 @@ class Game{
       sw.appendChild(d);
     });
     if(this._previewRigs) this._previewRigs[who].setChar(cd,this._tintOf(who));
+    this._markRoster();
+  }
+  _markRoster(){
     if(this._rosterTiles) this._rosterTiles.forEach((t,i)=>{ t.classList.toggle('p1',i===this.selection.p1); t.classList.toggle('p2',i===this.selection.p2);
       t.querySelector('.b1').style.display=i===this.selection.p1?'':'none'; t.querySelector('.b2').style.display=i===this.selection.p2?'':'none'; });
   }
@@ -2361,7 +2378,7 @@ class Game{
     rig.renderer.render(rig.scene,rig.cam);
     const url=rig.renderer.domElement.toDataURL();
     rig.cam.position.set(0,0.75,5.8); rig.cam.lookAt(0,0.55,0);
-    rig.setChar(CHAR_DATA[this.selection[who]],this._tintOf(who));
+    rig.setChar(this._previewCd(who),this._isRandom(who)?0x161616:this._tintOf(who));
     return url;
   }
   _toStageSelect(){ if(this.settings.mode==='arcade') return this._startArcade(); this.state='stageselect'; this._showScreen('stageselect'); AUDIO.playClick(); this._stageThumbs(); }
@@ -2381,6 +2398,7 @@ class Game{
   }
   // ---------- arcade: five rounds against random rivals, getting harder ----------
   _startArcade(){
+    if(this._isRandom('p1')) this.selection.p1=Math.random()*CHAR_DATA.length|0; // arcade keeps one fighter for all rounds
     const me=this.selection.p1, pool=CHAR_DATA.map((c,i)=>i).filter(i=>i!==me);
     for(let i=pool.length-1;i>0;i--){ const j=Math.random()*(i+1)|0; [pool[i],pool[j]]=[pool[j],pool[i]]; }
     this.arcade={round:0,rivals:pool.slice(0,5),stages:pool.slice(0,5).map(()=>Math.random()*STAGES.length|0),diffs:['easy','medium','medium','hard','hard']};
@@ -2410,13 +2428,20 @@ class Game{
       t.oncontextmenu=e=>{ e.preventDefault(); this.selection.p2=i; this._refreshCharUI('p2'); AUDIO.playClick(); };
       el.appendChild(t); this._rosterTiles.push(t);
     });
+    const r=document.createElement('div'); r.className='rtile';
+    r.innerHTML=`<div style="height:62px;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:900;color:#8a93a8;background:#0d1018">?</div><div style="padding:2px 2px 0;font-weight:700;color:#aab">RANDOM</div><span class="badge b1">P1</span><span class="badge b2">P2</span>`;
+    const N=CHAR_DATA.length;
+    r.onclick=()=>{ this.selection.p1=N; this._refreshCharUI('p1'); AUDIO.playClick(); };
+    r.oncontextmenu=e=>{ e.preventDefault(); this.selection.p2=N; this._refreshCharUI('p2'); AUDIO.playClick(); };
+    el.appendChild(r); this._rosterTiles.push(r);
   }
 
   // -------------------- MATCH SETUP --------------------
   _startMatch(isRematch){
     const mode=this.settings.mode, ffa=mode==='ffa';
     if(!isRematch||!this.p1char){
-      this.p1char=CHAR_DATA[this.selection.p1]; this.p2char=CHAR_DATA[this.selection.p2]; this.stageData=STAGES[this.selection.stageIdx];
+      const pick=i=>CHAR_DATA[i]||choice(CHAR_DATA); // an index past the roster means "random"
+      this.p1char=pick(this.selection.p1); this.p2char=pick(this.selection.p2); this.stageData=STAGES[this.selection.stageIdx]||choice(STAGES);
       this.extraChars=ffa?[choice(CHAR_DATA),choice(CHAR_DATA)]:[];
     }
     this._teardownScene(); AUDIO.stopMusic(); this._applyGraphics();
