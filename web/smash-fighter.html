@@ -1190,7 +1190,9 @@ class Fighter{
         const running=Math.abs(this.vel.x)>this.cd.walkSpeed*0.8;
         const target=(cmd.left?-1:1)*(running?this.cd.runSpeed:this.cd.walkSpeed);
         this.vel.x=lerp(this.vel.x,target,0.35);
-        this.state=running?'run':'walk';
+        const was=this.state; this.state=running?'run':'walk';
+        if(this.state==='run' && was!=='run') this.events.push({type:'dust',dir:this.facing});
+        if(Math.sign(this.vel.x)!==Math.sign(target) && Math.abs(this.vel.x)>this.cd.walkSpeed) this.events.push({type:'dust',dir:-Math.sign(this.vel.x),skid:true});
       } else {
         this.vel.x=lerp(this.vel.x,0,0.4);
         this.state=cmd.down?'crouch':'idle';
@@ -2786,6 +2788,7 @@ class Game{
         case 'spikes': this._spikes(e.x,e.y,e.color); break;
         case 'itemthrow': AUDIO.playWhoosh(0.8); break;
         case 'pickup': if(this.items.includes(e.item)) this._onPickup(f,e.item); break;
+        case 'dust': if(this.frame%3===0||!e.skid) P.spawn(new THREE.Vector3(f.pos.x-e.dir*0.3,f.pos.y+0.08,0.3),e.skid?3:7,{color:[0xbdb4a4,0x9a8f80],speed:0.07,upBias:0.5,grav:0.002,life:20,size:0.1,dirX:-e.dir}); break;
         case 'taunt': this._floatText(f,choice(['COME ON!','TOO EASY','HA!','BRING IT'])); AUDIO.tone(700,0.1,'triangle',0.14,900); AUDIO.tone(1050,0.12,'triangle',0.12,null,{delay:0.08}); break;
       }
     }
@@ -3528,6 +3531,9 @@ function animateFighter(f,dt){
     case 'defeat': name=set.defeat; break;
     default: name=set.idle;
   }
+  // lean into the run and tilt with air drift (pivot x-rotation tips the body toward where it faces)
+  const lean=f.state==='run'?0.14:(!f.grounded&&f.state!=='hitstun'&&f.state!=='attack'?clamp(f.vel.x*f.facing*0.025,-0.12,0.14):0);
+  f._lean=lerp(f._lean||0,lean,0.2); f.pivot.rotation.x+=f._lean;
   f.anim.show(name,opt);
   f.anim.update(f.hitstop>0?0:dt);
 }
