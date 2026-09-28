@@ -117,6 +117,13 @@
   .swatch{ width:22px; height:22px; border-radius:50%; border:2px solid #333c4d; cursor:pointer; pointer-events:auto; }
   .swatch.sel{ border-color:#fff; box-shadow:0 0 8px rgba(255,179,71,.7); }
   .swatch.locked{ opacity:.25; cursor:not-allowed; }
+  .tp-title{ cursor:pointer; pointer-events:auto; } .tp-title::after{ content:' ▾'; opacity:.6; }
+  .collapsed > :not(.tp-title){ display:none !important; } .collapsed .tp-title::after{ content:' ▸'; } .collapsed{ width:auto !important; }
+  #lessons-panel{ pointer-events:auto; position:absolute; right:14px; bottom:14px; width:290px; padding:10px 12px; border-radius:10px; background:rgba(10,12,18,.72);
+    border:1px solid rgba(255,255,255,.1); font-size:12px; line-height:1.55; }
+  #lessons .ls{ opacity:.8; } #lessons .ls.done{ opacity:.45; text-decoration:line-through; } #lessons .ls.done::before{ content:'✓ '; color:#6bff9a; }
+  #lessons .ls:not(.done)::before{ content:'○ '; color:#ffb347; }
+  #lessons kbd{ background:#1c2230; border:1px solid #3d4658; border-radius:4px; padding:0 4px; font-family:monospace; font-size:11px; }
   #training-panel{ position:absolute; left:14px; bottom:14px; width:360px; padding:10px 12px; border-radius:10px; pointer-events:auto;
     background:rgba(10,12,18,.72); border:1px solid rgba(255,255,255,.1); font-size:12px; }
   .tp-title{ font-weight:800; letter-spacing:3px; color:#ffb347; margin-bottom:6px; }
@@ -222,6 +229,7 @@
   <div class="cs-players">
     <div class="cs-col">
       <h2 style="color:#7fd0ff">PLAYER 1</h2>
+      <div id="p1-ctrl" class="cs-mode-select hidden" style="margin:0;"></div>
       <canvas id="cs-canvas-1" class="cs-preview" width="230" height="230"></canvas>
       <div class="cs-arrows">
         <div class="cs-arrow" id="cs1-left">&#10094;</div>
@@ -282,6 +290,7 @@
     <div class="tp-row"><span class="tp-label">Hitboxes</span><div id="tp-hitbox" class="cs-mode-select"></div><div id="tp-reset" class="chip">Reset positions</div></div>
     <pre id="frame-data">Attack to see frame data.</pre>
   </div>
+  <div id="lessons-panel" class="hidden"><div class="tp-title">LESSONS <span id="lessons-count"></span></div><div id="lessons"></div></div>
 </div>
 
 <!-- ============ TOUCH CONTROLS ============ -->
@@ -1687,7 +1696,7 @@ class Projectile{
   }
   destroy(){
     this.scene.remove(this.mesh);
-    this.mesh.traverse(o=>{ if(o.userData.shared) return; if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); });
+    this.mesh.traverse(o=>{ if(o.userData.shared) return; if(o.userData.keepMat){ o.geometry.dispose(); return; } if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); });
   }
 }
 
@@ -1700,6 +1709,8 @@ class StageObj{
     this.main=this.platforms.find(p=>p.solid);
     this.respawnY=Math.max(...this.platforms.map(p=>p.y+p.h/2))+5;
     this._buildVisuals();
+    if(this.clouds) this.clouds.forEach(c=>c.userData.batch=false); // clouds drift, keep them separate
+    this._batchStatic();
     // moving platforms: 'x' movers drift sideways, 'y' movers are lifts; riders are carried by _dx/_dy
     this.movers=(data.movers||(data.moving?[Object.assign({axis:'x'},data.moving)]:[])).map(d=>{
       const mv=Object.assign({dir:d.startDir||1,offset:d.start||0},d);
@@ -1715,6 +1726,35 @@ class StageObj{
       mv.plat={x,y,w:d.w,h:d.h,solid:false,_moving:true,_dx:0,_dy:0}; this.platforms.push(mv.plat);
       return mv;
     });
+  }
+  // Merge every static prop that shares a material into one world-space mesh: far fewer draw calls.
+  // Positions/normals/uvs may be quantized (normalized integers), so they are expanded to floats here.
+  _batchStatic(){
+    const scene=this.scene, groups=new Map(), roots=scene.children.filter(o=>o.userData.batch);
+    scene.updateMatrixWorld(true);
+    const norm=a=>{ const arr=a.array; return !a.normalized?1:arr instanceof Int16Array?1/32767:arr instanceof Uint16Array?1/65535:arr instanceof Int8Array?1/127:arr instanceof Uint8Array?1/255:1; };
+    for(const r of roots) r.traverse(o=>{ if(o.isMesh && !o.isSkinnedMesh){ const k=o.material.uuid; if(!groups.has(k)) groups.set(k,{mat:o.material,list:[]}); groups.get(k).list.push(o); } });
+    const v=new THREE.Vector3(), nm=new THREE.Matrix3();
+    for(const {mat,list} of groups.values()){
+      if(list.length<2) continue;
+      // walk the index with getX(): r128's toNonIndexed() misreads interleaved (quantized) attributes
+      let total=0; const parts=list.map(o=>{ const g=o.geometry, n=g.index?g.index.count:g.attributes.position.count; total+=n; return [o,g,n]; });
+      const P=new Float32Array(total*3), N=new Float32Array(total*3), U=new Float32Array(total*2); let off=0, hasUV=true;
+      for(const [o,g,cnt] of parts){
+        const pa=g.attributes.position, na=g.attributes.normal, ua=g.attributes.uv, ps=norm(pa), ns=na?norm(na):1, us=ua?norm(ua):1, ix=g.index;
+        if(!ua) hasUV=false; nm.getNormalMatrix(o.matrixWorld);
+        for(let t=0;t<cnt;t++,off++){ const i=ix?ix.getX(t):t;
+          v.set(pa.getX(i)*ps,pa.getY(i)*ps,pa.getZ(i)*ps).applyMatrix4(o.matrixWorld); P[off*3]=v.x; P[off*3+1]=v.y; P[off*3+2]=v.z;
+          if(na){ v.set(na.getX(i)*ns,na.getY(i)*ns,na.getZ(i)*ns).applyMatrix3(nm).normalize(); N[off*3]=v.x; N[off*3+1]=v.y; N[off*3+2]=v.z; }
+          if(ua){ U[off*2]=ua.getX(i)*us; U[off*2+1]=ua.getY(i)*us; }
+        }
+      }
+      const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.BufferAttribute(P,3)); geo.setAttribute('normal',new THREE.BufferAttribute(N,3));
+      if(hasUV) geo.setAttribute('uv',new THREE.BufferAttribute(U,2));
+      const mesh=new THREE.Mesh(geo,mat); mesh.castShadow=mesh.receiveShadow=true; mesh.matrixAutoUpdate=false; mesh.userData.keepMat=true; scene.add(mesh);
+      for(const o of list){ o.visible=false; o.parent.remove(o); }
+    }
+    for(const r of roots){ let any=false; r.traverse(o=>{ if(o.isMesh) any=true; }); if(!any) scene.remove(r); }
   }
   _buildVisuals(){
     const scene=this.scene, th=this.data.theme;
@@ -1739,7 +1779,7 @@ class StageObj{
       if(this.data.tod==='night'){ this.stars=this._points(400,0xffffff,0.35,[-160,160],[10,90],[-150,-110]); }
     }
     const std=o=>new THREE.MeshStandardMaterial(o);
-    const add=(name,x,y,z,sc,ry)=>{ const o=MODELS.prop(name); o.position.set(x,y,z); if(Array.isArray(sc)) o.scale.set(sc[0],sc[1],sc[2]); else o.scale.setScalar(sc||1); o.rotation.y=ry||0; scene.add(o); return o; };
+    const add=(name,x,y,z,sc,ry)=>{ const o=MODELS.prop(name); o.position.set(x,y,z); if(Array.isArray(sc)) o.scale.set(sc[0],sc[1],sc[2]); else o.scale.setScalar(sc||1); o.rotation.y=ry||0; o.userData.batch=true; scene.add(o); return o; };
     const bodyCol={fortress:0x6f7584,volcano:0x4d3a2e,storm:0x59606b,meadow:0x7a5f42,crypt:0x3a4150,homerun:0x7a5f42}[th];
     const topTile={fortress:'floor_tile_large',volcano:'floor_dirt_large_rocky',storm:'floor_dirt_large_rocky',meadow:null,crypt:'floor_tile_large',homerun:null}[th];
     for(const p of this.platforms){
@@ -2411,6 +2451,7 @@ class Game{
     this._chipRow($('tp-pct'),[0,50,100,150].map(v=>({label:v+'%',value:v})),-1,v=>{ if(this.f2) this.f2.percent=v; });
     this._chipRow($('tp-hitbox'),[{label:'Show',value:true},{label:'Hide',value:false}],true,v=>{ this.training.hitboxes=v; });
     $('tp-reset').onclick=()=>this._trainingReset();
+    document.querySelectorAll('#training-panel .tp-title, #lessons-panel .tp-title').forEach(t=>t.onclick=()=>t.parentElement.classList.toggle('collapsed'));
     this._chipRow($('tp-speed'),[{label:'1×',value:1},{label:'½×',value:0.5},{label:'¼×',value:0.25}],1,v=>{ this.training.speed=v; });
     this._chipRow($('tp-items'),[{label:'Bomb',value:'bomb'},{label:'Axe',value:'axe'},{label:'Potion',value:'potion'},{label:'Wand',value:'wand'},{label:'Crate',value:'crate'}],null,v=>{
       if(!this.f1||!this.isTraining) return;
@@ -2425,7 +2466,8 @@ class Game{
     $('btn-arcade').onclick=()=>{ this.settings.mode='arcade'; this._toCharSelect(); };
     $('btn-homerun').onclick=()=>{ this.settings.mode='homerun'; this._toCharSelect(); };
     $('btn-ffa').onclick=()=>{ this.settings.mode='ffa'; this._toCharSelect(); };
-    this.ffaP2='bot'; this.ffaTeams=false;
+    this.ffaP2='bot'; this.ffaTeams=false; this.p1cpu=false;
+    this._chipRow($('p1-ctrl'),[{label:'P1: HUMAN',value:false},{label:'P1: CPU (WATCH)',value:true}],false,v=>{ this.p1cpu=v; AUDIO.playClick(); });
     this._chipRow($('ffa-teams'),[{label:'FREE-FOR-ALL',value:false},{label:'2 vs 2 (P1+P2 vs CPUs)',value:true}],false,v=>{ this.ffaTeams=v; AUDIO.playClick(); this._toCharSelect(); });
     this._chipRow($('ffa-p2'),[{label:'P2: CPU',value:'bot'},{label:'P2: HUMAN',value:'p2'}],'bot',v=>{ this.ffaP2=v; AUDIO.playClick(); this._toCharSelect(); });
     $('btn-quit').onclick=()=>this._toMainMenu();
@@ -2522,6 +2564,7 @@ class Game{
       (mode==='homerun'?'SANDBAG — 10 SECONDS, THEN SEND IT FLYING':mode==='ffa'?(this.ffaP2==='bot'?'CPU LV '+this.settings.botDifficulty+' + 2 RANDOM CPUs':'PLAYER 2 + 2 RANDOM CPUs'):'PLAYER 2')));
     document.getElementById('ffa-p2').classList.toggle('hidden',mode!=='ffa');
     document.getElementById('ffa-teams').classList.toggle('hidden',mode!=='ffa');
+    document.getElementById('p1-ctrl').classList.toggle('hidden',!(mode==='cpu'||mode==='ffa'));
     document.getElementById('btn-to-stage').innerHTML=mode==='arcade'?'START ARCADE &#8594;':'NEXT: SELECT STAGE &#8594;';
     this._refreshCharUI('p1'); this._refreshCharUI('p2');
   }
@@ -2629,7 +2672,7 @@ class Game{
       const rl=new THREE.DirectionalLight(0x88aaff,0.7); rl.position.set(-3,2,-4); scene.add(rl);
       const rig={scene,renderer,cam,fighter:null,
         setChar:(cd,tint)=>{
-          if(rig.fighter){ scene.remove(rig.fighter.group); rig.fighter.group.traverse(o=>{ if(o.userData.shared) return; if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }); }
+          if(rig.fighter){ scene.remove(rig.fighter.group); rig.fighter.group.traverse(o=>{ if(o.userData.shared) return; if(o.userData.keepMat){ o.geometry.dispose(); return; } if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }); }
           if(rig.fighter) rig.fighter.group.traverse(o=>{ if(o.userData.tintMat) o.material.dispose(); });
           rig.fighter=new Fighter(scene,cd,1,who,tint); rig.fighter.group.position.set(0,-0.9,0);
         }};
@@ -2673,7 +2716,7 @@ class Game{
       cam.position.set(0,top+5.5,24); cam.lookAt(0,top+2.2,0); r.render(scene,cam);
       const card=document.getElementById('stage-grid').children[i];
       card.style.background=`linear-gradient(180deg,rgba(0,0,0,0) 45%,rgba(0,0,0,.75)),url(${r.domElement.toDataURL('image/jpeg',0.85)}) center/cover`;
-      scene.traverse(o=>{ if(o.userData.shared) return; if(o.geometry) o.geometry.dispose(); if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(q=>q.dispose()); });
+      scene.traverse(o=>{ if(o.userData.shared) return; if(o.userData.keepMat){ o.geometry.dispose(); return; } if(o.geometry) o.geometry.dispose(); if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(q=>q.dispose()); });
     });
     r.dispose(); if(r.forceContextLoss) r.forceContextLoss();
   }
@@ -2744,7 +2787,8 @@ class Game{
     // who is in the match and who controls them: 'p1'/'p2' keyboard+pad, 'bot', or the training 'dummy'
     const arc=mode==='arcade'&&this.arcade;
     const botDiff=arc?this.arcade.diffs[this.arcade.round]:this.settings.botDifficulty;
-    const roster=[{cd:this.p1char,tint:this._tintOf('p1'),control:'p1'},
+    const p1bot=this.p1cpu&&(mode==='cpu'||mode==='ffa');
+    const roster=[{cd:this.p1char,tint:this._tintOf('p1'),control:p1bot?'bot':'p1'},
       {cd:this.p2char,tint:mode==='homerun'?0xd8b98a:this._tintOf('p2'),control:(this.isTraining||mode==='homerun')?'dummy':(mode==='cpu'||arc||(ffa&&this.ffaP2==='bot'))?'bot':'p2'}];
     this.extraChars.forEach(cd=>roster.push({cd,tint:null,control:'bot'}));
     const spare=[0x9ec2ff,0xff9a9a,0x9ef0b4,0xffd98a,0x6a6a78];
@@ -2788,6 +2832,7 @@ class Game{
     $('stage-label').textContent=this.stageData.name.toUpperCase();
     this._buildHUD();
     $('training-panel').classList.toggle('hidden',!this.isTraining);
+    $('lessons-panel').classList.toggle('hidden',!this.isTraining); this._lessonsHtml=null;
     $('hud').classList.remove('replaying'); $('unlock-note').textContent='';
     $('big-text').style.opacity=0;
     this._updateHUD(); this._showGuide();
@@ -2829,7 +2874,7 @@ class Game{
   _teardownScene(){
     if(this._countT) this._countT.forEach(clearTimeout);
     if(!this.scene) return;
-    this.scene.traverse(o=>{ if(o.userData.tintMat) o.material.dispose(); if(o.userData.shared) return; if(o.geometry) o.geometry.dispose(); if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose()); });
+    this.scene.traverse(o=>{ if(o.userData.tintMat) o.material.dispose(); if(o.userData.shared) return; if(o.userData.keepMat){ o.geometry.dispose(); return; } if(o.geometry) o.geometry.dispose(); if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose()); });
     this.scene=null;
   }
   _bigText(text,small){
@@ -3336,6 +3381,7 @@ class Game{
     if(this.isHomerun){ document.getElementById('unlock-note').textContent=''; return; }
     const d=PROFILE.data, before=COLOR_UNLOCKS.filter(c=>PROFILE.unlocked(c)).map(c=>c.id);
     const humans=this.fighters.filter(f=>f.control==='p1'||f.control==='p2');
+    if(!humans.length){ document.getElementById('unlock-note').textContent=''; return; } // bots-only matches are not recorded
     d.matches++;
     for(const f of humans){
       const c=PROFILE.char(f.cd.id); c.played++; if(this.winners.includes(f)) c.wins++;
@@ -3459,7 +3505,7 @@ class Game{
         }
         if(h.pillar){ const k=(h.t-c.warn)/c.active; h.pillar.scale.set(1-k*0.5,Math.min(1,k*4),1-k*0.5); h.pillar.position.y=h.top+c.h*Math.min(1,k*4)/2; }
       }
-      if(h.t>c.warn+c.active+12){ h.done=true; h.objs.forEach(o=>{ this.scene.remove(o); if(o.userData.shared) return; if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }); }
+      if(h.t>c.warn+c.active+12){ h.done=true; h.objs.forEach(o=>{ this.scene.remove(o); if(o.userData.shared) return; if(o.userData.keepMat){ o.geometry.dispose(); return; } if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }); }
     }
     this.hazards=this.hazards.filter(h=>!h.done);
     this.stage.hazardZones=this.hazards.filter(h=>h.cfg.kind!=='wind').map(h=>({x:h.x,r:h.cfg.r+0.9}));
@@ -3623,6 +3669,37 @@ class Game{
     const top=this.stage.main.y+this.stage.main.h/2;
     [[this.f1,-4,1],[this.f2,4,-1]].forEach(([f,x,dir])=>{ f.interrupt(); f.pos.set(x,top,0); f.vel.set(0,0,0); f.hitstun=0; f.hitstop=0; f.tumble=false; f.facing=dir; f.grounded=true; f.state='idle'; f.shieldHP=100; f.shieldBroken=0; });
     this.projectiles.forEach(p=>p.dead=true);
+  }
+  // training checklist: each lesson ticks off when P1 is seen doing it
+  _lessonList(){
+    const k=KEYMAP.p1, K=c=>`<kbd>${keyLabel(c)}</kbd>`, jump=TAP_JUMP.on?K(k.jump)+'/'+K(k.up):K(k.jump);
+    return [
+      ['walk','Walk and run: hold '+K(k.left)+' or '+K(k.right),f=>f.state==='run'],
+      ['jump','Jump with '+jump+' (hold for higher)',f=>f.state==='jump'&&f.jumpHold>0],
+      ['dj','Double jump: jump again in the air',f=>f.state==='doublejump'],
+      ['ff','Fast fall: tap '+K(k.down)+' while falling',f=>f.fastFalling],
+      ['tilt','Tilt: hold a direction, then '+K(k.attack),f=>f.action&&/^tilt/.test(f.action.key)],
+      ['smash','Smash: direction + '+K(k.attack)+' together (hold to charge)',f=>f.action&&/^smash/.test(f.action.key)&&f.chargeFrames>0],
+      ['air','Aerial: '+K(k.attack)+' in the air',f=>f.action&&/^aerial/.test(f.action.key)],
+      ['special','Special: '+K(k.special)+' (try every direction)',f=>f.action&&/^special(N|Side|Down)/.test(f.action.key)],
+      ['up','Recovery: up + '+K(k.special)+' in the air',f=>f.action&&f.action.key==='specialUp'&&!f.grounded],
+      ['shield','Shield: hold '+K(k.shield),f=>f.state==='shield'],
+      ['dodge','Dodge: '+K(k.shield)+' then a direction',f=>f.state==='roll'||f.state==='spotdodge'||f.state==='airdodge'],
+      ['grab','Grab '+K(k.grab)+' near the dummy, then a direction to throw',f=>f.state==='throw'&&f.throwKey!=='break'],
+      ['ledge','Grab a ledge (fall past the stage edge)',f=>f.state==='ledge'],
+      ['ult','Ultimate: '+K(k.special)+'+'+K(k.shield)+' when the meter is full',f=>f.action&&f.action.key==='ultimate'],
+    ];
+  }
+  _updateLessons(){
+    const el=document.getElementById('lessons'), f=this.f1; if(!f) return;
+    if(!this._lessons){ this._lessons={}; this._lessonsHtml=null; }
+    const L=this._lessonList(); let changed=!this._lessonsHtml;
+    for(const [id,,test] of L) if(!this._lessons[id] && test(f)){ this._lessons[id]=true; changed=true; AUDIO.playPickup(); }
+    if(Object.keys(this._lessons).length>=L.length-1 && f.ultMeter<100 && !this._lessons.ult) f.ultMeter=100; // hand out the meter for the last lesson
+    if(!changed) return;
+    const done=L.filter(l=>this._lessons[l[0]]).length;
+    document.getElementById('lessons-count').textContent=done+' / '+L.length+(done===L.length?' — ALL DONE!':'');
+    el.innerHTML=L.map(([id,txt])=>`<div class="ls${this._lessons[id]?' done':''}">${txt}</div>`).join(''); this._lessonsHtml=true;
   }
   _updateTrainingHUD(){
     const f=this.f1;
@@ -3829,7 +3906,7 @@ class Game{
       const t=Math.max(0,Math.ceil(this.timeLeft)); $('hud-timer').textContent=Math.floor(t/60)+':'+String(t%60).padStart(2,'0');
       $('hud-timer').style.display='';
     } else $('hud-timer').style.display='none';
-    if(this.isTraining && this.f1) this._updateTrainingHUD();
+    if(this.isTraining && this.f1){ this._updateTrainingHUD(); this._updateLessons(); }
   }
 
   // fighters knocked outside the camera get a bubble pinned to the screen edge, pointing at them
@@ -3859,7 +3936,7 @@ class Game{
   }
   _disposeMenuScene(){
     const M=this.menuScene; if(!M) return; this.menuScene=null;
-    M.scene.traverse(o=>{ if(o.userData.tintMat) o.material.dispose(); if(o.userData.shared) return; if(o.geometry) o.geometry.dispose(); if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose()); });
+    M.scene.traverse(o=>{ if(o.userData.tintMat) o.material.dispose(); if(o.userData.shared) return; if(o.userData.keepMat){ o.geometry.dispose(); return; } if(o.geometry) o.geometry.dispose(); if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose()); });
   }
   _renderMenu(dt){
     const M=this.menuScene; if(!M) return;
