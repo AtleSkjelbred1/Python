@@ -196,8 +196,8 @@
     <span class="sl">ITEMS</span><div id="item-chips" class="cs-mode-select"></div>
     <span class="sl">MUSIC</span><div id="music-chips" class="cs-mode-select"></div>
     <span class="sl">GRAPHICS</span><div id="gfx-chips" class="cs-mode-select"></div>
-    <span class="sl">BOT</span><div id="diff-chips" class="cs-mode-select"></div>
     <span class="sl">TAP JUMP</span><div id="tapjump-chips" class="cs-mode-select"></div>
+    <span class="sl" style="grid-column:1">CPU LEVEL</span><div id="diff-chips" class="cs-mode-select" style="grid-column:span 3"></div>
   </div>
 </div>
 
@@ -1871,9 +1871,19 @@ const AI_PROFILES={
   medium:{react:13,rand:0.35,shield:0.35,parry:0.05,edgeguard:0.35,combo:0.5, smash:0.35,recover:0.95},
   hard:  {react:6, rand:0.1, shield:0.5, parry:0.3, edgeguard:0.85,combo:0.9, smash:0.5, recover:1},
 };
+// CPU level -> behaviour: 1 barely reacts, 5 = the old medium, 8 = the old hard, 9 reacts in 3 frames
+const AI_ANCHORS=[[1,{react:30,rand:0.85,shield:0.06,parry:0,edgeguard:0,combo:0,smash:0.1,recover:0.45}],[2,AI_PROFILES.easy],[5,AI_PROFILES.medium],[8,AI_PROFILES.hard],
+  [9,{react:3,rand:0.03,shield:0.6,parry:0.45,edgeguard:0.95,combo:1,smash:0.55,recover:1}]];
+function aiProfileFor(lv){
+  let i=0; while(i<AI_ANCHORS.length-2 && lv>AI_ANCHORS[i+1][0]) i++;
+  const [l0,a]=AI_ANCHORS[i], [l1,b]=AI_ANCHORS[i+1], t=clamp((lv-l0)/(l1-l0),0,1), o={};
+  for(const k in a) o[k]=a[k]+(b[k]-a[k])*t; o.react=Math.round(o.react); return o;
+}
 class AIController{
   constructor(fighter,difficulty){
-    this.f=fighter; this.diff=difficulty; this.p=AI_PROFILES[difficulty];
+    // difficulty is a CPU level 1-9 (names still accepted); the profile is blended between anchor levels
+    const lv=typeof difficulty==='number'?clamp(difficulty,1,9):({easy:2,medium:5,hard:8}[difficulty]||5);
+    this.f=fighter; this.level=lv; this.diff=lv<=3?'easy':lv<=6?'medium':'hard'; this.p=aiProfileFor(lv);
     this.buffer=[]; this.holdShield=0; this.holdAttack=0; this.cooldown=0; this.zoneCooldown=0; this.history=[];
     this.mode='neutral';
   }
@@ -2099,7 +2109,7 @@ const COLOR_UNLOCKS=[
   {id:'crimson',name:'Crimson',tint:0xff9a9a,goal:'Win a match',progress:d=>[Math.min(d.wins,1),1]},
   {id:'azure',name:'Azure',tint:0x9ec2ff,goal:'Land a 5-hit combo',progress:d=>[Math.min(d.longestCombo,5),5]},
   {id:'shadow',name:'Shadow',tint:0x6a6a78,goal:'Score 25 KOs in total',progress:d=>[Math.min(d.kos,25),25]},
-  {id:'gold',name:'Gold',tint:0xffd98a,goal:'Beat a Hard bot',progress:d=>[Math.min(d.hardWins,1),1]},
+  {id:'gold',name:'Gold',tint:0xffd98a,goal:'Beat a level 7+ CPU',progress:d=>[Math.min(d.hardWins,1),1]},
   {id:'emerald',name:'Emerald',tint:0x9ef0b4,goal:'Clear Arcade mode',progress:d=>[Math.min(d.arcadeClears||0,1),1]},
 ];
 const PROFILE={
@@ -2152,7 +2162,7 @@ class Game{
     this.camera.position.set(0,8,26);
     this.postfx=new PostFX(this.renderer);
     window.addEventListener('resize',()=>this._resize()); this._resize();
-    this.settings=Object.assign({stocks:3,timeLimit:0,mode:'vs',botDifficulty:'medium',hazards:true,items:true,music:true,graphics:'high',tapJump:true},this._loadSettings());
+    this.settings=Object.assign({stocks:3,timeLimit:0,mode:'vs',botDifficulty:5,hazards:true,items:true,music:true,graphics:'high',tapJump:true},this._loadSettings());
     this.selection={p1:0,p2:1,stageIdx:0,colors:{p1:'default',p2:'default'}};
     this.training={dummy:'stand',hitboxes:true};
     PROFILE.load();
@@ -2195,7 +2205,8 @@ class Game{
     const S=this.settings, set=k=>v=>{ S[k]=v; this._saveSettings(); AUDIO.playClick(); };
     this._chipRow($('stock-chips'),[1,2,3,4,5].map(v=>({label:v+'',value:v})),S.stocks,set('stocks'));
     this._chipRow($('time-chips'),[{label:'OFF',value:0},{label:'3:00',value:180},{label:'5:00',value:300},{label:'8:00',value:480}],S.timeLimit,set('timeLimit'));
-    this._chipRow($('diff-chips'),[{label:'EASY',value:'easy'},{label:'MEDIUM',value:'medium'},{label:'HARD',value:'hard'}],S.botDifficulty,set('botDifficulty'));
+    if(typeof S.botDifficulty!=='number') S.botDifficulty={easy:2,medium:5,hard:8}[S.botDifficulty]||5;
+    this._chipRow($('diff-chips'),[1,2,3,4,5,6,7,8,9].map(v=>({label:''+v,value:v})),S.botDifficulty,set('botDifficulty'));
     this._chipRow($('item-chips'),[{label:'ON',value:true},{label:'OFF',value:false}],S.items,set('items'));
     this._chipRow($('music-chips'),[{label:'ON',value:true},{label:'OFF',value:false}],S.music,v=>{ set('music')(v); AUDIO.musicOn=v; if(!v) AUDIO.stopMusic(); });
     this._chipRow($('gfx-chips'),[{label:'HIGH',value:'high'},{label:'LOW',value:'low'}],S.graphics,v=>{ set('graphics')(v); this._applyGraphics(); });
@@ -2325,8 +2336,8 @@ class Game{
     if(AUDIO.ctx && (!AUDIO.music||AUDIO.music.theme!=='menu')) AUDIO.startMusic('menu');
     this.state='charselect'; this._showScreen('charselect');
     const mode=this.settings.mode;
-    document.getElementById('p2-label').textContent=mode==='cpu'?'BOT ('+this.settings.botDifficulty.toUpperCase()+')':(mode==='training'?'TRAINING DUMMY':(mode==='arcade'?'ARCADE: 5 RANDOM RIVALS':
-      (mode==='homerun'?'SANDBAG — 10 SECONDS, THEN SEND IT FLYING':mode==='ffa'?(this.ffaP2==='bot'?'CPU ('+this.settings.botDifficulty.toUpperCase()+') + 2 RANDOM CPUs':'PLAYER 2 + 2 RANDOM CPUs'):'PLAYER 2')));
+    document.getElementById('p2-label').textContent=mode==='cpu'?'CPU LEVEL '+this.settings.botDifficulty:(mode==='training'?'TRAINING DUMMY':(mode==='arcade'?'ARCADE: 5 RANDOM RIVALS':
+      (mode==='homerun'?'SANDBAG — 10 SECONDS, THEN SEND IT FLYING':mode==='ffa'?(this.ffaP2==='bot'?'CPU LV '+this.settings.botDifficulty+' + 2 RANDOM CPUs':'PLAYER 2 + 2 RANDOM CPUs'):'PLAYER 2')));
     document.getElementById('ffa-p2').classList.toggle('hidden',mode!=='ffa');
     document.getElementById('ffa-teams').classList.toggle('hidden',mode!=='ffa');
     document.getElementById('btn-to-stage').innerHTML=mode==='arcade'?'START ARCADE &#8594;':'NEXT: SELECT STAGE &#8594;';
@@ -3131,7 +3142,7 @@ class Game{
       d.wins++;
       const sec=Math.round(this.matchFrames/60);
       if(d.fastestWin==null||sec<d.fastestWin){ d.fastestWin=sec; d.fastestWinChar=winner.cd.name; }
-      if((this.settings.mode==='cpu'&&this.settings.botDifficulty==='hard')||(this.arcade&&this.arcade.diffs[this.arcade.round]==='hard')) d.hardWins++;
+      if((this.settings.mode==='cpu'&&this.settings.botDifficulty>=7)||(this.arcade&&this.arcade.diffs[this.arcade.round]==='hard')) d.hardWins++;
     }
     PROFILE.save();
     const A=this.settings.mode==='arcade'&&this.arcade;
