@@ -192,6 +192,7 @@
   <div class="panel settings-grid" style="margin-top:14px;">
     <span class="sl">STOCKS</span><div id="stock-chips" class="cs-mode-select"></div>
     <span class="sl">TIME LIMIT</span><div id="time-chips" class="cs-mode-select"></div>
+    <span class="sl">RULES</span><div id="rules-chips" class="cs-mode-select"></div>
     <span class="sl">HAZARDS</span><div id="hazard-chips" class="cs-mode-select"></div>
     <span class="sl">ITEMS</span><div id="item-chips" class="cs-mode-select"></div>
     <span class="sl">MUSIC</span><div id="music-chips" class="cs-mode-select"></div>
@@ -843,7 +844,7 @@ const HOMERUN_STAGE={ id:'homerun', name:'Home-Run Field', desc:'', theme:'homer
     {x:6.35,y:4,w:0.5,h:10,solid:true,barrier:true,noUnder:true,noLedge:true},{x:-6.35,y:4,w:0.5,h:10,solid:true,barrier:true,noUnder:true,noLedge:true}],
   blast:{l:-40,r:1100,t:90,b:-40}, sky:0x6fb3e0, fog:0x9ccbe8, bloom:{threshold:0.97,strength:0.18} };
 const SANDBAG_CD=Object.assign({},CHAR_DATA.find(c=>c.id==='rattle'),{name:'Sandbag',weight:100,sandbag:true,traits:'',desc:''});
-const HR_TIME=600, HR_EDGE=6.6;
+const HR_TIME=600, HR_EDGE=6.6, STAMINA_HP=150;
 // Arcade's final round: a giant armoured Brakka that only flinches from strong hits
 const BOSS_CD=Object.assign({},CHAR_DATA.find(c=>c.id==='brakka'),{name:'The Colossus',size:2.05,weight:205,walkSpeed:1.8,runSpeed:3.0,
   jumpVel:13.5,doubleJumpVel:11,armorAll:true,boss:true,traits:'Only strong hits make it flinch',desc:''});
@@ -2198,7 +2199,7 @@ class Game{
     this.camera.position.set(0,8,26);
     this.postfx=new PostFX(this.renderer);
     window.addEventListener('resize',()=>this._resize()); this._resize();
-    this.settings=Object.assign({stocks:3,timeLimit:0,mode:'vs',botDifficulty:5,hazards:true,items:true,music:true,graphics:'high',tapJump:true},this._loadSettings());
+    this.settings=Object.assign({stocks:3,timeLimit:0,mode:'vs',botDifficulty:5,rules:'stock',hazards:true,items:true,music:true,graphics:'high',tapJump:true},this._loadSettings());
     this.selection={p1:0,p2:1,stageIdx:0,colors:{p1:'default',p2:'default'}};
     this.training={dummy:'stand',hitboxes:true};
     PROFILE.load();
@@ -2213,7 +2214,7 @@ class Game{
     requestAnimationFrame(t=>this._loop(t));
   }
   _loadSettings(){ try{ return JSON.parse(localStorage.getItem('riftclash.settings.v1'))||{}; }catch(e){ return {}; } }
-  _saveSettings(){ try{ const s=this.settings; localStorage.setItem('riftclash.settings.v1',JSON.stringify({stocks:s.stocks,timeLimit:s.timeLimit,botDifficulty:s.botDifficulty,hazards:s.hazards,items:s.items,music:s.music,graphics:s.graphics,tapJump:s.tapJump})); }catch(e){} }
+  _saveSettings(){ try{ const s=this.settings; localStorage.setItem('riftclash.settings.v1',JSON.stringify({stocks:s.stocks,timeLimit:s.timeLimit,botDifficulty:s.botDifficulty,hazards:s.hazards,items:s.items,music:s.music,graphics:s.graphics,tapJump:s.tapJump,rules:s.rules})); }catch(e){} }
   // LOW trades shadows and resolution for frame rate on weaker machines
   _applyGraphics(){
     const low=this.settings.graphics==='low'; LOW_GFX.on=low;
@@ -2243,6 +2244,7 @@ class Game{
     this._chipRow($('time-chips'),[{label:'OFF',value:0},{label:'3:00',value:180},{label:'5:00',value:300},{label:'8:00',value:480}],S.timeLimit,set('timeLimit'));
     if(typeof S.botDifficulty!=='number') S.botDifficulty={easy:2,medium:5,hard:8}[S.botDifficulty]||5;
     this._chipRow($('diff-chips'),[1,2,3,4,5,6,7,8,9].map(v=>({label:''+v,value:v})),S.botDifficulty,set('botDifficulty'));
+    this._chipRow($('rules-chips'),[{label:'STOCK',value:'stock'},{label:'STAMINA',value:'stamina'}],S.rules,set('rules'));
     this._chipRow($('item-chips'),[{label:'ON',value:true},{label:'OFF',value:false}],S.items,set('items'));
     this._chipRow($('music-chips'),[{label:'ON',value:true},{label:'OFF',value:false}],S.music,v=>{ set('music')(v); AUDIO.musicOn=v; if(!v) AUDIO.stopMusic(); });
     this._chipRow($('gfx-chips'),[{label:'HIGH',value:'high'},{label:'LOW',value:'low'}],S.graphics,v=>{ set('graphics')(v); this._applyGraphics(); });
@@ -2634,6 +2636,7 @@ class Game{
     this.projectiles=[]; this.clones=[];
     this.items=[]; this.crates=[]; this.itemsOn=this.settings.items&&!this.isTraining&&!this.isHomerun; this.crateTimer=Math.round(rand(300,480)); this.orb=null; this.orbTimer=Math.round(rand(1500,2400));
     this.timeLeft=this.settings.timeLimit; this.suddenDeath=false; this.slowmo=null;
+    this.stamina=this.settings.rules==='stamina' && ['vs','cpu','ffa'].includes(this.settings.mode);
     this.matchOver=false; this.cinematic=null; this.endTimer=0; this.frame=0;
     this.bloomPulse=0; this.flash=0;
     const $=id=>document.getElementById(id);
@@ -2773,7 +2776,7 @@ class Game{
     // game-deciding blow: rough travel estimate (speed decays KB_DECAY per frame) past a blast line
     if(!this.isTraining && !this.isHomerun && defender.stocks===1 && this.fighters.filter(f=>!f.eliminated).length===2 && !this.slowmo){
       const d=sp*sp/(2*KB_DECAY*60), b=this.stage.blast, x=defender.pos.x+ax*d, y=defender.pos.y+1+Math.max(0,ay)*d;
-      if(x<b.l||x>b.r||y>b.t){ this.slowmo={t:50,f:defender}; this.flash=Math.max(this.flash,0.35); this.flashColor=0xffffff; AUDIO.playUltimate(); }
+      if(x<b.l||x>b.r||y>b.t||(this.stamina&&defender.percent>=STAMINA_HP)){ this.slowmo={t:50,f:defender}; this.flash=Math.max(this.flash,0.35); this.flashColor=0xffffff; AUDIO.playUltimate(); }
     }
     defender.grounded=false; defender.onPlatform=null;
     defender.hitstun=Math.round(clamp(kb*0.34,6,80))+(move.stun||0);
@@ -3076,8 +3079,11 @@ class Game{
   _checkKO(f){
     if(f.pose||f.eliminated||f.state==='respawn') return;
     const b=this.stage.blast;
-    if(f.pos.x>=b.l&&f.pos.x<=b.r&&f.pos.y>=b.b&&f.pos.y<=b.t) return;
-    const at=new THREE.Vector3(clamp(f.pos.x,b.l+3,b.r-3),clamp(f.pos.y,b.b+3,b.t-3),0);
+    // Stamina rules: HP is 150 minus percent, so running out of HP counts as a KO on the spot
+    const hpOut=this.stamina && f.percent>=STAMINA_HP && f.hitstop<=0;
+    if(!hpOut && f.pos.x>=b.l&&f.pos.x<=b.r&&f.pos.y>=b.b&&f.pos.y<=b.t) return;
+    const at=hpOut?new THREE.Vector3(f.pos.x,f.pos.y+1,0.4):new THREE.Vector3(clamp(f.pos.x,b.l+3,b.r-3),clamp(f.pos.y,b.b+3,b.t-3),0);
+    if(hpOut){ this.particles.spawn(at,50,{color:[0xffffff,f.cd.accent,0x333333],speed:0.4,life:40,grav:0.01,size:0.14}); this._bigText('K.O.!',true); this._countT.push(setTimeout(()=>this._hideBigText(),700)); }
     this.particles.spawn(at,70,{color:[f.cd.accent,0xffffff,0xffee88],speed:0.55,life:40,upBias:1,grav:0.004,additive:true,size:0.11});
     this.particles.ring(at,f.cd.accent,7,30,0.18); this.particles.ring(at,0xffffff,4,20,0.1);
     this.flash=0.3; this.flashColor=f.cd.accent; this.bloomPulse=2; this.cameraRig.kick(1.4);
@@ -3609,7 +3615,7 @@ class Game{
           this._endMatch(alive.find(f=>f.team===(sum(0)>=sum(1)?0:1))||alive[0],'time');
         }
         else if(top.length===1) this._endMatch(top[0],'time');
-        else if(this.fighters.length===2) this._suddenDeath();
+        else if(this.fighters.length===2 && !this.stamina) this._suddenDeath();
         else this._endMatch(top.reduce((w,f)=>f.percent<w.percent?f:w),'time');
       }
     }
@@ -3649,7 +3655,8 @@ class Game{
     };
     this.fighters.forEach((f,i)=>{
       const n=i+1, el=$('hudpct-'+n);
-      el.textContent=Math.floor(f.percent)+'%'; el.style.color=col(f.percent);
+      if(this.stamina){ const hp=Math.max(0,Math.ceil(STAMINA_HP-f.percent)); el.textContent=hp+' HP'; el.style.color=col(180*(1-hp/STAMINA_HP)); }
+      else { el.textContent=Math.floor(f.percent)+'%'; el.style.color=col(f.percent); }
       const sh=this.hudShake[n];
       el.style.transform=sh>0.4?`translate(${rand(-1,1)*sh}px,${rand(-1,1)*sh*0.6}px) scale(${1+sh*0.02})`:'';
       this.hudShake[n]*=0.82;
