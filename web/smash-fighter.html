@@ -186,6 +186,7 @@
   .tbtn.down{ background:rgba(255,179,71,.55); border-color:#ffb347; }
   #tpause{ position:absolute; top:12px; left:50%; transform:translateX(-50%); margin-top:48px; width:44px; height:34px; border-radius:8px; }
   @media (max-height:520px){
+    #ctrl-guide{ top:100px; font-size:11px; padding:6px 10px; max-width:52vw; }
     .cs-preview{ width:150px; height:150px; } .cs-moves{ display:none; } .cs-stats{ font-size:10px; } .cs-stats > div[style]{ display:none; }
     .rtile{ width:56px; } .rtile img{ height:44px; } #screen-charselect{ padding-top:6px; } h1.title{ font-size:42px; }
     .portrait-hud{ width:200px; top:6px; padding:4px 8px; } .hud-pct{ font-size:26px; } .hud-portrait{ width:40px; height:40px; }
@@ -2848,6 +2849,8 @@ class Game{
     const k=KEYMAP.p1, L=keyLabel, jump=TAP_JUMP.on?`<kbd>${L(k.jump)}</kbd> or <kbd>${L(k.up)}</kbd>`:`<kbd>${L(k.jump)}</kbd>`;
     el.innerHTML=`<b>P1</b> move <kbd>${L(k.left)}</kbd><kbd>${L(k.right)}</kbd> · jump ${jump} (hold = higher) · attack <kbd>${L(k.attack)}</kbd> · special <kbd>${L(k.special)}</kbd> · shield <kbd>${L(k.shield)}</kbd> · grab <kbd>${L(k.grab)}</kbd><br>`+
       `direction + attack together = smash (hold to charge) · hold a direction, then attack = quick tilt · ${L(k.special)}+${L(k.shield)} = ultimate · Esc = pause & move list`;
+    if(document.body.classList.contains('touch-on')) // touch players get a short guide for the on-screen buttons
+      el.innerHTML=`stick = move (up jumps) · <b>ATK</b> attack · <b>SPEC</b> special · <b>SHLD</b> shield · <b>GRAB</b><br>flick the stick + ATK = smash · SPEC + SHLD = ultimate · <b>II</b> = pause`;
     el.style.opacity=1; el.classList.remove('hidden');
     this._guideT=setTimeout(()=>{ el.style.opacity=0; },this.isTraining?9000:7000);
   }
