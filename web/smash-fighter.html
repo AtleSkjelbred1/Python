@@ -2455,10 +2455,18 @@ const NET={pc:null,ch:null,role:null,open:false,inbox:[],last:null,snap:null,onM
   pack(d){ return btoa(unescape(encodeURIComponent(JSON.stringify({t:d.type,s:d.sdp})))); },
   unpack(s){ const o=JSON.parse(decodeURIComponent(escape(atob(s.trim().replace(/\s+/g,''))))); return {type:o.t,sdp:o.s}; },
   reset(){ try{ if(this.ch) this.ch.close(); if(this.pc) this.pc.close(); }catch(e){} Object.assign(this,{pc:null,ch:null,role:null,open:false,inbox:[],last:null,snap:null}); },
-  _pc(){ const pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]});
-    pc.onconnectionstatechange=()=>{ if(['failed','closed'].includes(pc.connectionState)&&this.open){ this.open=false; this.onMsg&&this.onMsg({t:'lost'}); } };
+  // STUN finds a direct route; the public TURN relay is the fallback for strict routers and mobile/CGNAT networks
+  ICE:[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302','stun:stun.cloudflare.com:3478']},
+    {urls:['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443','turn:openrelay.metered.ca:443?transport=tcp'],username:'openrelayproject',credential:'openrelayproject'}],
+  _pc(){ const pc=new RTCPeerConnection({iceServers:this.ICE});
+    pc.onconnectionstatechange=()=>{
+      if(['failed','closed'].includes(pc.connectionState)&&this.open){ this.open=false; this.onMsg&&this.onMsg({t:'lost'}); }
+      else if(pc.connectionState==='failed'&&!this.open&&pc===this.pc) this.onMsg&&this.onMsg({t:'fail'}); };
     return pc; },
-  _gather(pc){ return new Promise(res=>{ if(pc.iceGatheringState==='complete') return res(); const t=setTimeout(res,4000);
+  // which kinds of route this browser found: host = same network only, srflx = direct over the internet, relay = through TURN
+  routes(){ const sdp=(this.pc&&this.pc.localDescription&&this.pc.localDescription.sdp)||''; const r={host:0,srflx:0,relay:0};
+    for(const m of sdp.matchAll(/ typ (host|srflx|relay)/g)) r[m[1]]++; return r; },
+  _gather(pc){ return new Promise(res=>{ if(pc.iceGatheringState==='complete') return res(); const t=setTimeout(res,5000);
     pc.addEventListener('icegatheringstatechange',()=>{ if(pc.iceGatheringState==='complete'){ clearTimeout(t); res(); } }); }); },
   _chan(ch){ this.ch=ch; ch.onopen=()=>{ this.open=true; this.onMsg&&this.onMsg({t:'open'}); };
     ch.onclose=()=>{ if(this.open){ this.open=false; this.onMsg&&this.onMsg({t:'lost'}); } };
@@ -2466,9 +2474,12 @@ const NET={pc:null,ch:null,role:null,open:false,inbox:[],last:null,snap:null,onM
       if(m.t==='in') this.inbox.push(m.c); else if(m.t==='s') this.snap=m; else this.onMsg&&this.onMsg(m); }; },
   async host(){ this.reset(); this.role='host'; const pc=this.pc=this._pc(); this._chan(pc.createDataChannel('rc',{ordered:true}));
     await pc.setLocalDescription(await pc.createOffer()); await this._gather(pc); return this.pack(pc.localDescription); },
-  async acceptAnswer(code){ await this.pc.setRemoteDescription(this.unpack(code)); },
+  async acceptAnswer(code){ const d=this.unpack(code);
+    if(d.type!=='answer') throw new Error(d.type==='offer'?'that is a host code — your friend must press JOIN, not HOST':'not a reply code');
+    await this.pc.setRemoteDescription(d); },
   async join(code){ this.reset(); this.role='guest'; const pc=this.pc=this._pc(); pc.ondatachannel=e=>this._chan(e.channel);
-    await pc.setRemoteDescription(this.unpack(code)); await pc.setLocalDescription(await pc.createAnswer()); await this._gather(pc); return this.pack(pc.localDescription); },
+    const d=this.unpack(code); if(d.type!=='offer') throw new Error(d.type==='answer'?'that is a reply code — paste the code the host sent you':'not a host code');
+    await pc.setRemoteDescription(d); await pc.setLocalDescription(await pc.createAnswer()); await this._gather(pc); return this.pack(pc.localDescription); },
   send(m){ if(this.open&&this.ch&&this.ch.readyState==='open') this.ch.send(JSON.stringify(m)); },
   // host: one remote input per frame; if none arrived, keep the held buttons but drop the one-frame presses
   takeInput(){
@@ -2787,7 +2798,7 @@ class Game{
     if(!window.RTCPeerConnection){ $('net-status').textContent='This browser does not support WebRTC.'; return; }
     $('net-steps').classList.remove('hidden'); $('net-s1-title').textContent='1. Send this code to your friend'; $('net-s2-title').textContent='2. Paste the reply code from your friend';
     $('net-out').value='Creating code…'; $('net-in').value=''; $('net-status').textContent='';
-    try{ $('net-out').value=await NET.host(); }catch(e){ $('net-status').textContent='Could not create a code: '+e.message; }
+    try{ $('net-out').value=await NET.host(); $('net-status').textContent=this._netRouteNote(); }catch(e){ $('net-status').textContent='Could not create a code: '+e.message; }
   }
   _netJoinStart(){
     const $=id=>document.getElementById(id);
@@ -2800,12 +2811,17 @@ class Game{
     const $=id=>document.getElementById(id), code=$('net-in').value;
     if(!code.trim()) return;
     try{
-      if(NET.role==='host'){ await NET.acceptAnswer(code); $('net-status').textContent='Connecting…'; }
-      else { $('net-status').textContent='Creating reply code…'; $('net-out').value=await NET.join(code); $('net-status').textContent='Send the reply code to the host and wait…'; }
-    }catch(e){ $('net-status').textContent='That code did not work ('+e.message+'). Check that it was copied completely.'; }
+      if(NET.role==='host'){ await NET.acceptAnswer(code); $('net-status').textContent='Connecting…'; this._netWatchdog(15000); }
+      else { $('net-status').textContent='Creating reply code…'; $('net-out').value=await NET.join(code); $('net-status').textContent='Send the reply code to the host and wait…  '+this._netRouteNote(); this._netWatchdog(90000); }
+    }catch(e){ $('net-status').textContent=/—/.test(e.message)?'Wrong code: '+e.message+'.':'That code did not work ('+e.message+'). Check that it was copied completely.'; }
   }
+  _netRouteNote(){ const r=NET.routes();
+    return r.srflx||r.relay?'Network check: '+(r.srflx?'direct ✓':'direct ✗')+'  '+(r.relay?'relay ✓':'relay ✗'):'Network check: no internet route found — this code only works on the same network.'; }
+  _netWatchdog(ms){ clearTimeout(this._netWD); const pc=NET.pc;
+    this._netWD=setTimeout(()=>{ if(!NET.open&&NET.pc===pc&&this.state==='online') this._netMsg({t:'fail'}); },ms); }
   _netMsg(m){
     const $=id=>document.getElementById(id);
+    if(m.t==='fail'){ if(this.state==='online') $('net-status').textContent='Could not connect. Your networks block a direct link and the relay did not answer. Try: both use the same game link, make fresh codes (BACK, then HOST/JOIN again), or one of you switch network (e.g. phone hotspot).'; return; }
     if(m.t==='open'){
       $('net-status').textContent=NET.role==='host'?'Connected! Pick a stage and start.':'Connected! Waiting for the host to start…';
       $('net-steps').classList.add('hidden'); $('net-host-go').classList.toggle('hidden',NET.role!=='host');
