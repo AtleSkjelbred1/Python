@@ -335,7 +335,7 @@
     <div class="tips">
       Direction + Attack pressed together = smash (hold Attack to charge) · direction already held + Attack = tilt · while running: dash attack · Jab ×3 by tapping Attack · Up also jumps (turn off under Tap Jump) · Tap Jump = short hop, hold = higher jump<br>
       Down in the air = fast fall · Down on a thin platform = drop through · Shield + direction = roll, Shield + down = spot dodge<br>
-      Specials go through shields · Shield at the moment of impact = parry · Shield in the air = air dodge · Grab, then a direction = throw (Attack = pummel)<br>
+      Specials go through shields · Shield at the moment of impact = parry · Shield just before hitting the ground while tumbling = tech · Shield in the air = air dodge · Grab, then a direction = throw (Attack = pummel)<br>
       At a ledge: toward/up = climb, Jump, Attack = get-up attack, Shield = roll, away/down = let go · Nyx &amp; Vex can wall jump<br>
       Items: hit a crate to break it · Attack or Grab next to an item picks it up · Attack while holding = throw (hold up/down/sideways to aim) · potions heal on pickup · the Rune Wand shoots bolts (Up/Down+Attack or Grab throws it)
     </div>
@@ -1010,6 +1010,7 @@ const EMPTY_CMD={left:false,right:false,up:false,down:false,jump:false,attack:fa
   jumpP:false,attackP:false,specialP:false,shieldP:false,grabP:false,axisX:0,axisY:0};
 const TAP_JUMP={on:true}; // Up (W / arrow up / stick up) also jumps, like Smash's default
 const RUN_DELAY=7;
+const TECH_WINDOW=20;       // frames before touching the ground that a shield press still techs
 const SMASH_WINDOW=3;       // frames between a fresh direction press and Attack that still count as a smash          // frames a direction is held before walking turns into a run
 const BUFFER_FRAMES=6, BUFFER_KEYS=['attackP','specialP','jumpP','grabP'];
 const ITEM_SHOOT=new Move('itemShoot',{name:'Rune Bolt',startup:6,active:2,recovery:12,dmg:6,bkb:7,kbg:1.35,angle:25,projectile:true,noHitbox:true,speed:16,pvis:'fire',color:0xb48cff,itemShoot:true});
@@ -1222,6 +1223,7 @@ class Fighter{
     if(!this._buf) this._buf={};
     cmd=Object.assign({},cmd);
     const upP=cmd.up && !this._prevUp; this._prevUp=cmd.up;
+    if(cmd.shieldP) this._techBuf=TECH_WINDOW; else if(this._techBuf>0) this._techBuf--; // shield shortly before landing = tech
     this._prevL=this._lastL; this._prevR=this._lastR; this._lastL=cmd.left; this._lastR=cmd.right;
     // how many frames ago a direction was freshly pressed (for smash-vs-tilt on digital input)
     const lP=cmd.left&&!this._prevL, rP=cmd.right&&!this._prevR, dP=cmd.down&&!this._prevDn; this._prevDn=cmd.down;
@@ -1265,7 +1267,7 @@ class Fighter{
       } else this.vel.x*=0.8;
       this.hitstun--; this.state='hitstun';
       this._physics(dt,world);
-      if(this.hitstun<=0){ this.tumble=false; this.state=this.grounded?'idle':'fall'; }
+      if(this.hitstun<=0){ if(this._teched) this._teched=false; else { this.tumble=false; this.state=this.grounded?'idle':'fall'; } }
       return;
     }
     if(this.grabbedBy){
@@ -1428,7 +1430,15 @@ class Fighter{
     this.squash=this.state==='hitstun'?0.8:(this.fastFalling?0.64:0.75);
     this.airDodged=false; this.jumpsLeft=1; this.upSpecialUsed=false; this.wallJumpUsed=false; this.fastFalling=false;
     this.events.push({type:'land',heavy:this.cd.weight>=140});
-    if(this.hitstun>0) return;
+    if(this.hitstun>0){
+      if(this.tumble && this._techBuf>0){ // tech: recover on the spot or roll toward the held direction
+        const dir=this._lastL?-1:this._lastR?1:0;
+        this.hitstun=0; this.tumble=false; this.vel.set(0,0,0); this._techBuf=0; this.invuln=Math.max(this.invuln,20); this._teched=true; this._techs=(this._techs||0)+1;
+        if(dir){ this._startRoll(dir); } else { this.state='spotdodge'; this.stateTimer=0; }
+        this.events.push({type:'tech'});
+      }
+      return;
+    }
     if(this.helpless){ this.helpless=false; this.state='land'; this.landTimer=8; return; }
     if(this.state==='attack' && this.action){
       const m=this.action.move;
@@ -2116,6 +2126,7 @@ class AIController{
     if(f.grabbedBy){ this.mode='escape'; if(R()<(this.diff==='hard'?0.5:this.diff==='medium'?0.3:0.12)) cmd.attackP=true; return cmd; }
     if(f.hitstun>0){ // survival DI: toward the stage and upward
       this.mode='escape';
+      if(f.tumble && f.vel.y<0 && f.pos.y-(stage.main.y+stage.main.h/2)<1.4 && Math.abs(f.pos.x-stage.main.x)<stage.main.w/2 && R()<P.parry*1.6+0.05){ cmd.shieldP=true; return cmd; }
       if(R()>P.rand*0.5){ cmd.axisX=f.pos.x>main.x?-1:1; cmd.axisY=-1; }
       return cmd;
     }
@@ -3276,6 +3287,7 @@ class Game{
         case 'itemthrow': AUDIO.playWhoosh(0.8); break;
         case 'pickup': if(this.items.includes(e.item)) this._onPickup(f,e.item); break;
         case 'dust': if(this.frame%3===0||!e.skid) P.spawn(new THREE.Vector3(f.pos.x-e.dir*0.3,f.pos.y+0.08,0.3),e.skid?3:7,{color:[0xbdb4a4,0x9a8f80],speed:0.07,upBias:0.5,grav:0.002,life:20,size:0.1,dirX:-e.dir}); break;
+        case 'tech': this._floatText(f,'TECH!'); AUDIO.playParry(); P.spawn(new THREE.Vector3(f.pos.x,f.pos.y+0.3,0.3),12,{color:[0xffffff,0x9fe0ff],speed:0.12,upBias:0.4,life:16,additive:true}); break;
         case 'taunt': this._floatText(f,choice(['COME ON!','TOO EASY','HA!','BRING IT'])); AUDIO.tone(700,0.1,'triangle',0.14,900); AUDIO.tone(1050,0.12,'triangle',0.12,null,{delay:0.08}); break;
       }
     }
@@ -3723,6 +3735,7 @@ class Game{
       ['dodge','Dodge: '+K(k.shield)+' then a direction',f=>f.state==='roll'||f.state==='spotdodge'||f.state==='airdodge'],
       ['grab','Grab '+K(k.grab)+' near the dummy, then a direction to throw',f=>f.state==='throw'&&f.throwKey!=='break'],
       ['ledge','Grab a ledge (fall past the stage edge)',f=>f.state==='ledge'],
+      ['tech','Tech: when knocked down, press '+K(k.shield)+' just before you land (set the dummy to CPU)',f=>(f._techs||0)>0],
       ['ult','Ultimate: '+K(k.special)+'+'+K(k.shield)+' when the meter is full',f=>f.action&&f.action.key==='ultimate'],
     ];
   }
