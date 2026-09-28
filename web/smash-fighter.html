@@ -15,6 +15,7 @@
     justify-content:center; background:radial-gradient(ellipse at center,#161a24 0%,#05060a 100%);
     z-index:20; }
   .hidden{ display:none !important; }
+  #screen-mainmenu, #screen-records, #screen-controls{ background:radial-gradient(ellipse at center,rgba(10,12,18,.35) 0%,rgba(5,6,10,.82) 100%); }
   h1.title{ font-size:64px; letter-spacing:6px; margin:0 0 6px 0; font-weight:900;
     background:linear-gradient(180deg,#fff,#ffb347 60%,#c9601a);
     -webkit-background-clip:text; background-clip:text; color:transparent;
@@ -29,7 +30,9 @@
   .panel{ background:rgba(20,22,30,.72); border:1px solid #2c3140; border-radius:14px; padding:18px 24px;
     backdrop-filter:blur(6px); }
   /* -------- Character Select -------- */
-  #screen-charselect{ justify-content:flex-start; padding-top:26px; }
+  #screen-charselect{ justify-content:flex-start; padding-top:18px; padding-bottom:80px; overflow-y:auto; }
+  #btn-to-stage{ position:fixed; right:22px; bottom:18px; margin:0; z-index:25; background:linear-gradient(180deg,#ffb347,#e0782a); color:#1a0f05; font-weight:800; border-color:#ffd08a; }
+  #cs-hint{ margin-top:14px; text-align:center; }
   .cs-players{ display:flex; gap:40px; margin-bottom:10px; }
   .cs-col{ display:flex; flex-direction:column; align-items:center; gap:8px; }
   .cs-col h2{ margin:0; letter-spacing:2px; font-size:20px; }
@@ -60,6 +63,7 @@
   .chip.active{ background:var(--accent); color:#111; border-color:var(--accent); font-weight:700; }
   /* -------- Stage select -------- */
   .stage-grid{ display:flex; gap:22px; }
+  .stage-grid{ flex-wrap:wrap; justify-content:center; max-width:96vw; }
   .stage-card{ pointer-events:auto; cursor:pointer; width:220px; height:150px; border-radius:12px; border:2px solid #333c4d;
     display:flex; flex-direction:column; justify-content:flex-end; padding:10px; font-weight:700;
     background-size:cover; position:relative; overflow:hidden; }
@@ -131,7 +135,14 @@
     display:none; box-shadow:0 0 14px rgba(0,0,0,.6); }
   .offscreen .oarrow{ position:absolute; left:50%; top:50%; width:0; height:0; border-left:9px solid transparent; border-right:9px solid transparent;
     border-bottom:14px solid #fff; transform-origin:50% 50%; }
+  .settings-grid{ display:grid; grid-template-columns:auto auto auto auto; gap:2px 14px; align-items:center; }
+  .settings-grid .sl{ opacity:.75; font-size:12px; letter-spacing:1px; }
+  .settings-grid .cs-mode-select{ margin:4px 0; }
+  #screen-mainmenu{ overflow-y:auto; justify-content:flex-start; padding:4vh 0 20px; }
+  #screen-mainmenu .subtitle{ margin-bottom:18px; }
+  @media (max-width:760px){ .settings-grid{ grid-template-columns:auto auto; } }
   .rec-h{ letter-spacing:2px; font-size:12px; color:#ffb347; margin:10px 0 2px 0; }
+  #win-quote{ font-style:italic; opacity:.85; font-size:15px; margin-top:4px; text-shadow:0 2px 8px #000; }
   #unlock-note{ color:#ffd166; font-size:14px; letter-spacing:1px; min-height:18px; margin-top:4px; }
   /* -------- touch controls (shown on touch screens during a match) -------- */
   #touch{ position:fixed; inset:0; z-index:16; pointer-events:none; display:none; }
@@ -165,33 +176,14 @@
   <div id="btn-1v1" class="menu-btn">LOCAL VERSUS (2 PLAYERS)</div>
   <div class="row"><div id="btn-cpu" class="menu-btn" style="min-width:230px;">VS BOT</div><div id="btn-arcade" class="menu-btn" style="min-width:230px;">ARCADE</div></div>
   <div class="row"><div id="btn-training" class="menu-btn" style="min-width:150px;">TRAINING</div><div id="btn-records" class="menu-btn" style="min-width:150px;">RECORDS</div><div id="btn-controls" class="menu-btn" style="min-width:150px;">CONTROLS</div></div>
-  <div class="panel" style="margin-top:22px;">
-    <div class="row" style="margin-bottom:10px;">
-      <span style="width:140px;opacity:.75;font-size:13px;">STOCKS</span>
-      <div id="stock-chips" class="cs-mode-select"></div>
-    </div>
-    <div class="row" style="margin-bottom:10px;">
-      <span style="width:140px;opacity:.75;font-size:13px;">TIME LIMIT</span>
-      <div id="time-chips" class="cs-mode-select"></div>
-    </div>
-    <div class="row" style="margin-bottom:10px;">
-      <span style="width:140px;opacity:.75;font-size:13px;">STAGE HAZARDS</span>
-      <div id="hazard-chips" class="cs-mode-select"></div>
-    </div>
-    <div class="row" style="margin-bottom:10px;">
-      <span style="width:140px;opacity:.75;font-size:13px;">ITEMS</span>
-      <div id="item-chips" class="cs-mode-select"></div>
-    </div>
-    <div class="row" style="margin-bottom:10px;">
-      <span style="width:140px;opacity:.75;font-size:13px;">MUSIC</span>
-      <div id="music-chips" class="cs-mode-select"></div>
-      <span style="width:84px;opacity:.75;font-size:13px;margin-left:14px;">GRAPHICS</span>
-      <div id="gfx-chips" class="cs-mode-select"></div>
-    </div>
-    <div class="row" id="diff-row">
-      <span style="width:140px;opacity:.75;font-size:13px;">BOT DIFFICULTY</span>
-      <div id="diff-chips" class="cs-mode-select"></div>
-    </div>
+  <div class="panel settings-grid" style="margin-top:14px;">
+    <span class="sl">STOCKS</span><div id="stock-chips" class="cs-mode-select"></div>
+    <span class="sl">TIME LIMIT</span><div id="time-chips" class="cs-mode-select"></div>
+    <span class="sl">HAZARDS</span><div id="hazard-chips" class="cs-mode-select"></div>
+    <span class="sl">ITEMS</span><div id="item-chips" class="cs-mode-select"></div>
+    <span class="sl">MUSIC</span><div id="music-chips" class="cs-mode-select"></div>
+    <span class="sl">GRAPHICS</span><div id="gfx-chips" class="cs-mode-select"></div>
+    <span class="sl">BOT</span><div id="diff-chips" class="cs-mode-select"></div>
   </div>
 </div>
 
@@ -225,8 +217,8 @@
       <div class="cs-moves" id="cs2-moves"></div>
     </div>
   </div>
-  <div id="btn-to-stage" class="menu-btn" style="margin-top:14px;">NEXT: SELECT STAGE &#8594;</div>
-  <div style="font-size:11px;opacity:.5;margin-top:10px;">Click a fighter for P1, right-click for P2 &nbsp;·&nbsp; P1: A / D &nbsp;·&nbsp; P2: &#8592; / &#8594; &nbsp;·&nbsp; Gamepad: D-pad, A to continue &nbsp;·&nbsp; Enter to continue, Esc to go back</div>
+  <div id="btn-to-stage" class="menu-btn">NEXT: SELECT STAGE &#8594;</div>
+  <div id="cs-hint" style="font-size:11px;opacity:.5;">Click a fighter for P1, right-click for P2 &nbsp;·&nbsp; P1: A / D &nbsp;·&nbsp; P2: &#8592; / &#8594; &nbsp;·&nbsp; Gamepad: D-pad, A to continue &nbsp;·&nbsp; Enter to continue, Esc to go back</div>
 </div>
 
 <!-- ============ STAGE SELECT ============ -->
@@ -351,6 +343,7 @@
 <!-- ============ RESULTS ============ -->
 <div id="screen-results" class="screen hidden">
   <div id="winner-banner"></div>
+  <div id="win-quote"></div>
   <div id="unlock-note"></div>
   <table class="results-table">
     <tr><th></th><th id="res-n1"></th><th id="res-n2"></th></tr>
@@ -607,11 +600,11 @@ const INPUT = new InputManager();
 const ARCH_COEF = {
   power:   { dmg:1.16, kb:1.04, spd:0.82, range:1.17 },
   speed:   { dmg:0.82, kb:0.94, spd:1.34, range:0.86 },
-  giant:   { dmg:1.36, kb:1.10, spd:0.72, range:1.42 },
+  giant:   { dmg:1.42, kb:1.12, spd:0.72, range:1.42 },
   zoner:   { dmg:1.02, kb:1.02, spd:1.06, range:1.04 },
   grappler:{ dmg:1.13, kb:1.05, spd:0.96, range:1.12 },
-  assassin:{ dmg:0.90, kb:0.97, spd:1.24, range:0.92 },
-  ranger:  { dmg:0.92, kb:0.98, spd:1.14, range:0.98 },
+  assassin:{ dmg:0.94, kb:1.00, spd:1.24, range:0.94 },
+  ranger:  { dmg:0.86, kb:0.95, spd:1.10, range:0.96 },
   brawler: { dmg:0.98, kb:1.01, spd:1.20, range:0.90 },
 };
 const BASE_MOVES = {
@@ -692,8 +685,8 @@ const SPECIALS = {
     down:{name:'Vanish',startup:4,active:12,recovery:14,dmg:0,noHitbox:true,vanish:true,vanishDist:4,color:0x9b5de5},
   },
   wren:{
-    n:{name:'Crossbow Bolt',startup:12,active:4,recovery:19,dmg:5.5,bkb:6,kbg:1.4,angle:15,range:1.5,projectile:true,noHitbox:true,speed:15,pvis:'arrow',color:0x9be870},
-    side:{name:'Smoke Bomb',startup:14,active:4,recovery:20,dmg:8,bkb:10,kbg:2.0,angle:55,range:1.2,projectile:true,noHitbox:true,lob:true,lobVy:6,speed:8,pvis:'bomb',explode:2.0,stun:10,color:0x9be870},
+    n:{name:'Crossbow Bolt',startup:12,active:4,recovery:20,dmg:4.5,bkb:5,kbg:1.1,angle:15,range:1.5,projectile:true,noHitbox:true,speed:14,pvis:'arrow',color:0x9be870},
+    side:{name:'Smoke Bomb',startup:14,active:4,recovery:20,dmg:8,bkb:10,kbg:2.0,angle:55,range:1.2,projectile:true,noHitbox:true,lob:true,lobVy:6,speed:8,pvis:'bomb',explode:1.6,color:0x9be870},
     up:{name:'Grapple Line',startup:7,active:6,recovery:14,dmg:6,bkb:8,kbg:2.2,angle:80,range:1.0,recoveryMove:true,vel:19,color:0x9be870},
     down:{name:'Snare Wire',startup:10,active:2,recovery:16,dmg:7,bkb:8,kbg:1.9,angle:75,range:0.9,trap:true,noHitbox:true,stun:24,color:0x9be870},
   },
@@ -741,7 +734,7 @@ const CHAR_DATA = [
     traits:'Wall jump, teleport recovery', desc:'Hooded electric duelist with twin daggers. Blindingly fast, short combos, teleport recovery, low weight.'},
   {id:'brakka',name:'Brakka',color:0x6b6459,accent:0xff7a33,weight:162,walkSpeed:2.0,runSpeed:3.5,jumpVel:12.2,doubleJumpVel:10.2,fallSpeed:17,fastFallSpeed:26,airSpeed:1.9,size:1.38,archetype:'giant',superArmorSmash:true,
     traits:'Super armor on smash attacks', desc:'A hulking axe-wielding giant. The heaviest fighter, super armor on smash attacks, short jump.'},
-  {id:'seren',name:'Seren Ashveil',color:0xc94a2e,accent:0xffce54,weight:92,walkSpeed:2.8,runSpeed:4.6,jumpVel:14,doubleJumpVel:12,fallSpeed:13.5,fastFallSpeed:21,airSpeed:3.0,size:0.98,archetype:'zoner',meleeMult:0.88,
+  {id:'seren',name:'Seren Ashveil',color:0xc94a2e,accent:0xffce54,weight:92,walkSpeed:2.8,runSpeed:4.6,jumpVel:14,doubleJumpVel:12,fallSpeed:13.5,fastFallSpeed:21,airSpeed:3.0,size:0.98,archetype:'zoner',meleeMult:0.96,
     traits:'Projectiles and fire hazards; weak melee', desc:'Fire mage built for zoning with projectiles. Dangerous at range, fragile up close.'},
   {id:'rook',name:'Rook Harlan',color:0x4a4a52,accent:0xd94b4b,weight:120,walkSpeed:2.7,runSpeed:4.5,jumpVel:14,doubleJumpVel:12.5,fallSpeed:15,fastFallSpeed:23,airSpeed:2.7,size:1.06,archetype:'grappler',grabRange:1.5,throwMult:1.3,
     traits:'Long grab, +30% throw damage', desc:'Armoured skeleton brawler. Grab and throw specialist with a charged punch.'},
@@ -754,6 +747,17 @@ const CHAR_DATA = [
   {id:'rattle',name:'Rattle',color:0x5a4a3a,accent:0xffb36b,weight:80,walkSpeed:3.3,runSpeed:6.3,jumpVel:15.6,doubleJumpVel:14.8,fallSpeed:14,fastFallSpeed:23,airSpeed:3.6,size:0.84,archetype:'brawler',weapon:'Skeleton_Axe',
     traits:'Tiny hurtbox; Fall Apart dodges then bursts', desc:'A small, scrappy skeleton with a rusty axe. Fast rolls, bone tosses, and he can fall apart to dodge an attack.'},
 ];
+const VICTORY_QUOTES={
+  kael:['An oath kept is a blade that never dulls.','Stand up. Again, if you must.'],
+  nyx:['Blink and you missed it. You blinked.','Too slow — the storm does not wait.'],
+  brakka:['BRAKKA WINS. BRAKKA HUNGRY.','Mountains do not move. Neither do I.'],
+  seren:['Everything burns eventually.','Keep your distance next time. It will not help.'],
+  rook:['Good grip. Better throw.','Bones heal. Pride takes longer.'],
+  vex:['You fought my shadow. I was elsewhere.','Quiet now.'],
+  wren:['Never saw the second bolt, did you?','Clean shot. Clean win.'],
+  morrow:['Your strength is mine now.','Rest. The grave is patient.'],
+  rattle:['*happy clattering*','Put me back together? Nah, I won.'],
+};
 function buildMoveset(cd){
   const coef=ARCH_COEF[cd.archetype]; const mv={};
   for(const id in BASE_MOVES){
@@ -828,6 +832,21 @@ class ParticleSystem{
       new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.9,blending:THREE.AdditiveBlending,depthWrite:false}));
     mesh.position.copy(pos); this.scene.add(mesh);
     this.fx.push({mesh,life,maxLife:life,maxScale});
+  }
+  // star-shaped impact flash, drawn once to a canvas and shared by every spark
+  static sparkTex(){
+    if(ParticleSystem._spark) return ParticleSystem._spark;
+    const c=document.createElement('canvas'); c.width=c.height=128; const x=c.getContext('2d');
+    const g=x.createRadialGradient(64,64,0,64,64,64); g.addColorStop(0,'rgba(255,255,255,1)'); g.addColorStop(0.25,'rgba(255,255,255,.8)'); g.addColorStop(1,'rgba(255,255,255,0)');
+    x.fillStyle=g; x.beginPath();
+    for(let i=0;i<16;i++){ const a=i/16*Math.PI*2, r=i%2?18:64; x.lineTo(64+Math.cos(a)*r,64+Math.sin(a)*r); }
+    x.closePath(); x.fill();
+    return ParticleSystem._spark=new THREE.CanvasTexture(c);
+  }
+  spark(pos,color,size){
+    const mat=new THREE.SpriteMaterial({map:ParticleSystem.sparkTex(),color,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,rotation:Math.random()*Math.PI});
+    const s=new THREE.Sprite(mat); s.userData.shared=true; s.position.copy(pos); this.scene.add(s); // sprite geometry is shared by three.js
+    this.custom(s,10,(o,k)=>{ o.scale.setScalar(size*(0.4+easeOutCubic(k)*0.9)); o.material.opacity=0.85*(1-k*k); },()=>mat.dispose());
   }
   // short-lived scripted effect: fn(obj,progress) each frame, then removed and cleaned up
   custom(obj,life,fn,cleanup){ this.fx.push({mesh:obj,life,maxLife:life,fn,cleanup}); }
@@ -2290,7 +2309,21 @@ class Game{
     rig.setChar(CHAR_DATA[this.selection[who]],this._tintOf(who));
     return url;
   }
-  _toStageSelect(){ if(this.settings.mode==='arcade') return this._startArcade(); this.state='stageselect'; this._showScreen('stageselect'); AUDIO.playClick(); }
+  _toStageSelect(){ if(this.settings.mode==='arcade') return this._startArcade(); this.state='stageselect'; this._showScreen('stageselect'); AUDIO.playClick(); this._stageThumbs(); }
+  // renders each stage once into its card the first time stage select opens
+  _stageThumbs(){
+    if(this._thumbsDone) return; this._thumbsDone=true;
+    const r=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true}); r.setSize(330,225); r.setPixelRatio(1);
+    const cam=new THREE.PerspectiveCamera(42,330/225,0.1,250);
+    STAGES.forEach((s,i)=>{
+      const scene=new THREE.Scene(), st=new StageObj(scene,s), m=st.main, top=m.y+m.h/2;
+      cam.position.set(0,top+5.5,24); cam.lookAt(0,top+2.2,0); r.render(scene,cam);
+      const card=document.getElementById('stage-grid').children[i];
+      card.style.background=`linear-gradient(180deg,rgba(0,0,0,0) 45%,rgba(0,0,0,.75)),url(${r.domElement.toDataURL('image/jpeg',0.85)}) center/cover`;
+      scene.traverse(o=>{ if(o.userData.shared) return; if(o.geometry) o.geometry.dispose(); if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(q=>q.dispose()); });
+    });
+    r.dispose(); if(r.forceContextLoss) r.forceContextLoss();
+  }
   // ---------- arcade: five rounds against random rivals, getting harder ----------
   _startArcade(){
     const me=this.selection.p1, pool=CHAR_DATA.map((c,i)=>i).filter(i=>i!==me);
@@ -2493,6 +2526,7 @@ class Game{
     if(id==='morrow') this.particles.spawn(at,10,{color:[0x7cf2c8,0x2a3d4a],speed:0.07,life:34,grav:-0.005,additive:true});
     if(id==='rattle') this.particles.spawn(at,8,{color:[0xe8e0c8,0xbdb49a],speed:0.2,life:26,grav:0.02,size:0.07});
     if(kb>70) this.particles.ring(at,col,1.2+kb*0.012,14);
+    this.particles.spark(at,0xffffff,0.7+dmg*0.05); if(dmg>=9) this.particles.spark(at,col,1.0+dmg*0.08);
     this.bloomPulse=Math.max(this.bloomPulse,clamp(dmg/18,0.12,1.1)+(move.special?0.3:0));
     this.cameraRig.kick(kb>85?clamp((kb-60)/80,0.25,1.2):0.08);
     if(defender===this.f2) this._lastHit={name:move.name||move.id,dmg,kb:Math.round(kb),hitstun:defender.hitstun,speed:+(kb*KB_TO_VEL).toFixed(1)};
@@ -3084,6 +3118,7 @@ class Game{
     this._hideBigText();
     const $=id=>document.getElementById(id);
     $('winner-banner').textContent=this.winner.cd.name+' WINS!';
+    $('win-quote').textContent='“'+choice(VICTORY_QUOTES[this.winner.cd.id]||[''])+'”';
     const A=this.settings.mode==='arcade'&&this.arcade;
     $('btn-rematch').textContent=A?(A.cleared?'FINISH':(A.won?'NEXT ROUND':'RETRY ROUND')):'REMATCH';
     if(A) $('winner-banner').textContent=A.cleared?'ARCADE CLEAR!':(A.won?'ROUND '+(A.round+1)+' CLEAR!':'DEFEAT — ROUND '+(A.round+1)+' / 5');
@@ -3229,7 +3264,36 @@ class Game{
     });
   }
   // -------------------- RENDER --------------------
+  // live backdrop behind the main menu: a random stage, two fighters idling, a slow camera drift
+  _buildMenuScene(){
+    this._disposeMenuScene();
+    const scene=new THREE.Scene(), st=choice(STAGES), stage=new StageObj(scene,st);
+    const top=stage.main.y+stage.main.h/2, picks=[...CHAR_DATA].sort(()=>Math.random()-0.5).slice(0,2);
+    const fs=picks.map((cd,i)=>{ const f=new Fighter(scene,cd,i?1:-1,'menu'); f.pos.set(i?2.2:-2.2,top,0); f.facing=i?-1:1; f.grounded=true; f.state='idle'; return f; });
+    this.menuScene={scene,stage,fs,t:rand(0,10),data:st};
+  }
+  _disposeMenuScene(){
+    const M=this.menuScene; if(!M) return; this.menuScene=null;
+    M.scene.traverse(o=>{ if(o.userData.tintMat) o.material.dispose(); if(o.userData.shared) return; if(o.geometry) o.geometry.dispose(); if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose()); });
+  }
+  _renderMenu(dt){
+    const M=this.menuScene; if(!M) return;
+    M.t+=dt; M.stage.update(dt);
+    M.fs.forEach((f,i)=>{ f.walkCycle+=dt;
+      // every few seconds one of them swings, so the scene is not static
+      const k=(M.t*0.25+i*0.5)%1; if(k<0.02&&!f.action){ f.startAction('tiltSide',f.moveset.tiltSide); }
+      if(f.action){ f.actionFrame++; const m=f.action.move; f.actionPhase=f.actionFrame<=m.startup?'startup':f.actionFrame<=m.startup+m.active?'active':'recovery';
+        if(f.actionFrame>m.startup+m.active+m.recovery){ f.action=null; f.state='idle'; } else f.state='attack'; }
+      animateFighter(f,dt); f.group.position.copy(f.pos); f.group.rotation.y=f.facing>0?FACE_ANGLE:-FACE_ANGLE; });
+    const a=M.t*0.08, top=M.stage.main.y+M.stage.main.h/2;
+    this.camera.position.set(Math.sin(a)*7,top+3.4+Math.sin(M.t*0.13)*0.6,14+Math.cos(a)*2); this.camera.lookAt(0,top+1.4,0);
+    const bl=M.data.bloom||{threshold:0.8,strength:0.45};
+    this.postfx.brightMat.uniforms.threshold.value=bl.threshold;
+    this.postfx.render(M.scene,this.camera,{strength:bl.strength,flash:0,flashColor:0xffffff,vignette:0.5});
+  }
   _render(dt){
+    if(['menu','records','controls'].includes(this.state)){ if(!this.menuScene) this._buildMenuScene(); return this._renderMenu(dt); }
+    if(this.menuScene && this.state!=='charselect' && this.state!=='stageselect') this._disposeMenuScene();
     if(!this.scene||!['battle','paused','gameend','results'].includes(this.state)) return;
     if(this.replaying) dt/=3;
     const all=this.fighters.concat(this.clones);
