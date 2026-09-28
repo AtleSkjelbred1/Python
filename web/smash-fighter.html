@@ -2431,7 +2431,7 @@ const NET={pc:null,ch:null,role:null,open:false,inbox:[],last:null,snap:null,onM
   unpack(s){ const o=JSON.parse(decodeURIComponent(escape(atob(s.trim().replace(/\s+/g,''))))); return {type:o.t,sdp:o.s}; },
   reset(){ try{ if(this.ch) this.ch.close(); if(this.pc) this.pc.close(); }catch(e){} Object.assign(this,{pc:null,ch:null,role:null,open:false,inbox:[],last:null,snap:null}); },
   _pc(){ const pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]});
-    pc.onconnectionstatechange=()=>{ if(['failed','disconnected','closed'].includes(pc.connectionState)&&this.open){ this.open=false; this.onMsg&&this.onMsg({t:'lost'}); } };
+    pc.onconnectionstatechange=()=>{ if(['failed','closed'].includes(pc.connectionState)&&this.open){ this.open=false; this.onMsg&&this.onMsg({t:'lost'}); } };
     return pc; },
   _gather(pc){ return new Promise(res=>{ if(pc.iceGatheringState==='complete') return res(); const t=setTimeout(res,4000);
     pc.addEventListener('icegatheringstatechange',()=>{ if(pc.iceGatheringState==='complete'){ clearTimeout(t); res(); } }); }); },
@@ -2446,7 +2446,10 @@ const NET={pc:null,ch:null,role:null,open:false,inbox:[],last:null,snap:null,onM
     await pc.setRemoteDescription(this.unpack(code)); await pc.setLocalDescription(await pc.createAnswer()); await this._gather(pc); return this.pack(pc.localDescription); },
   send(m){ if(this.open&&this.ch&&this.ch.readyState==='open') this.ch.send(JSON.stringify(m)); },
   // host: one remote input per frame; if none arrived, keep the held buttons but drop the one-frame presses
-  takeInput(){ const c=this.inbox.shift(); if(c){ this.last=c; return Object.assign({},EMPTY_CMD,c); }
+  takeInput(){
+    while(this.inbox.length>2){ const a=this.inbox.shift(), b=this.inbox[0];
+      for(const x of ['jumpP','attackP','specialP','shieldP','grabP','tauntP']) b[x]=b[x]||a[x]; if(!b.cStick) b.cStick=a.cStick; }
+    const c=this.inbox.shift(); if(c){ this.last=c; return Object.assign({},EMPTY_CMD,c); }
     if(!this.last) return Object.assign({},EMPTY_CMD);
     const k=Object.assign({},EMPTY_CMD,this.last); for(const x of ['jumpP','attackP','specialP','shieldP','grabP','tauntP']) k[x]=false; k.cStick=null; return k; },
 };
@@ -2558,7 +2561,7 @@ class Game{
     $('btn-back-cs').onclick=()=>this._toCharSelect();
     $('btn-start-match').onclick=()=>this._startMatch();
     $('btn-resume').onclick=()=>this._resume();
-    $('btn-restart').onclick=()=>this._startMatch(true);
+    $('btn-restart').onclick=()=>{ if(this.online){ if(!this.netGuest&&NET.open) this._netStartMatch(); return; } this._startMatch(true); };
     $('btn-arcade').onclick=()=>{ this.settings.mode='arcade'; this._toCharSelect(); };
     $('btn-homerun').onclick=()=>{ this.settings.mode='homerun'; this._toCharSelect(); };
     $('btn-ffa').onclick=()=>{ this.settings.mode='ffa'; this._toCharSelect(); };
@@ -2782,7 +2785,7 @@ class Game{
       if(NET.role==='guest') NET.send({t:'sel',c:this.selection.p1,tj:TAP_JUMP.on});
     } else if(m.t==='sel'){ this.netGuestSel=m.c; this.netGuestTap=m.tj; const cd=CHAR_DATA[m.c]; if(cd&&this.state==='online') $('net-status').textContent='Connected! Your friend picked '+cd.name+'.'; }
     else if(m.t==='start'){ this._netGuestStart(m); }
-    else if(m.t==='end'){ if(this.netGuest && !this.matchOver) this._endMatch(this.fighters[m.w],m.r||'ko'); }
+    else if(m.t==='end'){ if(this.netGuest && !this.matchOver){ if(NET.snap && NET.snap.fr!==this._netSnapAt){ this._netSnapAt=NET.snap.fr; this._netApply(NET.snap); } this._endMatch(this.fighters[m.w],m.r||'ko'); } }
     else if(m.t==='menu'){
       if(this.netGuest){ this._teardownScene(); AUDIO.stopMusic(); this.online=false; this.netGuest=false; this._toOnline(); $('net-status').textContent='The host went back to the menu. Waiting for a new match…'; }
       else if(this.online){ this._teardownScene(); AUDIO.stopMusic(); this.online=false; this._toOnline(); $('net-status').textContent='Your friend left the match.'; }
@@ -2802,7 +2805,7 @@ class Game{
   }
   _netGuestStart(m){
     this.settings.mode='online-guest'; this.selection.stageIdx=m.st; this._netHostSel=m.p1; this.selection.p2=m.p2; this.p1char=null;
-    this._netStocks=m.stocks; this._netTime=m.time; this._savedTimeLimit=this.settings.timeLimit; this.settings.timeLimit=m.time; this._startMatch();
+    this._netStocks=m.stocks; this._netTime=m.time; if(this._savedTimeLimit==null) this._savedTimeLimit=this.settings.timeLimit; this.settings.timeLimit=m.time; this._startMatch();
   }
   _toControls(){
     this.state='controls'; this._showScreen('controls'); this._binding=null;
@@ -3015,7 +3018,7 @@ class Game{
     if(this.viz){ this.viz=null; }
     this.projectiles=[]; this.clones=[];
     this.items=[]; this.crates=[]; this.itemsOn=this.settings.items&&!this.isTraining&&!this.isHomerun&&!this.online; this.crateTimer=Math.round(rand(300,480)); this.orb=null; this.orbTimer=Math.round(rand(1500,2400));
-    this.timeLeft=this.netGuest?this._netTime:this.settings.timeLimit; this.suddenDeath=false; this.slowmo=null; this.netProj=new Map(); this._netSnapAt=0;
+    this.timeLeft=this.netGuest?this._netTime:this.settings.timeLimit; this.suddenDeath=false; this.slowmo=null; this.netProj=new Map(); this.netClones=new Map(); this._netSnapAt=0; this._netHits=[]; NET.snap=null; NET.inbox.length=0; NET.last=null;
     this.stamina=this.settings.rules==='stamina' && ['vs','cpu','ffa'].includes(this.settings.mode);
     this.matchOver=false; this.cinematic=null; this.endTimer=0; this.frame=0;
     this.bloomPulse=0; this.flash=0;
@@ -3311,14 +3314,18 @@ class Game{
     let key=f.lastLandedMoveKey;
     const mv=key?f.moveset[key]:null;
     if(!mv||mv.noHitbox||mv.projectile||mv.trap||mv.clone||mv.counter||mv.vanish||mv.ultimate||key==='grab'||/^throw/.test(key)) key='tiltSide';
-    const c=new Fighter(this.scene,f.cd,f.facing,'clone');
-    c.isClone=true; c.owner=f; c.facing=f.facing; c.pos.copy(f.pos); c.pos.x+=f.facing*0.6;
-    c.group.traverse(o=>{ if(o.isMesh && o!==c.shieldMesh){ o.material=new THREE.MeshStandardMaterial({color:0x1a1024,emissive:f.cd.accent,emissiveIntensity:0.5,transparent:true,opacity:0.6,roughness:0.4,skinning:!!o.isSkinnedMesh}); o.castShadow=false; o.userData.cloneMat=true; } });
-    c.shieldMesh.visible=false; c.glow.intensity=1.2;
-    c.startAction(key,f.moveset[key]); c.life=0; c.target=this._targetFor(f);
+    const c=this._makeClone(f,f.facing,key); c.netId=(this._cloneId=(this._cloneId||0)+1);
+    c.pos.copy(f.pos); c.pos.x+=f.facing*0.6; c.target=this._targetFor(f);
     this.clones.push(c);
     this.particles.spawn(new THREE.Vector3(c.pos.x,c.pos.y+1,0.3),18,{color:[0x9b5de5,0x2a1a3a],speed:0.12,life:24});
     AUDIO.tone(140,0.3,'sawtooth',0.2,70);
+  }
+  _makeClone(f,facing,key){
+    const c=new Fighter(this.scene,f.cd,facing,'clone');
+    c.isClone=true; c.owner=f; c.facing=facing; c.pos.copy(f.pos);
+    c.group.traverse(o=>{ if(o.isMesh && o!==c.shieldMesh){ o.material=new THREE.MeshStandardMaterial({color:0x1a1024,emissive:f.cd.accent,emissiveIntensity:0.5,transparent:true,opacity:0.6,roughness:0.4,skinning:!!o.isSkinnedMesh}); o.castShadow=false; o.userData.cloneMat=true; } });
+    c.shieldMesh.visible=false; c.glow.intensity=1.2;
+    c.startAction(key,f.moveset[key]); c.life=0; return c;
   }
   _updateClones(){
     for(const c of this.clones){
@@ -3562,7 +3569,7 @@ class Game{
   }
   _endMatch(winner,reason){
     if(this.matchOver) return;
-    if(this.online && NET.role==='host') NET.send({t:'end',w:this.fighters.indexOf(winner),r:reason});
+    if(this.online && NET.role==='host'){ NET.send(this._netSnapshot()); NET.send({t:'end',w:this.fighters.indexOf(winner),r:reason}); }
     this.slowmo=null;
     this.matchOver=true; this.state='gameend'; this.endTimer=0; this.winner=winner;
     this.winners=winner.team==null?[winner]:this.fighters.filter(f=>f.team===winner.team);
@@ -4067,7 +4074,10 @@ class Game{
       fs:this.fighters.map(f=>[r(f.pos.x),r(f.pos.y),r(f.vel.x),r(f.vel.y),f.facing,f.state,f.action?f.action.key:null,f.actionFrame,f.actionPhase,f.chargeFrames,
         f.stateTimer,f.throwTimer,f.throwKey,f.jumpSquat,f.landTimer,f.tumble?1:0,r(f.squash),f.hitstop,f._rollDir||0,f._countered?1:0,f.vanished,f.grounded?1:0,
         Math.round(f.shieldHP),r(f.percent),f.eliminated?1:0,isFinite(f.stocks)?f.stocks:-1,Math.round(f.ultMeter),f.respawnInvuln,f.invuln>0?1:0,f._hitFlash>0?1:0]),
-      pr:this.projectiles.map(p=>[p.netId,this.fighters.indexOf(p.owner),p.move.id,p.kind,r(p.pos.x),r(p.pos.y),r(p.vel.x),r(p.vel.y)])};
+      pr:this.projectiles.map(p=>[p.netId,this.fighters.indexOf(p.owner),p.move.id,p.kind,r(p.pos.x),r(p.pos.y),r(p.vel.x),r(p.vel.y)]),
+      cl:this.clones.map(c=>[c.netId,this.fighters.indexOf(c.owner),r(c.pos.x),r(c.pos.y),c.facing,c.action?c.action.key:null,c.actionFrame,c.life]),
+      mv:this.stage.movers.map(m=>[r(m.offset),m.dir,r(m.wait||0)]),
+      st:this.fighters.map(f=>[r(f.statDamageDealt),f.statLongestCombo,f.statKOs])};
   }
   _netGuestFrame(dt){
     NET.send({t:'in',c:INPUT.getCommands('p1',0)});
@@ -4101,6 +4111,14 @@ class Game{
       if(p.orient) p.mesh.rotation.z=Math.atan2(vy,vx); else if(p.spin) p.mesh.rotation.z-=p.spin*Math.sign(vx||1);
     }
     for(const [id,p] of this.netProj) if(!seen.has(id)){ p.destroy(); this.netProj.delete(id); }
+    // shadow clones: ghost copies driven by the host's positions and attack frames
+    const seenC=new Set(); this.netClones=this.netClones||new Map();
+    for(const q of (s.cl||[])){ const [id,oi,x,y,fa,key,fr,life]=q; seenC.add(id); let c=this.netClones.get(id); const o=this.fighters[oi]; if(!o) continue;
+      if(!c){ c=this._makeClone(o,fa,key||'tiltSide'); c.netId=id; this.netClones.set(id,c); this.clones.push(c); }
+      c.pos.set(x,y,0); c.facing=fa; c.life=life; if(key&&o.moveset[key]) c.action={key,move:o.moveset[key]}; c.actionFrame=fr; }
+    for(const [id,c] of this.netClones) if(!seenC.has(id)){ this.scene.remove(c.group); c.group.traverse(o=>{ if(o.userData.cloneMat) o.material.dispose(); }); this.netClones.delete(id); this.clones=this.clones.filter(x=>x!==c); }
+    (s.mv||[]).forEach((d,i)=>{ const m=this.stage.movers[i]; if(m){ m.offset=d[0]; m.dir=d[1]; m.wait=d[2]; } });
+    (s.st||[]).forEach((d,i)=>{ const f=this.fighters[i]; if(f){ f.statDamageDealt=d[0]; f.statLongestCombo=d[1]; f.statKOs=d[2]; } });
   }
   _updateEnd(dt){
     if(this.replaying){
