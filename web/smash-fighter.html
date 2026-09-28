@@ -457,6 +457,15 @@ class AudioManager{
     else if(vis==='wave') this.playSword();
     else this.playFire();
   }
+  // tiny formant "voice": a sawtooth through two vowel formants with a pitch glide
+  voice(f0,dur,vowel,vol,glide){
+    this.ensure(); const ctx=this.ctx, t=this.now, F={a:[800,1200],u:[350,800],e:[500,1700],o:[500,900]}[vowel||'a'];
+    const o=ctx.createOscillator(); o.type='sawtooth'; o.frequency.setValueAtTime(f0,t); o.frequency.exponentialRampToValueAtTime(f0*(glide||0.8),t+dur);
+    const g=ctx.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol||0.12,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    const mix=ctx.createGain(); mix.gain.value=1; mix.connect(g);
+    for(const [fq,q] of [[F[0],6],[F[1],8]]){ const b=ctx.createBiquadFilter(); b.type='bandpass'; b.frequency.value=fq; b.Q.value=q; o.connect(b); b.connect(mix); }
+    this._out(g,0.2); o.start(t); o.stop(t+dur+0.03);
+  }
   playShieldHit(){ this.tone(300,0.08,'triangle',0.3,220); }
   playParry(){ this.tone(1400,0.14,'sine',0.4,2200,{wet:0.6}); }
   playShieldBreak(){ this.tone(500,0.5,'sawtooth',0.35,50); }
@@ -764,6 +773,16 @@ const MOVE_NOTES={
   rattle:['Tosses a bone in an arc.','Rolling multi-hit dash with a launching finisher.','Skull hop with a rising chop — your recovery.','Collapses into a pile of bones (untouchable), then bursts back together.','Buries a rival under an avalanche of bones.'],
 };
 const TEAM_NAMES=['RED','BLUE'], TEAM_COLORS=[0xff5a5a,0x4aa3ff];
+const VOICE_PITCH={kael:115,nyx:250,brakka:78,seren:235,rook:100,vex:170,wren:220,morrow:125,rattle:290};
+function fighterVoice(f,kind){
+  const p=VOICE_PITCH[f.cd.id]; if(!p||f.isClone||f.cd.sandbag) return;
+  const s=p*(f.cd.boss?0.7:1)*rand(0.95,1.06);
+  if(kind==='jump') AUDIO.voice(s*1.25,0.09,'u',0.06,1.1);
+  else if(kind==='strike') AUDIO.voice(s*1.1,0.2,choice(['a','e']),0.11,0.75);
+  else if(kind==='hurt') AUDIO.voice(s*1.2,0.22,'o',0.12,0.6);
+  else if(kind==='ko') AUDIO.voice(s*1.3,0.7,'a',0.13,0.45);
+  else if(kind==='win') AUDIO.voice(s*1.2,0.35,'e',0.12,1.3);
+}
 const VICTORY_QUOTES={
   kael:['An oath kept is a blade that never dulls.','Stand up. Again, if you must.'],
   nyx:['Blink and you missed it. You blinked.','Too slow — the storm does not wait.'],
@@ -825,6 +844,9 @@ const HOMERUN_STAGE={ id:'homerun', name:'Home-Run Field', desc:'', theme:'homer
   blast:{l:-40,r:1100,t:90,b:-40}, sky:0x6fb3e0, fog:0x9ccbe8, bloom:{threshold:0.97,strength:0.18} };
 const SANDBAG_CD=Object.assign({},CHAR_DATA.find(c=>c.id==='rattle'),{name:'Sandbag',weight:100,sandbag:true,traits:'',desc:''});
 const HR_TIME=600, HR_EDGE=6.6;
+// Arcade's final round: a giant armoured Brakka that only flinches from strong hits
+const BOSS_CD=Object.assign({},CHAR_DATA.find(c=>c.id==='brakka'),{name:'The Colossus',size:2.05,weight:205,walkSpeed:1.8,runSpeed:3.0,
+  jumpVel:13.5,doubleJumpVel:11,armorAll:true,boss:true,traits:'Only strong hits make it flinch',desc:''});
 
 //////////////////////// HITBOX ////////////////////////
 class Hitbox{
@@ -1783,7 +1805,7 @@ class StageObj{
 
 //////////////////////// CAMERA ////////////////////////
 class CameraRig{
-  constructor(camera){ this.camera=camera; this.shake=0; this.look=new THREE.Vector3(0,2,0); }
+  constructor(camera){ this.camera=camera; this.shake=0; this.punch=0; this.look=new THREE.Vector3(0,2,0); }
   update(targets,dt,focus){
     let mx,my,dist;
     if(focus){ mx=focus.x; my=focus.y; dist=focus.dist; }
@@ -1795,6 +1817,7 @@ class CameraRig{
       my=clamp((minY+maxY)/2,-3,9)*0.6+2.2;
       dist=clamp(14+Math.max(maxX-minX,(maxY-minY)*1.5)*0.85,15,40);
     }
+    dist*=1-this.punch*0.14; this.punch*=0.9; // brief push-in on heavy hits
     const target=new THREE.Vector3(mx,my+dist*0.14,dist);
     const t=1-Math.pow(focus?0.02:0.0008,dt);
     this.camera.position.lerp(target,t);
@@ -2350,7 +2373,7 @@ class Game{
     if(AUDIO.ctx && (!AUDIO.music||AUDIO.music.theme!=='menu')) AUDIO.startMusic('menu');
     this.state='charselect'; this._showScreen('charselect');
     const mode=this.settings.mode;
-    document.getElementById('p2-label').textContent=mode==='cpu'?'CPU LEVEL '+this.settings.botDifficulty:(mode==='training'?'TRAINING DUMMY':(mode==='arcade'?'ARCADE: 5 RANDOM RIVALS':
+    document.getElementById('p2-label').textContent=mode==='cpu'?'CPU LEVEL '+this.settings.botDifficulty:(mode==='training'?'TRAINING DUMMY':(mode==='arcade'?'ARCADE: 5 RIVALS + A FINAL BOSS':
       (mode==='homerun'?'SANDBAG — 10 SECONDS, THEN SEND IT FLYING':mode==='ffa'?(this.ffaP2==='bot'?'CPU LV '+this.settings.botDifficulty+' + 2 RANDOM CPUs':'PLAYER 2 + 2 RANDOM CPUs'):'PLAYER 2')));
     document.getElementById('ffa-p2').classList.toggle('hidden',mode!=='ffa');
     document.getElementById('ffa-teams').classList.toggle('hidden',mode!=='ffa');
@@ -2437,7 +2460,7 @@ class Game{
       `<tr><td>Longest combo</td><td class="num">${d.longestCombo} hits${d.longestComboChar?' · '+d.longestComboChar:''}</td></tr>`+
       `<tr><td>Fastest win</td><td class="num">${fmt(d.fastestWin)}${d.fastestWinChar?' · '+d.fastestWinChar:''}</td></tr>`+
       `<tr><td>Most damage in one match</td><td class="num">${d.mostDamage}%</td></tr>`+
-      `<tr><td>Arcade</td><td class="num">${d.arcadeClears||0} clears · best ${d.arcadeBest||0} / 5 rounds</td></tr>`+
+      `<tr><td>Arcade</td><td class="num">${d.arcadeClears||0} clears · best ${d.arcadeBest||0} / 6 rounds</td></tr>`+
       `<tr><td>Home-Run best</td><td class="num">${(()=>{ const hr=d.homerun||{}, k=Object.keys(hr).sort((a,b)=>hr[b]-hr[a])[0]; return k?hr[k].toFixed(1)+' m · '+CHAR_DATA.find(c=>c.id===k).name:'—'; })()}</td></tr></table>`;
     h+='<div class="rec-h">FIGHTERS</div><table class="rec-table"><tr><th>Fighter</th><th>Played</th><th>Wins</th><th>Win rate</th></tr>';
     CHAR_DATA.forEach(cd=>{ const c=d.chars[cd.id]||{played:0,wins:0}; h+=`<tr><td>${cd.name}</td><td class="num">${c.played}</td><td class="num">${c.wins}</td><td class="num">${c.played?Math.round(100*c.wins/c.played)+'%':'—'}</td></tr>`; });
@@ -2518,13 +2541,16 @@ class Game{
     if(this._isRandom('p1')) this.selection.p1=Math.random()*CHAR_DATA.length|0; // arcade keeps one fighter for all rounds
     const me=this.selection.p1, pool=CHAR_DATA.map((c,i)=>i).filter(i=>i!==me);
     for(let i=pool.length-1;i>0;i--){ const j=Math.random()*(i+1)|0; [pool[i],pool[j]]=[pool[j],pool[i]]; }
-    this.arcade={round:0,rivals:pool.slice(0,5),stages:pool.slice(0,5).map(()=>Math.random()*STAGES.length|0),diffs:['easy','medium','medium','hard','hard']};
+    this.arcade={round:0,rivals:pool.slice(0,5),stages:pool.slice(0,5).map(()=>Math.random()*STAGES.length|0),diffs:['easy','medium','medium','hard','hard',8]};
     this._arcadeRound();
   }
   _arcadeRound(){
-    const A=this.arcade; this.selection.p2=A.rivals[A.round]; this.selection.stageIdx=A.stages[A.round]; this.p1char=null;
-    this._startMatch();
-    const lbl=document.getElementById('stage-label'); lbl.textContent='ARCADE ROUND '+(A.round+1)+' / 5  ·  '+A.diffs[A.round].toUpperCase()+'  ·  '+lbl.textContent;
+    const A=this.arcade, boss=A.round===5;
+    if(!boss){ this.selection.p2=A.rivals[A.round]; this.selection.stageIdx=A.stages[A.round]; } else this.selection.stageIdx=0;
+    this.p1char=null; this._p2Override=boss?BOSS_CD:null;
+    this._startMatch(); this._p2Override=null;
+    if(boss){ this._bigText('FINAL ROUND',true); }
+    const lbl=document.getElementById('stage-label'); lbl.textContent=(boss?'ARCADE FINAL ROUND  ·  THE COLOSSUS':'ARCADE ROUND '+(A.round+1)+' / 6  ·  '+String(A.diffs[A.round]).toUpperCase())+'  ·  '+lbl.textContent;
   }
   _rematch(){
     const A=this.arcade;
@@ -2558,7 +2584,7 @@ class Game{
     const mode=this.settings.mode, ffa=mode==='ffa';
     if(!isRematch||!this.p1char){
       const pick=i=>CHAR_DATA[i]||choice(CHAR_DATA); // an index past the roster means "random"
-      this.p1char=pick(this.selection.p1); this.p2char=pick(this.selection.p2); this.stageData=STAGES[this.selection.stageIdx]||choice(STAGES);
+      this.p1char=pick(this.selection.p1); this.p2char=this._p2Override||pick(this.selection.p2); this.stageData=STAGES[this.selection.stageIdx]||choice(STAGES);
       this.extraChars=ffa?[choice(CHAR_DATA),choice(CHAR_DATA)]:[];
     }
     this._teardownScene(); AUDIO.stopMusic(); this._applyGraphics();
@@ -2718,7 +2744,7 @@ class Game{
       if(defender.shieldHP<=0) defender._shieldBreak();
       return false;
     }
-    if(defender.armorActive && move.dmg<25 && !move.ultimate){
+    if((defender.armorActive && move.dmg<25 && !move.ultimate) || (defender.cd.armorAll && move.dmg<12 && !move.ultimate && defender.hitstun<=0)){
       defender.percent+=move.dmg; attacker.statDamageDealt+=move.dmg;
       defender.hitstop=5; if(!opts.remote){ attacker.hitstop=5; attacker._landedHit=true; }
       this.particles.spawn(at,12,{color:[0xffcc66,0x8a7e6e],speed:0.16,life:18});
@@ -2788,6 +2814,8 @@ class Game{
     this.particles.spark(at,0xffffff,0.7+dmg*0.05); if(dmg>=9) this.particles.spark(at,col,1.0+dmg*0.08);
     this.bloomPulse=Math.max(this.bloomPulse,clamp(dmg/18,0.12,1.1)+(move.special?0.3:0));
     this.cameraRig.kick(kb>85?clamp((kb-60)/80,0.25,1.2):0.08);
+    if(kb>80 && !defender.cd.armorAll) fighterVoice(defender,'hurt');
+    if(kb>95) this.cameraRig.punch=Math.max(this.cameraRig.punch,clamp((kb-95)/90,0.3,1));
     if(defender===this.f2) this._lastHit={name:move.name||move.id,dmg,kb:Math.round(kb),hitstun:defender.hitstun,speed:+(kb*KB_TO_VEL).toFixed(1)};
     if(move.ultimate){
       this.particles.spawn(at,70,{color:[col,0xffffff],speed:0.5,life:40,additive:true,size:0.1});
@@ -2984,7 +3012,7 @@ class Game{
           if(e.heavy){ P.spawn(new THREE.Vector3(f.pos.x,f.pos.y+0.1,0.2),8,{color:[0x6b6459,0x8a7e6e],speed:0.16,grav:0.02,life:24,size:0.1}); this.cameraRig.kick(0.18); AUDIO.playStone(); }
           else AUDIO.playLand();
           break;
-        case 'jump': AUDIO.playJump(); P.spawn(new THREE.Vector3(f.pos.x,f.pos.y+0.05,0.2),5,{color:0x9a8f80,speed:0.07,upBias:0.3,life:16}); break;
+        case 'jump': AUDIO.playJump(); if(Math.random()<0.35) fighterVoice(f,'jump'); P.spawn(new THREE.Vector3(f.pos.x,f.pos.y+0.05,0.2),5,{color:0x9a8f80,speed:0.07,upBias:0.3,life:16}); break;
         case 'jump2': AUDIO.playJump(); P.ring(new THREE.Vector3(f.pos.x,f.pos.y+0.2,0),f.cd.accent,0.9,12,0.05); break;
         case 'walljump': AUDIO.playJump(); P.spawn(new THREE.Vector3(f.pos.x,f.pos.y+0.8,0.2),10,{color:f.cd.accent,speed:0.12,life:16,additive:true}); this._floatText(f,'WALL JUMP'); break;
         case 'teleport':
@@ -3053,7 +3081,7 @@ class Game{
     this.particles.spawn(at,70,{color:[f.cd.accent,0xffffff,0xffee88],speed:0.55,life:40,upBias:1,grav:0.004,additive:true,size:0.11});
     this.particles.ring(at,f.cd.accent,7,30,0.18); this.particles.ring(at,0xffffff,4,20,0.1);
     this.flash=0.3; this.flashColor=f.cd.accent; this.bloomPulse=2; this.cameraRig.kick(1.4);
-    AUDIO.playKO(); AUDIO.playCrowd();
+    AUDIO.playKO(); AUDIO.playCrowd(); fighterVoice(f,'ko');
     if(this._frameHits) this._frameHits.push({ko:true,at:at.clone(),col:f.cd.accent});
     if(f.pos.y>b.t){ // knocked out through the top: a twinkle far away in the sky
       const star=new THREE.Vector3(clamp(f.pos.x*0.6,-14,14),b.t-6,-45);
@@ -3160,7 +3188,7 @@ class Game{
     }
     PROFILE.save();
     const A=this.settings.mode==='arcade'&&this.arcade;
-    if(A){ A.won=winner===this.f1; d.arcadeBest=Math.max(d.arcadeBest||0,A.round+(A.won?1:0)); if(A.won&&A.round===4){ A.cleared=true; d.arcadeClears=(d.arcadeClears||0)+1; } PROFILE.save(); }
+    if(A){ A.won=winner===this.f1; d.arcadeBest=Math.max(d.arcadeBest||0,A.round+(A.won?1:0)); if(A.won&&A.round===5){ A.cleared=true; d.arcadeClears=(d.arcadeClears||0)+1; } PROFILE.save(); }
     const fresh=COLOR_UNLOCKS.filter(c=>PROFILE.unlocked(c)&&!before.includes(c.id)).map(c=>c.name);
     document.getElementById('unlock-note').textContent=fresh.length?'New colour unlocked: '+fresh.join(', ')+'!':'';
   }
@@ -3488,7 +3516,7 @@ class Game{
     this.winners.forEach((f,i)=>place(f,[-1.4,-3.2][i],1,'victory'));
     [...this.losers].sort((a,b)=>a.placed-b.placed).forEach((f,i)=>place(f,[1.8,3.6,-4.8][i],i===2?1:-1,'defeat'));
     this.particles.spawn(new THREE.Vector3(m.x-1.4,top+3,0.5),60,{color:[this.winner.cd.accent,0xffffff,0xffd166],speed:0.25,life:60,grav:0.004,additive:true});
-    AUDIO.playFanfare();
+    AUDIO.playFanfare(); setTimeout(()=>fighterVoice(this.winner,'win'),500);
     this._hideBigText();
     const $=id=>document.getElementById(id);
     $('winner-banner').textContent=this.winner.team!=null?(TEAM_NAMES[this.winner.team]+' TEAM WINS!'):this.winner.cd.name+' WINS!';
@@ -3500,7 +3528,7 @@ class Game{
     }
     const A=this.settings.mode==='arcade'&&this.arcade;
     $('btn-rematch').textContent=A?(A.cleared?'FINISH':(A.won?'NEXT ROUND':'RETRY ROUND')):'REMATCH';
-    if(A) $('winner-banner').textContent=A.cleared?'ARCADE CLEAR!':(A.won?'ROUND '+(A.round+1)+' CLEAR!':'DEFEAT — ROUND '+(A.round+1)+' / 5');
+    if(A) $('winner-banner').textContent=A.cleared?'ARCADE CLEAR!':(A.won?'ROUND '+(A.round+1)+' CLEAR!':(A.round===5?'THE COLOSSUS STANDS — TRY AGAIN':'DEFEAT — ROUND '+(A.round+1)+' / 6'));
     const F=this.fighters, ord=n=>['1st','2nd','3rd','4th'][n-1], cell=fn=>F.map(f=>`<td>${fn(f)}</td>`).join('');
     if(this.isHomerun){ $('results-table').innerHTML=''; $('btn-rematch').textContent='TRY AGAIN'; return; }
     $('results-table').innerHTML=`<tr><th></th>${F.map(f=>`<th style="color:${hex6(f.cd.accent)}">${f.cd.name}${f.control==='bot'?' (CPU)':''}</th>`).join('')}</tr>`+
@@ -3555,8 +3583,10 @@ class Game{
     if(this.hazardsOn) this._updateHazards();
     for(const f of this.fighters){
       const ph=f.state==='attack'?f.actionPhase:null;
-      if(ph==='active' && f._lastPh!=='active' && f.action && !f.action.move.noHitbox && !f.action.move.projectile && !f.action.move.counter)
+      if(ph==='active' && f._lastPh!=='active' && f.action && !f.action.move.noHitbox && !f.action.move.projectile && !f.action.move.counter){
         AUDIO.playWhoosh(clamp(0.4+(f.action.move.dmg||0)*0.04,0.4,1));
+        const m=f.action.move; if(m.special||m.chargeable||m.ultimate||(m.dmg>=10&&Math.random()<0.5)) fighterVoice(f,'strike');
+      }
       f._lastPh=ph;
       if(f.state==='attack' && f.actionPhase==='active' && f.action && !f.action.move.noHitbox){
         const v=new THREE.Vector3(); f.trailSource.getWorldPosition(v);
