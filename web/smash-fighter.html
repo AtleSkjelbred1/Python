@@ -924,6 +924,14 @@ const BUFFER_FRAMES=6, BUFFER_KEYS=['attackP','specialP','jumpP','grabP'];
 const ITEM_THROW=new Move('itemThrow',{startup:5,active:2,recovery:10,dmg:0,noHitbox:true,itemThrow:true,name:'Item Throw'});
 const LEDGE_ATTACK=new Move('ledgeAttack',{startup:8,active:4,recovery:16,dmg:8,bkb:12,kbg:1.2,angle:30,range:1.2,name:'Ledge Attack'});
 const LOW_GFX={on:false};
+function addRim(mat,u){
+  mat.onBeforeCompile=sh=>{
+    sh.uniforms.rimColor=u.color; sh.uniforms.rimStrength=u.strength;
+    sh.fragmentShader='uniform vec3 rimColor; uniform float rimStrength;\n'+sh.fragmentShader.replace('#include <emissivemap_fragment>',
+      '#include <emissivemap_fragment>\n float rimF=pow(1.0-clamp(dot(normal,normalize(vViewPosition)),0.0,1.0),2.2); totalEmissiveRadiance+=rimColor*rimF*rimStrength;');
+  };
+  mat.customProgramCacheKey=()=>'rim';
+}
 const FACE_ANGLE=Math.PI/2-0.32; // model turns sideways, slightly toward the camera
 
 class Fighter{
@@ -962,7 +970,10 @@ class Fighter{
     const pivot=new THREE.Group(); pivot.position.y=H*0.45; g.add(pivot); this.pivot=pivot;
     const model=THREE.SkeletonUtils.clone(MODELS.templates[cd.id]);
     model.scale.setScalar(H/2.15); model.position.y=-H*0.45; pivot.add(model); this.model=model;
-    if(this.tint!=null){ const c=new THREE.Color(this.tint); model.traverse(o=>{ if(o.isMesh){ o.material=o.material.clone(); o.material.color.multiply(c); o.userData.tintMat=true; } }); }
+    // every fighter gets its own material copies: optional colour tint plus a fresnel rim light used for
+    // readability, hit flashes and the respawn shimmer
+    const c=this.tint!=null?new THREE.Color(this.tint):null; this.rimU={color:{value:new THREE.Color(0xffffff)},strength:{value:0.28}};
+    model.traverse(o=>{ if(o.isMesh){ o.material=o.material.clone(); if(c) o.material.color.multiply(c); o.userData.tintMat=true; addRim(o.material,this.rimU); } });
     if(cd.weapon){ const slot=model.getObjectByName('handslot.r'); if(slot) slot.add(MODELS.templates[cd.weapon].clone()); }
     this.trailSource=model.getObjectByName('handslot.r')||model;
     this.headBone=model.getObjectByName('head')||model;
@@ -2713,7 +2724,7 @@ class Game{
     defender.state='hitstun'; defender.tumble=kb>75;
     defender.squash=kb>60?0.78:0.9;
     const hs=Math.round(clamp(dmg*0.45+2,2,move.ultimate?22:10));
-    defender._shakeAmt=clamp(0.03+dmg*0.012,0.04,0.22);
+    defender._shakeAmt=clamp(0.03+dmg*0.012,0.04,0.22); defender._hitFlash=8;
     defender.hitstop=hs; if(!opts.remote){ attacker.hitstop=hs; attacker._landedHit=true; }
     if(defender.lastAttacker===attacker && defender.comboTimer>0){ defender.comboCount++; defender.comboDamage+=dmg; }
     else { defender.comboCount=1; defender.comboDamage=dmg; }
@@ -3608,9 +3619,14 @@ class Game{
       const stretch=f.grounded?1:1+Math.min(0.1,Math.abs(f.vel.y)/220);
       const sy=f.squash*stretch, sx=1/Math.sqrt(sy);
       f.group.scale.set(sx,sy,sx);
+      if(f.rimU && !f.isClone){
+        const inv=f.respawnInvuln>0, hit=f._hitFlash>0;
+        f.rimU.color.value.setHex(hit?0xffffff:(inv?0x9fe0ff:(f.team!=null?TEAM_COLORS[f.team]:0xffffff)));
+        f.rimU.strength.value=hit?2.4*f._hitFlash/8:(inv?0.9+0.5*Math.sin(performance.now()*0.02):(f.team!=null?0.6:0.28));
+        if(f._hitFlash>0) f._hitFlash-=dt*60;
+      }
       if(!f.isClone){
-        const blink=f.respawnInvuln>0 && Math.floor(f.respawnInvuln/4)%2===0;
-        f.group.visible=!f.eliminated && f.vanished<=0 && !blink;
+        f.group.visible=!f.eliminated && f.vanished<=0;
         f.shieldMesh.visible=f.state==='shield';
         if(f.shieldMesh.visible){
           const k=f.shieldHP/100; f.shieldMesh.scale.setScalar(0.45+0.55*k);
