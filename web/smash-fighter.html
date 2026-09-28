@@ -75,6 +75,11 @@
   .portrait-hud{ position:absolute; top:14px; width:260px; padding:8px 12px; border-radius:10px; display:flex; gap:12px; align-items:center;
     background:rgba(10,12,18,.55); border:1px solid rgba(255,255,255,.08); }
   #hud-p1{ left:14px; } #hud-p2{ right:14px; text-align:right; flex-direction:row-reverse; }
+  /* 3-4 fighters: Smash-style row of panels along the bottom */
+  #hud.quad #hud-players{ position:absolute; left:50%; bottom:10px; transform:translateX(-50%); display:flex; gap:10px; }
+  #hud.quad .portrait-hud{ position:relative; top:auto; left:auto; right:auto; width:210px; flex-direction:row; text-align:left; }
+  #hud.quad #stage-label{ display:none; }
+  .hud-tag{ font-size:10px; font-weight:800; letter-spacing:1px; padding:0 5px; border-radius:4px; margin-right:5px; color:#111; }
   .hud-info{ flex:1; }
   .hud-portrait{ width:58px; height:58px; border-radius:50%; border:2px solid #888; background:#0d1018; object-fit:cover; }
   .hud-ult-label{ font-size:10px; letter-spacing:2px; color:#ffd166; opacity:0; transition:opacity .2s; text-shadow:0 0 8px #ff9a33; }
@@ -104,7 +109,7 @@
   .ctrl-table td{ padding:2px 8px; border-bottom:1px solid #23283333; }
   .gp-status{ font-size:11px; opacity:.6; margin-top:6px;}
   /* -------- Results -------- */
-  .results-table{ width:520px; border-collapse:collapse; margin:16px 0; font-size:13px; }
+  .results-table{ min-width:520px; border-collapse:collapse; margin:16px 0; font-size:13px; }
   .results-table th,.results-table td{ padding:8px 14px; text-align:center; border-bottom:1px solid #23283344; }
   .results-table th{ opacity:.6; font-weight:600; font-size:11px; letter-spacing:1px; }
   #screen-results{ justify-content:flex-end; padding-bottom:34px; background:linear-gradient(180deg,rgba(5,6,10,0) 0%,rgba(5,6,10,.25) 45%,rgba(5,6,10,.9) 75%); }
@@ -177,7 +182,7 @@
   <h1 class="title">RIFT CLASH</h1>
   <div class="subtitle">AN ORIGINAL PLATFORM FIGHTER</div>
   <div id="loading-note" style="font-size:12px;letter-spacing:3px;color:#ffb347;margin-bottom:12px;">LOADING FIGHTERS…</div>
-  <div id="btn-1v1" class="menu-btn">LOCAL VERSUS (2 PLAYERS)</div>
+  <div class="row"><div id="btn-1v1" class="menu-btn" style="min-width:230px;">VERSUS (2 PLAYERS)</div><div id="btn-ffa" class="menu-btn" style="min-width:230px;">FREE-FOR-ALL (4)</div></div>
   <div class="row"><div id="btn-cpu" class="menu-btn" style="min-width:230px;">VS BOT</div><div id="btn-arcade" class="menu-btn" style="min-width:230px;">ARCADE</div></div>
   <div class="row"><div id="btn-training" class="menu-btn" style="min-width:150px;">TRAINING</div><div id="btn-records" class="menu-btn" style="min-width:150px;">RECORDS</div><div id="btn-controls" class="menu-btn" style="min-width:150px;">CONTROLS</div></div>
   <div class="panel settings-grid" style="margin-top:14px;">
@@ -210,6 +215,7 @@
     </div>
     <div class="cs-col">
       <h2 id="p2-label" style="color:#ff9b7f">PLAYER 2</h2>
+      <div id="ffa-p2" class="cs-mode-select hidden" style="margin:0;"></div>
       <canvas id="cs-canvas-2" class="cs-preview" width="230" height="230"></canvas>
       <div class="cs-arrows">
         <div class="cs-arrow" id="cs2-left">&#10094;</div>
@@ -237,28 +243,9 @@
 
 <!-- ============ HUD (in-battle) ============ -->
 <div id="hud" class="hidden">
-  <div id="hud-p1" class="portrait-hud">
-    <img class="hud-portrait" id="hudport-1" alt="">
-    <div class="hud-info">
-      <div class="hud-name" id="hudname-1">-</div>
-      <div class="hud-pct" id="hudpct-1">0%</div>
-      <div class="hud-stocks" id="hudstocks-1">&#9679;&#9679;&#9679;</div>
-      <div class="hud-ult-bar"><div class="hud-ult-fg" id="hudult-1" style="width:0%"></div></div>
-      <div class="hud-ult-label" id="hudultlabel-1">ULTIMATE READY</div>
-    </div>
-  </div>
-  <div id="hud-p2" class="portrait-hud">
-    <img class="hud-portrait" id="hudport-2" alt="">
-    <div class="hud-info">
-      <div class="hud-name" id="hudname-2">-</div>
-      <div class="hud-pct" id="hudpct-2">0%</div>
-      <div class="hud-stocks" id="hudstocks-2">&#9679;&#9679;&#9679;</div>
-      <div class="hud-ult-bar"><div class="hud-ult-fg" id="hudult-2" style="width:0%"></div></div>
-      <div class="hud-ult-label" id="hudultlabel-2">ULTIMATE READY</div>
-    </div>
-  </div>
+  <div id="hud-players"></div>
   <div id="hud-timer">2:00</div>
-  <div class="offscreen" id="off-1"><div class="oarrow"></div></div><div class="offscreen" id="off-2"><div class="oarrow"></div></div>
+  <div id="hud-offscreen"></div>
   <div id="hud-combo"><div class="cc" id="combo-count"></div><div class="cd" id="combo-dmg"></div></div>
   <div id="big-text"></div>
   <div id="stage-label"></div>
@@ -351,12 +338,7 @@
   <div id="winner-banner"></div>
   <div id="win-quote"></div>
   <div id="unlock-note"></div>
-  <table class="results-table">
-    <tr><th></th><th id="res-n1"></th><th id="res-n2"></th></tr>
-    <tr><td style="opacity:.6;">Damage Dealt</td><td id="res-dmg1"></td><td id="res-dmg2"></td></tr>
-    <tr><td style="opacity:.6;">Longest Combo</td><td id="res-combo1"></td><td id="res-combo2"></td></tr>
-    <tr><td style="opacity:.6;">KOs</td><td id="res-ko1"></td><td id="res-ko2"></td></tr>
-  </table>
+  <table class="results-table" id="results-table"></table>
   <div class="row">
     <div id="btn-rematch" class="menu-btn" style="min-width:200px;">REMATCH</div>
     <div id="btn-rechar" class="menu-btn" style="min-width:200px;">CHANGE FIGHTERS</div>
@@ -2125,6 +2107,9 @@ class Game{
     $('btn-resume').onclick=()=>this._resume();
     $('btn-restart').onclick=()=>this._startMatch(true);
     $('btn-arcade').onclick=()=>{ this.settings.mode='arcade'; this._toCharSelect(); };
+    $('btn-ffa').onclick=()=>{ this.settings.mode='ffa'; this._toCharSelect(); };
+    this.ffaP2='bot';
+    this._chipRow($('ffa-p2'),[{label:'P2: CPU',value:'bot'},{label:'P2: HUMAN',value:'p2'}],'bot',v=>{ this.ffaP2=v; AUDIO.playClick(); this._toCharSelect(); });
     $('btn-quit').onclick=()=>this._toMainMenu();
     $('btn-rematch').onclick=()=>this._rematch();
     $('btn-mainmenu').onclick=()=>this._toMainMenu();
@@ -2206,7 +2191,9 @@ class Game{
   _toCharSelect(){
     this.state='charselect'; this._showScreen('charselect');
     const mode=this.settings.mode;
-    document.getElementById('p2-label').textContent=mode==='cpu'?'BOT ('+this.settings.botDifficulty.toUpperCase()+')':(mode==='training'?'TRAINING DUMMY':(mode==='arcade'?'ARCADE: 5 RANDOM RIVALS':'PLAYER 2'));
+    document.getElementById('p2-label').textContent=mode==='cpu'?'BOT ('+this.settings.botDifficulty.toUpperCase()+')':(mode==='training'?'TRAINING DUMMY':(mode==='arcade'?'ARCADE: 5 RANDOM RIVALS':
+      (mode==='ffa'?(this.ffaP2==='bot'?'CPU ('+this.settings.botDifficulty.toUpperCase()+') + 2 RANDOM CPUs':'PLAYER 2 + 2 RANDOM CPUs'):'PLAYER 2')));
+    document.getElementById('ffa-p2').classList.toggle('hidden',mode!=='ffa');
     document.getElementById('btn-to-stage').innerHTML=mode==='arcade'?'START ARCADE &#8594;':'NEXT: SELECT STAGE &#8594;';
     this._refreshCharUI('p1'); this._refreshCharUI('p2');
   }
@@ -2382,8 +2369,10 @@ class Game{
 
   // -------------------- MATCH SETUP --------------------
   _startMatch(isRematch){
+    const mode=this.settings.mode, ffa=mode==='ffa';
     if(!isRematch||!this.p1char){
       this.p1char=CHAR_DATA[this.selection.p1]; this.p2char=CHAR_DATA[this.selection.p2]; this.stageData=STAGES[this.selection.stageIdx];
+      this.extraChars=ffa?[choice(CHAR_DATA),choice(CHAR_DATA)]:[];
     }
     this._teardownScene(); AUDIO.stopMusic(); this._applyGraphics();
     this.state='battle'; this._showScreen('__hud__');
@@ -2391,25 +2380,35 @@ class Game{
     this.stage=new StageObj(this.scene,this.stageData);
     this.particles=new ParticleSystem(this.scene);
     this.isTraining=this.settings.mode==='training';
-    let t1=this._tintOf('p1'), t2=this._tintOf('p2');
-    if(this.p1char===this.p2char && t1===t2) t2=t1===0x9ec2ff?0xff9a9a:0x9ec2ff; // mirror matches stay readable
-    this.tints=[t1,t2];
-    this.f1=new Fighter(this.scene,this.p1char,-1,'p1',t1);
-    this.f2=new Fighter(this.scene,this.p2char,1,'p2',t2);
-    this.fighters=[this.f1,this.f2];
-    this.f1.stocks=this.f2.stocks=this.isTraining?Infinity:this.settings.stocks;
+    // who is in the match and who controls them: 'p1'/'p2' keyboard+pad, 'bot', or the training 'dummy'
+    const arc=mode==='arcade'&&this.arcade;
+    const botDiff=arc?this.arcade.diffs[this.arcade.round]:this.settings.botDifficulty;
+    const roster=[{cd:this.p1char,tint:this._tintOf('p1'),control:'p1'},
+      {cd:this.p2char,tint:this._tintOf('p2'),control:this.isTraining?'dummy':(mode==='cpu'||arc||(ffa&&this.ffaP2==='bot'))?'bot':'p2'}];
+    this.extraChars.forEach(cd=>roster.push({cd,tint:null,control:'bot'}));
+    const spare=[0x9ec2ff,0xff9a9a,0x9ef0b4,0xffd98a,0x6a6a78];
+    roster.forEach((r,i)=>{ // repeated fighters get distinct colours so everyone stays readable
+      while(roster.slice(0,i).some(o=>o.cd===r.cd&&o.tint===r.tint)) r.tint=spare.find(t=>!roster.slice(0,i).some(o=>o.cd===r.cd&&o.tint===t));
+    });
+    this.tints=roster.map(r=>r.tint);
+    const n=roster.length, xs=n===2?[-4,4]:[-6,-2,2,6];
+    this.fighters=roster.map((r,i)=>{
+      const f=new Fighter(this.scene,r.cd,xs[i]<0?-1:1,'p'+(i+1),r.tint);
+      f.idx=i; f.control=r.control; f.stocks=this.isTraining?Infinity:(arc?2:this.settings.stocks);
+      f.ai=r.control==='bot'?new AIController(f,botDiff):null;
+      return f;
+    });
+    this.f1=this.fighters[0]; this.f2=this.fighters[1];
     if(this._gfxChanged){ this._gfxChanged=false; this.scene.traverse(o=>{ if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.needsUpdate=true); }); }
     const top=this.stage.main.y+this.stage.main.h/2;
-    this.f1.pos.set(-4,top,0); this.f2.pos.set(4,top,0); this.f1.facing=1; this.f2.facing=-1;
-    this.f1.grounded=this.f2.grounded=true; this.f1.state=this.f2.state='idle';
+    this.fighters.forEach((f,i)=>{ f.pos.set(xs[i],top,0); f.facing=xs[i]<0?1:-1; f.grounded=true; f.state='idle'; });
     this.respawnPads=this.fighters.map(f=>{
       const pad=new THREE.Mesh(new THREE.CylinderGeometry(0.9,0.5,0.18,24),new THREE.MeshStandardMaterial({color:0xffffff,emissive:f.cd.accent,emissiveIntensity:1.4,transparent:true,opacity:0.85}));
       pad.visible=false; this.scene.add(pad); return pad;
     });
     this.cameraRig=new CameraRig(this.camera);
-    const arc=this.settings.mode==='arcade'&&this.arcade;
-    if(arc){ this.arcade.won=false; this.f1.stocks=this.f2.stocks=2; }
-    this.ai=(this.settings.mode==='cpu'||arc)?new AIController(this.f2,arc?this.arcade.diffs[this.arcade.round]:this.settings.botDifficulty):null;
+    if(arc) this.arcade.won=false;
+    this.ai=this.f2.ai; this._targets=new Map();
     this._dummyAI=null; this._lastMove=null; this._lastHit=null;
     this.hazards=[]; this.hazardsOn=this.settings.hazards&&!this.isTraining; this.hazardTimer=Math.round(rand(420,660));
     this.replayBuf=[]; this._frameHits=[]; this.replaying=false; this.replayFrames=null; this.matchFrames=0;
@@ -2421,16 +2420,33 @@ class Game{
     this.bloomPulse=0; this.flash=0;
     const $=id=>document.getElementById(id);
     $('stage-label').textContent=this.stageData.name.toUpperCase();
-    $('hudname-1').textContent=this.p1char.name; $('hudname-2').textContent=this.p2char.name;
-    $('hudport-1').src=this._portrait('p1',this.p1char,t1); $('hudport-2').src=this._portrait('p2',this.p2char,t2);
+    this._buildHUD();
     $('training-panel').classList.toggle('hidden',!this.isTraining);
     $('hud').classList.remove('replaying'); $('unlock-note').textContent='';
-    $('hudport-1').style.borderColor='#'+this.p1char.accent.toString(16).padStart(6,'0');
-    $('hudport-2').style.borderColor='#'+this.p2char.accent.toString(16).padStart(6,'0');
     $('big-text').style.opacity=0;
     this._updateHUD();
     if(this.isTraining){ this._matchRunning=true; this._countT=[]; this._bigText('TRAINING',true); this._countT.push(setTimeout(()=>this._hideBigText(),900)); AUDIO.startMusic(this.stageData.theme); }
     else this._runCountdown();
+  }
+  _buildHUD(){
+    const n=this.fighters.length, row=document.getElementById('hud-players'), off=document.getElementById('hud-offscreen');
+    document.getElementById('hud').classList.toggle('quad',n>2);
+    const tagCol=['#7fd0ff','#ff9b7f','#9ef0b4','#ffd98a'];
+    row.innerHTML=''; off.innerHTML=''; this.hudShake={};
+    this.fighters.forEach((f,i)=>{
+      const k=i+1, tag=f.control==='bot'?'CPU':(f.control==='dummy'?'DUMMY':'P'+k);
+      const el=document.createElement('div'); el.className='portrait-hud'; el.id='hud-p'+k;
+      el.innerHTML=`<img class="hud-portrait" id="hudport-${k}" alt=""><div class="hud-info">
+        <div class="hud-name"><span class="hud-tag" style="background:${tagCol[i]}">${tag}</span><span id="hudname-${k}"></span></div>
+        <div class="hud-pct" id="hudpct-${k}">0%</div><div class="hud-stocks" id="hudstocks-${k}"></div>
+        <div class="hud-ult-bar"><div class="hud-ult-fg" id="hudult-${k}" style="width:0%"></div></div>
+        <div class="hud-ult-label" id="hudultlabel-${k}">ULTIMATE READY</div></div>`;
+      row.appendChild(el);
+      el.querySelector('#hudname-'+k).textContent=f.cd.name;
+      const img=el.querySelector('img'); img.src=this._portrait(i===1?'p2':'p1',f.cd,f.tint); img.style.borderColor=hex6(f.cd.accent);
+      const o=document.createElement('div'); o.className='offscreen'; o.id='off-'+k; o.innerHTML='<div class="oarrow"></div>'; off.appendChild(o);
+      this.hudShake[k]=0;
+    });
   }
   _teardownScene(){
     if(this._countT) this._countT.forEach(clearTimeout);
@@ -2668,7 +2684,7 @@ class Game{
     c.isClone=true; c.owner=f; c.facing=f.facing; c.pos.copy(f.pos); c.pos.x+=f.facing*0.6;
     c.group.traverse(o=>{ if(o.isMesh && o!==c.shieldMesh){ o.material=new THREE.MeshStandardMaterial({color:0x1a1024,emissive:f.cd.accent,emissiveIntensity:0.5,transparent:true,opacity:0.6,roughness:0.4,skinning:!!o.isSkinnedMesh}); o.castShadow=false; o.userData.cloneMat=true; } });
     c.shieldMesh.visible=false; c.glow.intensity=1.2;
-    c.startAction(key,f.moveset[key]); c.life=0; c.target=f===this.f1?this.f2:this.f1;
+    c.startAction(key,f.moveset[key]); c.life=0; c.target=this._targetFor(f);
     this.clones.push(c);
     this.particles.spawn(new THREE.Vector3(c.pos.x,c.pos.y+1,0.3),18,{color:[0x9b5de5,0x2a1a3a],speed:0.12,life:24});
     AUDIO.tone(140,0.3,'sawtooth',0.2,70);
@@ -2818,8 +2834,8 @@ class Game{
       clearTimeout(this._comboHideT); this._comboHideT=setTimeout(()=>$('hud-combo').style.opacity=0,1200);
     }
   }
-  _hudShake(f,dmg){ const i=f===this.f1?1:2; this.hudShake[i]=Math.max(this.hudShake[i],Math.min(14,4+dmg*0.6)); }
-  _checkKO(f,other){
+  _hudShake(f,dmg){ if(f.idx==null) return; const i=f.idx+1; this.hudShake[i]=Math.max(this.hudShake[i]||0,Math.min(14,4+dmg*0.6)); }
+  _checkKO(f){
     if(f.pose||f.eliminated||f.state==='respawn') return;
     const b=this.stage.blast;
     if(f.pos.x>=b.l&&f.pos.x<=b.r&&f.pos.y>=b.b&&f.pos.y<=b.t) return;
@@ -2831,10 +2847,35 @@ class Game{
     if(this._frameHits) this._frameHits.push({ko:true,at:at.clone(),col:f.cd.accent});
     this._dropHeld(f,true);
     if(this.isTraining){ f.respawn(0,this.stage.respawnY); return; }
-    f.stocks--; other.statKOs++;
-    f.statLongestCombo=Math.max(f.statLongestCombo,0);
-    if(f.stocks<=0){ f.interrupt(); f.eliminated=true; f.group.visible=false; this._endMatch(other,'ko'); return; }
-    f.respawn(0,this.stage.respawnY);
+    // the KO goes to whoever hit them last (in 1v1, always the opponent)
+    const others=this.fighters.filter(o=>o!==f), credit=this.fighters.includes(f.lastAttacker)?f.lastAttacker:(others.length===1?others[0]:null);
+    f.stocks--; if(credit) credit.statKOs++;
+    if(f.stocks<=0){
+      f.interrupt(); f.eliminated=true; f.group.visible=false; f.placed=this.fighters.filter(o=>!o.eliminated).length+1;
+      const alive=this.fighters.filter(o=>!o.eliminated);
+      if(alive.length<=1){ this._endMatch(alive[0]||credit||others[0],'ko'); return; }
+      this._bigText(f.cd.name.split(' ')[0].toUpperCase()+' IS OUT!',true); this._countT.push(setTimeout(()=>this._hideBigText(),1100));
+      return;
+    }
+    const spots=[0,-3,3,-6], used=this.fighters.filter(o=>o!==f&&o.state==='respawn').length;
+    f.respawn(spots[used%4],this.stage.respawnY);
+  }
+  _commandFor(f){
+    if(f.control==='p1') return INPUT.getCommands('p1',0);
+    if(f.control==='p2') return INPUT.getCommands('p2',1);
+    if(f.control==='dummy') return this._dummyCmd();
+    return f.ai.decide(this._targetFor(f),this.stage,this.projectiles);
+  }
+  // each fighter's current rival: the nearest one still in play, re-picked every half second
+  _targetFor(f){
+    const c=this._targets.get(f);
+    if(c && this.frame-c.at<30 && !c.t.eliminated) return c.t;
+    const others=this.fighters.filter(o=>o!==f&&!o.eliminated);
+    if(!others.length) return c?c.t:f;
+    const score=o=>Math.hypot(o.pos.x-f.pos.x,o.pos.y-f.pos.y)+(o.state==='respawn'?20:0);
+    const t=others.reduce((b,o)=>score(o)<score(b)?o:b);
+    if(f.ai && c && c.t!==t) f.ai.buffer=[];
+    this._targets.set(f,{t,at:this.frame}); return t;
   }
   // tied on stocks when time runs out: one stock each at 300%, first KO wins
   _suddenDeath(){
@@ -2845,7 +2886,9 @@ class Game{
   }
   _endMatch(winner,reason){
     if(this.matchOver) return;
-    this.matchOver=true; this.state='gameend'; this.endTimer=0; this.winner=winner; this.loser=winner===this.f1?this.f2:this.f1;
+    this.matchOver=true; this.state='gameend'; this.endTimer=0; this.winner=winner; this.losers=this.fighters.filter(f=>f!==winner); this.loser=this.losers[0];
+    winner.placed=1;
+    this.losers.filter(f=>!f.placed).sort((a,b)=>b.stocks-a.stocks||a.percent-b.percent).forEach((f,i)=>f.placed=i+2);
     this.cinematic=null;
     if(reason==='ko' && this.replayBuf.length>40) this.replayFrames=this.replayBuf.slice(-120);
     this._recordProfile(winner);
@@ -2855,7 +2898,7 @@ class Game{
   }
   _recordProfile(winner){
     const d=PROFILE.data, before=COLOR_UNLOCKS.filter(c=>PROFILE.unlocked(c)).map(c=>c.id);
-    const vsBot=this.settings.mode==='cpu'||this.settings.mode==='arcade', humans=vsBot?[this.f1]:[this.f1,this.f2];
+    const humans=this.fighters.filter(f=>f.control==='p1'||f.control==='p2');
     d.matches++;
     for(const f of humans){
       const c=PROFILE.char(f.cd.id); c.played++; if(f===winner) c.wins++;
@@ -2881,20 +2924,21 @@ class Game{
       action:f.action?{key:f.action.key,move:f.action.move}:null,actionFrame:f.actionFrame,actionPhase:f.actionPhase,chargeFrames:f.chargeFrames,
       stateTimer:f.stateTimer,throwTimer:f.throwTimer,throwKey:f.throwKey,jumpSquat:f.jumpSquat,landTimer:f.landTimer,tumble:f.tumble,
       walkCycle:f.walkCycle,squash:f.squash,hitstop:f.hitstop,_rollDir:f._rollDir,_countered:f._countered,vanished:f.vanished,
-      grounded:f.grounded,shieldHP:f.shieldHP,percent:f.percent}))};
+      grounded:f.grounded,shieldHP:f.shieldHP,percent:f.percent,elim:f.eliminated}))};
   }
   _applySnapshot(s){
     this.fighters.forEach((f,i)=>{ const d=s.fs[i]; f.pos.copy(d.pos); f.vel.copy(d.vel);
       Object.assign(f,{facing:d.facing,state:d.state,action:d.action,actionFrame:d.actionFrame,actionPhase:d.actionPhase,chargeFrames:d.chargeFrames,
         stateTimer:d.stateTimer,throwTimer:d.throwTimer,throwKey:d.throwKey,jumpSquat:d.jumpSquat,landTimer:d.landTimer,tumble:d.tumble,
         walkCycle:d.walkCycle,squash:d.squash,hitstop:d.hitstop,_rollDir:d._rollDir,_countered:d._countered,vanished:d.vanished,
-        grounded:d.grounded,shieldHP:d.shieldHP,percent:d.percent,eliminated:false,respawnInvuln:0,pose:null}); });
+        grounded:d.grounded,shieldHP:d.shieldHP,percent:d.percent,eliminated:!!d.elim,respawnInvuln:0,pose:null}); });
     for(const h of s.hits){
       if(h.ko){ this.particles.spawn(h.at,70,{color:[h.col,0xffffff,0xffee88],speed:0.55,life:40,grav:0.004,additive:true,size:0.11}); this.particles.ring(h.at,h.col,7,30,0.18); this.flash=0.3; this.flashColor=h.col; this.bloomPulse=2; this.cameraRig.kick(1.2); AUDIO.playKO(); }
       else { this.particles.spawn(h.at,Math.round(6+h.dmg),{color:[0xffffff,0xfff0b0,h.col],speed:0.14+h.kb*0.0025,life:20,additive:true,size:0.07}); if(h.kb>70) this.particles.ring(h.at,h.col,1.2+h.kb*0.012,14); this.bloomPulse=Math.max(this.bloomPulse,clamp(h.dmg/18,0.12,1.1)); AUDIO.playHit(h.dmg); if(h.kb>85) this.cameraRig.kick(0.6); }
     }
   }
   _startReplay(){
+    this._elimAtEnd=this.fighters.map(f=>f.eliminated);
     this.replaying=true; this.replay={frames:this.replayFrames,i:0,sub:0}; this.replayFrames=null;
     this.projectiles.forEach(p=>p.mesh.visible=false); this.clones.forEach(c=>c.group.visible=false);
     this.items.forEach(it=>{ it.mesh.visible=false; it.glow.visible=false; }); this.crates.forEach(c=>c.mesh.visible=false);
@@ -2902,7 +2946,7 @@ class Game{
   }
   _endReplay(){
     if(!this.replaying) return;
-    this.replaying=false; this.replay=null; this.loser.eliminated=true;
+    this.replaying=false; this.replay=null; this.fighters.forEach((f,i)=>f.eliminated=this._elimAtEnd[i]);
     document.getElementById('hud').classList.remove('replaying');
     this.endTimer=Math.max(this.endTimer,45);
   }
@@ -3154,7 +3198,8 @@ class Game{
       f.interrupt(); f.eliminated=false; f.group.visible=true; f.hitstun=0; f.hitstop=0; f.tumble=false; f.invuln=0; f.respawnInvuln=0;
       f.pos.set(m.x+x,top,0); f.vel.set(0,0,0); f.grounded=true; f.facing=facing; f.pose=pose; f.state=pose; f.walkCycle=0;
     };
-    place(this.winner,-1.4,1,'victory'); place(this.loser,1.8,-1,'defeat');
+    place(this.winner,-1.4,1,'victory');
+    [...this.losers].sort((a,b)=>a.placed-b.placed).forEach((f,i)=>place(f,[1.8,3.6,-3.4][i],i===2?1:-1,'defeat'));
     this.particles.spawn(new THREE.Vector3(m.x-1.4,top+3,0.5),60,{color:[this.winner.cd.accent,0xffffff,0xffd166],speed:0.25,life:60,grav:0.004,additive:true});
     AUDIO.playFanfare();
     this._hideBigText();
@@ -3164,10 +3209,12 @@ class Game{
     const A=this.settings.mode==='arcade'&&this.arcade;
     $('btn-rematch').textContent=A?(A.cleared?'FINISH':(A.won?'NEXT ROUND':'RETRY ROUND')):'REMATCH';
     if(A) $('winner-banner').textContent=A.cleared?'ARCADE CLEAR!':(A.won?'ROUND '+(A.round+1)+' CLEAR!':'DEFEAT — ROUND '+(A.round+1)+' / 5');
-    $('res-n1').textContent=this.p1char.name; $('res-n2').textContent=this.p2char.name;
-    $('res-dmg1').textContent=this.f1.statDamageDealt.toFixed(1)+'%'; $('res-dmg2').textContent=this.f2.statDamageDealt.toFixed(1)+'%';
-    $('res-combo1').textContent=this.f1.statLongestCombo+' hits'; $('res-combo2').textContent=this.f2.statLongestCombo+' hits';
-    $('res-ko1').textContent=this.f1.statKOs; $('res-ko2').textContent=this.f2.statKOs;
+    const F=this.fighters, ord=n=>['1st','2nd','3rd','4th'][n-1], cell=fn=>F.map(f=>`<td>${fn(f)}</td>`).join('');
+    $('results-table').innerHTML=`<tr><th></th>${F.map(f=>`<th style="color:${hex6(f.cd.accent)}">${f.cd.name}${f.control==='bot'?' (CPU)':''}</th>`).join('')}</tr>`+
+      (F.length>2?`<tr><td style="opacity:.6;">Place</td>${cell(f=>ord(f.placed||F.length))}</tr>`:'')+
+      `<tr><td style="opacity:.6;">Damage Dealt</td>${cell(f=>f.statDamageDealt.toFixed(1)+'%')}</tr>`+
+      `<tr><td style="opacity:.6;">Longest Combo</td>${cell(f=>f.statLongestCombo+' hits')}</tr>`+
+      `<tr><td style="opacity:.6;">KOs</td>${cell(f=>f.statKOs)}</tr>`;
   }
 
   // -------------------- MAIN LOOP --------------------
@@ -3197,16 +3244,15 @@ class Game{
       if(--this.cinematic.t<=0){ this.cinematic=null; this._hideBigText(); }
       return;
     }
-    const c1=INPUT.getCommands('p1',0);
-    const c2=this.isTraining?this._dummyCmd():(this.ai?this.ai.decide(this.f1,this.stage,this.projectiles):INPUT.getCommands('p2',1));
-    const worldFor=(opp)=>({platforms:this.stage.platforms,opp,items:this.items,occupiedLedges:[this.f1.ledge,this.f2.ledge].filter(x=>x!==null)});
-    this.f1.update(dt,c1,worldFor(this.f2));
-    this.f2.update(dt,c2,worldFor(this.f1));
-    this._updateGrab(this.f1,c1); this._updateGrab(this.f2,c2);
-    this._resolveHitbox(this.f1,this.f2); this._resolveHitbox(this.f2,this.f1);
-    this._resolveGrab(this.f1,this.f2); this._resolveGrab(this.f2,this.f1);
-    this._spawnFromActions(this.f1); this._spawnFromActions(this.f2);
-    this._handleEvents(this.f1); this._handleEvents(this.f2);
+    const live=this.fighters.filter(f=>!f.eliminated);
+    const cmds=new Map(live.map(f=>[f,this._commandFor(f)]));
+    const ledges=this.fighters.map(f=>f.ledge).filter(x=>x!==null);
+    for(const f of live) f.update(dt,cmds.get(f),{platforms:this.stage.platforms,opp:this._targetFor(f),items:this.items,occupiedLedges:ledges});
+    for(const f of live) this._updateGrab(f,cmds.get(f));
+    for(const a of live) for(const b of live) if(a!==b) this._resolveHitbox(a,b);
+    for(const a of live) for(const b of live) if(a!==b) this._resolveGrab(a,b);
+    for(const f of live) this._spawnFromActions(f);
+    for(const f of live) this._handleEvents(f);
     this._updateClones();
     const world={platforms:this.stage.platforms};
     for(const p of this.projectiles) p.update(dt,world);
@@ -3226,16 +3272,16 @@ class Game{
     }
     this.cameraRig.update(this.fighters,dt);
     this.matchFrames++;
-    this._checkKO(this.f1,this.f2);
-    if(!this.matchOver) this._checkKO(this.f2,this.f1);
+    for(const f of this.fighters) if(!this.matchOver) this._checkKO(f);
     if(!this.isTraining){ this.replayBuf.push(this._snapshot()); if(this.replayBuf.length>150) this.replayBuf.shift(); }
     else this._frameHits.length=0;
     if(this.settings.timeLimit>0 && !this.matchOver && !this.suddenDeath){
       this.timeLeft-=dt;
       if(this.timeLeft<=0){
-        const a=this.f1,b=this.f2;
-        if(a.stocks!==b.stocks) this._endMatch(a.stocks>b.stocks?a:b,'time');
-        else this._suddenDeath();
+        const alive=this.fighters.filter(f=>!f.eliminated), best=Math.max(...alive.map(f=>f.stocks)), top=alive.filter(f=>f.stocks===best);
+        if(top.length===1) this._endMatch(top[0],'time');
+        else if(this.fighters.length===2) this._suddenDeath();
+        else this._endMatch(top.reduce((w,f)=>f.percent<w.percent?f:w),'time');
       }
     }
     this._updateHUD();
@@ -3272,7 +3318,7 @@ class Game{
       const x=t*3, i=Math.min(2,Math.floor(x)), k=x-i, a=stops[i], b=stops[i+1];
       return `rgb(${a.map((v,j)=>Math.round(lerp(v,b[j],k))).join(',')})`;
     };
-    [this.f1,this.f2].forEach((f,i)=>{
+    this.fighters.forEach((f,i)=>{
       const n=i+1, el=$('hudpct-'+n);
       el.textContent=Math.floor(f.percent)+'%'; el.style.color=col(f.percent);
       const sh=this.hudShake[n];
