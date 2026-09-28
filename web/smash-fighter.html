@@ -608,8 +608,8 @@ const ARCH_COEF = {
   zoner:   { dmg:1.02, kb:1.02, spd:1.06, range:1.04 },
   grappler:{ dmg:1.13, kb:1.05, spd:0.96, range:1.12 },
   assassin:{ dmg:0.94, kb:1.00, spd:1.24, range:0.94 },
-  ranger:  { dmg:0.86, kb:0.95, spd:1.10, range:0.96 },
-  brawler: { dmg:0.98, kb:1.01, spd:1.20, range:0.90 },
+  ranger:  { dmg:0.90, kb:0.98, spd:1.12, range:0.98 },
+  brawler: { dmg:1.00, kb:1.05, spd:1.20, range:0.92 },
 };
 const BASE_MOVES = {
   jab1:{startup:3,active:3,recovery:6,dmg:2.5,bkb:5,kbg:0.85,angle:40,range:1.0,name:'Jab'},
@@ -689,16 +689,16 @@ const SPECIALS = {
     down:{name:'Vanish',startup:4,active:12,recovery:14,dmg:0,noHitbox:true,vanish:true,vanishDist:4,color:0x9b5de5},
   },
   wren:{
-    n:{name:'Crossbow Bolt',startup:12,active:4,recovery:20,dmg:4.5,bkb:5,kbg:1.1,angle:15,range:1.5,projectile:true,noHitbox:true,speed:14,pvis:'arrow',color:0x9be870},
+    n:{name:'Crossbow Bolt',startup:12,active:4,recovery:18,dmg:5,bkb:5,kbg:1.2,angle:15,range:1.5,projectile:true,noHitbox:true,speed:14,pvis:'arrow',color:0x9be870},
     side:{name:'Smoke Bomb',startup:14,active:4,recovery:20,dmg:8,bkb:10,kbg:2.0,angle:55,range:1.2,projectile:true,noHitbox:true,lob:true,lobVy:6,speed:8,pvis:'bomb',explode:1.6,color:0x9be870},
     up:{name:'Grapple Line',startup:7,active:6,recovery:14,dmg:6,bkb:8,kbg:2.2,angle:80,range:1.0,recoveryMove:true,vel:19,color:0x9be870},
     down:{name:'Snare Wire',startup:10,active:2,recovery:16,dmg:7,bkb:8,kbg:1.9,angle:75,range:0.9,trap:true,noHitbox:true,stun:24,color:0x9be870},
   },
   morrow:{
-    n:{name:'Soul Orb',startup:14,active:5,recovery:18,dmg:10,bkb:9,kbg:1.9,angle:30,range:1.6,projectile:true,noHitbox:true,speed:5.5,pvis:'orb',life:150,color:0x7cf2c8},
+    n:{name:'Soul Orb',startup:15,active:5,recovery:19,dmg:9,bkb:9,kbg:1.9,angle:30,range:1.6,projectile:true,noHitbox:true,speed:5.5,pvis:'orb',life:150,color:0x7cf2c8},
     side:{name:'Grave Spikes',startup:13,active:6,recovery:20,dmg:11,bkb:11,kbg:2.3,angle:80,range:1.2,reach:3.6,color:0x7cf2c8},
     up:{name:'Wraith Step',startup:6,active:5,recovery:16,dmg:5,bkb:6,kbg:1.8,angle:70,range:1.0,teleport:true,teleDist:8,color:0x7cf2c8},
-    down:{name:'Soul Siphon',startup:10,active:8,recovery:20,dmg:9,bkb:8,kbg:1.9,angle:60,range:1.3,aoe:true,drain:0.6,color:0x7cf2c8},
+    down:{name:'Soul Siphon',startup:10,active:8,recovery:20,dmg:9,bkb:8,kbg:1.9,angle:60,range:1.3,aoe:true,drain:0.45,color:0x7cf2c8},
   },
   rattle:{
     n:{name:'Bone Toss',startup:10,active:4,recovery:16,dmg:7,bkb:7,kbg:1.7,angle:40,range:1.3,projectile:true,noHitbox:true,lob:true,lobVy:8,speed:9,pvis:'bone',color:0xe8e0c8},
@@ -748,7 +748,7 @@ const CHAR_DATA = [
     traits:'Fast crossbow bolts, smoke bombs and snares', desc:'Cloaked crossbow ranger. Pins you down from range with bolts, bombs and snare wire.'},
   {id:'morrow',name:'Morrow the Bonecaller',color:0x2a3d4a,accent:0x7cf2c8,weight:96,walkSpeed:2.6,runSpeed:4.4,jumpVel:14.4,doubleJumpVel:12.8,fallSpeed:12.5,fastFallSpeed:20,airSpeed:3.0,size:1.02,archetype:'zoner',weapon:'Skeleton_Staff',
     traits:'Soul Siphon heals him; spikes hit at range', desc:'Skeleton necromancer. Slow soul orbs control space, grave spikes punish from afar, and his siphon steals back damage.'},
-  {id:'rattle',name:'Rattle',color:0x5a4a3a,accent:0xffb36b,weight:80,walkSpeed:3.3,runSpeed:6.3,jumpVel:15.6,doubleJumpVel:14.8,fallSpeed:14,fastFallSpeed:23,airSpeed:3.6,size:0.84,archetype:'brawler',weapon:'Skeleton_Axe',
+  {id:'rattle',name:'Rattle',color:0x5a4a3a,accent:0xffb36b,weight:85,walkSpeed:3.3,runSpeed:6.3,jumpVel:15.6,doubleJumpVel:14.8,fallSpeed:14,fastFallSpeed:23,airSpeed:3.6,size:0.84,archetype:'brawler',weapon:'Skeleton_Axe',
     traits:'Tiny hurtbox; Fall Apart dodges then bursts', desc:'A small, scrappy skeleton with a rusty axe. Fast rolls, bone tosses, and he can fall apart to dodge an attack.'},
 ];
 // one line per special for the pause-menu move list: [neutral, side, up, down, ultimate]
@@ -1001,6 +1001,7 @@ class Fighter{
   _consume(k){ if(this._buf) this._buf[k]=0; }
   canAct(){ return this.hitstun<=0 && !this.grabbedBy && !this.grabbing && this.shieldBroken<=0 && this.state!=='ledge' && !this.pose; }
   startAction(key,move){
+    this._actSerial=(this._actSerial||0)+1;
     this.action={key,move}; this.actionFrame=0; this.actionPhase='startup'; this.state='attack';
     this.chargeFrames=0; this._multiIdx=-1; this._hitTargets=new Set(); this._landedHit=false; this._countered=false;
     this._projSpawned=false; this._cloneSpawned=false; this.armorActive=false; this.counterActive=false;
@@ -1969,6 +1970,17 @@ class AIController{
         if(R()<0.3){ cmd.attackP=true; return cmd; }
       }
     }
+    // chase the Rift Orb when it is close and the rival is not right on top of us
+    const O=stage.orb;
+    if(O && f.ultMeter<100 && dist>2.2 && R()>P.rand*0.5){
+      const ox=O.pos.x-f.pos.x, oy=O.pos.y-(f.pos.y+1);
+      if(Math.abs(ox)<8){
+        if(Math.abs(ox)>0.8) toward(O.pos.x);
+        else if(oy>1.2){ if(f.grounded){ cmd.jumpP=true; cmd.jump=true; } else if(oy<2.6){ cmd.attackP=true; cmd.up=true; } else if(f.jumpsLeft>0) cmd.jumpP=true; }
+        else if(Math.abs(oy)<1.2) cmd.attackP=true;
+        return cmd;
+      }
+    }
     // incoming projectiles
     for(const pr of projectiles){
       if(pr.owner===f||pr.kind!=='bolt') continue;
@@ -2594,7 +2606,7 @@ class Game{
     this.replayBuf=[]; this._frameHits=[]; this.replaying=false; this.replayFrames=null; this.matchFrames=0;
     if(this.viz){ this.viz=null; }
     this.projectiles=[]; this.clones=[];
-    this.items=[]; this.crates=[]; this.itemsOn=this.settings.items&&!this.isTraining&&!this.isHomerun; this.crateTimer=Math.round(rand(300,480));
+    this.items=[]; this.crates=[]; this.itemsOn=this.settings.items&&!this.isTraining&&!this.isHomerun; this.crateTimer=Math.round(rand(300,480)); this.orb=null; this.orbTimer=Math.round(rand(1500,2400));
     this.timeLeft=this.settings.timeLimit; this.suddenDeath=false; this.slowmo=null;
     this.matchOver=false; this.cinematic=null; this.endTimer=0; this.frame=0;
     this.bloomPulse=0; this.flash=0;
@@ -3175,7 +3187,7 @@ class Game{
     this._elimAtEnd=this.fighters.map(f=>f.eliminated);
     this.replaying=true; this.replay={frames:this.replayFrames,i:0,sub:0}; this.replayFrames=null;
     this.projectiles.forEach(p=>p.mesh.visible=false); this.clones.forEach(c=>c.group.visible=false);
-    this.items.forEach(it=>{ it.mesh.visible=false; it.glow.visible=false; }); this.crates.forEach(c=>c.mesh.visible=false);
+    this.items.forEach(it=>{ it.mesh.visible=false; it.glow.visible=false; }); this.crates.forEach(c=>c.mesh.visible=false); if(this.orb) this.orb.g.visible=false;
     this._hideBigText(); document.getElementById('hud').classList.add('replaying');
   }
   _endReplay(){
@@ -3323,6 +3335,44 @@ class Game{
     this.items=this.items.filter(it=>!it.gone);
     this.stage.items=this.items; this.stage.crates=this.crates;
   }
+  // ---------- Rift Orb: drifts over the stage; three hits crack it and fill the breaker's ultimate ----------
+  _spawnOrb(){
+    const g=new THREE.Group();
+    const core=new THREE.Mesh(new THREE.SphereGeometry(0.5,20,14),new THREE.MeshBasicMaterial({color:0xffc070}));
+    const shell=new THREE.Mesh(new THREE.IcosahedronGeometry(0.62,1),new THREE.MeshBasicMaterial({color:0xff9a3a,wireframe:true,transparent:true,opacity:0.9,blending:THREE.AdditiveBlending}));
+    const halo=new THREE.Mesh(new THREE.SphereGeometry(0.95,16,12),new THREE.MeshBasicMaterial({color:0xff7a1a,transparent:true,opacity:0.4,blending:THREE.AdditiveBlending,depthWrite:false}));
+    g.add(core,shell,halo); this.scene.add(g);
+    const m=this.stage.main;
+    this.orb={g,shell,halo,hp:3,t:0,seed:rand(0,10),cx:m.x,top:m.y+m.h/2,w:m.w*0.45,pos:new THREE.Vector3(m.x,m.y+m.h/2+9,0),hitBy:new Map(),flash:0};
+    AUDIO.playSoul(); this._bigText('RIFT ORB!',true); this._countT.push(setTimeout(()=>this._hideBigText(),900));
+  }
+  _updateOrb(){
+    if(!this.orb){ if(this.itemsOn && !this.slowmo && --this.orbTimer<=0){ this.orbTimer=Math.round(rand(2400,3600)); this._spawnOrb(); } return; }
+    const O=this.orb; O.t++; this.stage.orb=O;
+    O.pos.set(O.cx+Math.sin(O.t*0.011+O.seed)*O.w, O.top+4.2+Math.sin(O.t*0.023+O.seed*2)*2.2, 0);
+    O.g.position.copy(O.pos); O.shell.rotation.x+=0.03; O.shell.rotation.y+=0.045; O.halo.scale.setScalar(1+0.12*Math.sin(O.t*0.2)+O.flash*0.5);
+    O.flash*=0.85; O.g.visible=!this.replaying && (O.t<1080 || O.t%8<4);
+    if(this.frame%3===0) this.particles.spawn(O.pos,1,{color:[0xffb347,0xfff4d0],speed:0.03,life:20,grav:-0.002,additive:true,size:0.08});
+    const hit=(f,key)=>{
+      if(O.hitBy.get(f)===key) return; O.hitBy.set(f,key); O.hp--; O.flash=1;
+      this.particles.spawn(O.pos,14,{color:[0xffffff,0xffb347],speed:0.2,life:14,additive:true}); this.particles.spark(O.pos,0xffffff,2);
+      AUDIO.playHit(8); AUDIO.tone(1500-O.hp*300,0.12,'triangle',0.2);
+      if(O.hp<=0){
+        f.ultMeter=100; this._floatText(f,'ULTIMATE READY!');
+        this.particles.spawn(O.pos,60,{color:[0xffb347,0xffffff,0xfff4d0],speed:0.45,life:34,additive:true,size:0.1}); this.particles.ring(O.pos,0xffb347,4,24,0.12);
+        this.flash=0.3; this.flashColor=0xffd9a0; this.bloomPulse=1.8; this.cameraRig.kick(0.6); AUDIO.playUltimate();
+        this._removeOrb();
+      }
+    };
+    for(const f of this.fighters){
+      if(f.eliminated) continue;
+      const hb=f.currentHitbox();
+      if(hb && Math.hypot(hb.x-O.pos.x,hb.y-O.pos.y)<hb.radius+0.65){ hit(f,f.action.key+':'+f._multiIdx+':'+(f._actSerial||0)); if(!this.orb) return; }
+    }
+    for(const p of this.projectiles) if(p.kind==='bolt' && !p.dead && this.fighters.includes(p.owner) && p.pos.distanceTo(O.pos)<p.radius+0.65){ p.dead=true; hit(p.owner,p); if(!this.orb) return; }
+    if(O.t>1200) this._removeOrb();
+  }
+  _removeOrb(){ const O=this.orb; if(this.stage) this.stage.orb=null; if(!O) return; this.scene.remove(O.g); O.g.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }); this.orb=null; }
   _onPickup(f,it){
     const T=ITEM_TYPES[it.type];
     if(T.heal){
@@ -3428,7 +3478,7 @@ class Game{
   _stageVictory(){
     this.projectiles.forEach(p=>p.destroy()); this.projectiles=[];
     this.fighters.forEach(f=>this._dropHeld(f,true));
-    this.items.forEach(it=>this._removeItem(it)); this.items=[]; this.crates.forEach(c=>this.scene.remove(c.mesh)); this.crates=[];
+    this.items.forEach(it=>this._removeItem(it)); this.items=[]; this.crates.forEach(c=>this.scene.remove(c.mesh)); this.crates=[]; this._removeOrb();
     this.clones.forEach(c=>this.scene.remove(c.group)); this.clones=[];
     const m=this.stage.main, top=m.y+m.h/2;
     const place=(f,x,facing,pose)=>{
@@ -3501,7 +3551,7 @@ class Game{
     const world={platforms:this.stage.platforms};
     for(const p of this.projectiles) p.update(dt,world);
     this._resolveProjectiles();
-    this._updateItems(dt);
+    this._updateItems(dt); this._updateOrb();
     if(this.hazardsOn) this._updateHazards();
     for(const f of this.fighters){
       const ph=f.state==='attack'?f.actionPhase:null;
