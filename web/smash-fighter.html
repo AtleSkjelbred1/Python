@@ -2516,6 +2516,8 @@ class Game{
     // browsers only allow audio after a user gesture: start the menu theme on the first click or key
     const firstGesture=()=>{ if(['menu','charselect','stageselect','records','controls'].includes(this.state) && !AUDIO.music) AUDIO.startMusic('menu'); };
     window.addEventListener('pointerdown',firstGesture,{once:true}); window.addEventListener('keydown',firstGesture,{once:true});
+    // soft tick when the pointer moves onto a button
+    document.addEventListener('mouseover',e=>{ const b=e.target.closest&&e.target.closest('.menu-btn,.rtile,.stage-card'); if(b&&b!==this._hoverEl&&AUDIO.ctx){ this._hoverEl=b; AUDIO.tone(1200,0.025,'sine',0.04,null,{wet:0}); } else if(!b) this._hoverEl=null; });
     INPUT.initTouch(()=>{ if(this.state==='battle') this._pause(); else if(this.state==='paused') this._resume(); });
   }
   _menuKey(code){
@@ -2612,7 +2614,8 @@ class Game{
     document.getElementById('btn-to-stage').innerHTML=mode==='arcade'?'START ARCADE &#8594;':'NEXT: SELECT STAGE &#8594;';
     this._refreshCharUI('p1'); this._refreshCharUI('p2');
   }
-  _cycleChar(who,dir){ const n=CHAR_DATA.length+1; this.selection[who]=(this.selection[who]+dir+n)%n; this._refreshCharUI(who); }
+  _cycleChar(who,dir){ const n=CHAR_DATA.length+1; this.selection[who]=(this.selection[who]+dir+n)%n; this._refreshCharUI(who); if(CHAR_DATA[this.selection[who]]) this._pickVoice(CHAR_DATA[this.selection[who]]); }
+  _pickVoice(cd){ if(!AUDIO.ctx) return; clearTimeout(this._pickT); this._pickT=setTimeout(()=>AUDIO.voice(VOICE_PITCH[cd.id]*1.2,0.28,'e',0.1,1.25),60); }
   _isRandom(who){ return !CHAR_DATA[this.selection[who]]; }
   _previewCd(who){ return CHAR_DATA[this.selection[who]]||(this._randPreview||(this._randPreview=choice(CHAR_DATA))); }
   _refreshCharUI(who){
@@ -2799,8 +2802,8 @@ class Game{
       const t=document.createElement('div'); t.className='rtile';
       t.innerHTML=`<img alt=""><div style="padding:2px 2px 0;font-weight:700;color:${hex6(cd.accent)}">${cd.name.split(' ')[0].toUpperCase()}</div><span class="badge b1">P1</span><span class="badge b2">P2</span>`;
       t.querySelector('img').src=this._portrait('p1',cd,null);
-      t.onclick=()=>{ this.selection.p1=i; this._refreshCharUI('p1'); AUDIO.playClick(); };
-      t.oncontextmenu=e=>{ e.preventDefault(); this.selection.p2=i; this._refreshCharUI('p2'); AUDIO.playClick(); };
+      t.onclick=()=>{ this.selection.p1=i; this._refreshCharUI('p1'); AUDIO.playClick(); this._pickVoice(cd); };
+      t.oncontextmenu=e=>{ e.preventDefault(); this.selection.p2=i; this._refreshCharUI('p2'); AUDIO.playClick(); this._pickVoice(cd); };
       el.appendChild(t); this._rosterTiles.push(t);
     });
     const r=document.createElement('div'); r.className='rtile';
