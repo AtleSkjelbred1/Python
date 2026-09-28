@@ -2582,7 +2582,7 @@ class Game{
     if(this.viz){ this.viz=null; }
     this.projectiles=[]; this.clones=[];
     this.items=[]; this.crates=[]; this.itemsOn=this.settings.items&&!this.isTraining&&!this.isHomerun; this.crateTimer=Math.round(rand(300,480));
-    this.timeLeft=this.settings.timeLimit; this.suddenDeath=false;
+    this.timeLeft=this.settings.timeLimit; this.suddenDeath=false; this.slowmo=null;
     this.matchOver=false; this.cinematic=null; this.endTimer=0; this.frame=0;
     this.bloomPulse=0; this.flash=0;
     const $=id=>document.getElementById(id);
@@ -2719,6 +2719,11 @@ class Game{
     if(move.spike){ if(defender.grounded){ ax=0.3*dir; ay=0.8; } else { ax=0.15*dir; ay=-1; } }
     const sp=kb*KB_TO_VEL;
     defender.vel.set(ax*sp,ay*sp,0);
+    // game-deciding blow: rough travel estimate (speed decays KB_DECAY per frame) past a blast line
+    if(!this.isTraining && !this.isHomerun && defender.stocks===1 && this.fighters.filter(f=>!f.eliminated).length===2 && !this.slowmo){
+      const d=sp*sp/(2*KB_DECAY*60), b=this.stage.blast, x=defender.pos.x+ax*d, y=defender.pos.y+1+Math.max(0,ay)*d;
+      if(x<b.l||x>b.r||y>b.t){ this.slowmo={t:50,f:defender}; this.flash=Math.max(this.flash,0.35); this.flashColor=0xffffff; AUDIO.playUltimate(); }
+    }
     defender.grounded=false; defender.onPlatform=null;
     defender.hitstun=Math.round(clamp(kb*0.34,6,80))+(move.stun||0);
     defender.state='hitstun'; defender.tumble=kb>75;
@@ -3025,6 +3030,10 @@ class Game{
     this.flash=0.3; this.flashColor=f.cd.accent; this.bloomPulse=2; this.cameraRig.kick(1.4);
     AUDIO.playKO(); AUDIO.playCrowd();
     if(this._frameHits) this._frameHits.push({ko:true,at:at.clone(),col:f.cd.accent});
+    if(f.pos.y>b.t){ // knocked out through the top: a twinkle far away in the sky
+      const star=new THREE.Vector3(clamp(f.pos.x*0.6,-14,14),b.t-6,-45);
+      setTimeout(()=>{ if(this.scene&&this.particles){ this.particles.spark(star,f.cd.accent,9); this.particles.spark(star,0xffffff,5); AUDIO.tone(2400,0.25,'triangle',0.12,3200,{wet:0.8}); } },350);
+    }
     this._dropHeld(f,true);
     if(this.isHomerun && f===this.f2){ if(this.hr.phase==='fly') this._homerunDone(); else f.respawn(0,this.stage.respawnY); return; }
     if(this.isTraining||this.isHomerun){ f.respawn(0,this.stage.respawnY); return; }
@@ -3093,6 +3102,7 @@ class Game{
   }
   _endMatch(winner,reason){
     if(this.matchOver) return;
+    this.slowmo=null;
     this.matchOver=true; this.state='gameend'; this.endTimer=0; this.winner=winner;
     this.winners=winner.team==null?[winner]:this.fighters.filter(f=>f.team===winner.team);
     this.losers=this.fighters.filter(f=>!this.winners.includes(f)); this.loser=this.losers[0];
@@ -3441,11 +3451,11 @@ class Game{
   _loop(t){
     requestAnimationFrame(tt=>this._loop(tt));
     let dtms=t-this._last; this._last=t; dtms=Math.min(dtms,80);
-    this._accum+=dtms;
+    this._accum+=dtms*(this.slowmo&&this.state==='battle'?0.22:1);
     const step=1000/60; let steps=0;
     while(this._accum>=step && steps<5){ this._fixedUpdate(1/60); this._accum-=step; steps++; }
     this._pollMenuPads();
-    this._render(this.state==='paused'?0:dtms/1000);
+    this._render(this.state==='paused'?0:dtms/1000*(this.slowmo?0.22:1));
     INPUT.endFrame();
   }
   _fixedUpdate(dt){
@@ -3490,7 +3500,8 @@ class Game{
       }
       if(f.state==='stunned' && this.frame%10===0) this.particles.spawn(new THREE.Vector3(f.pos.x,f.pos.y+2.1*f.cd.size,0.3),2,{color:0xffe066,speed:0.04,life:20,grav:0,additive:true});
     }
-    if(this.hr) this._updateHomerun(); else this.cameraRig.update(this.fighters,dt);
+    if(this.slowmo){ const f=this.slowmo.f; this.cameraRig.update(this.fighters,dt,{x:f.pos.x,y:f.pos.y+1,dist:11}); if(--this.slowmo.t<=0||f.state==='respawn'||f.eliminated) this.slowmo=null; }
+    else if(this.hr) this._updateHomerun(); else this.cameraRig.update(this.fighters,dt);
     this.matchFrames++;
     for(const f of this.fighters) if(!this.matchOver) this._checkKO(f);
     if(!this.isTraining){ this.replayBuf.push(this._snapshot()); if(this.replayBuf.length>150) this.replayBuf.shift(); }
