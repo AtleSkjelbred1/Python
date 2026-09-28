@@ -2014,7 +2014,7 @@ class CameraRig{
       dist=clamp(14+Math.max(maxX-minX,(maxY-minY)*1.5)*0.85,15,40);
     }
     dist*=1-this.punch*0.14; this.punch*=0.9; // brief push-in on heavy hits
-    const target=new THREE.Vector3(mx,my+dist*0.14,dist);
+    const target=new THREE.Vector3(mx+(focus&&focus.ox||0),my+dist*0.14,dist-(focus&&focus.ox?Math.abs(focus.ox)*0.3:0));
     const t=1-Math.pow(focus?0.02:0.0008,dt);
     this.camera.position.lerp(target,t);
     this.look.lerp(new THREE.Vector3(mx,my,0),t);
@@ -3924,7 +3924,11 @@ class Game{
       for(const f of this.fighters){ f.walkCycle+=dt; f.update(dt,EMPTY_CMD,{platforms:this.stage.platforms}); }
       if(this.endTimer%40===0) this.particles.spawn(new THREE.Vector3(this.winner.pos.x,this.winner.pos.y+3,0.5),14,{color:[this.winner.cd.accent,0xffd166],speed:0.2,life:40,additive:true});
       const m=this.stage.main;
-      this.cameraRig.update(this.fighters,dt,{x:m.x,y:m.y+m.h/2+0.4,dist:10.5});
+      // slow orbit around the lineup, with confetti drifting down
+      const a=(this.endTimer-55)*0.012;
+      this.cameraRig.update(this.fighters,dt,{x:m.x,y:m.y+m.h/2+0.4,dist:10.5,ox:Math.sin(a)*3.2});
+      if(this.endTimer%3===0) this.particles.spawn(new THREE.Vector3(m.x+rand(-7,7),m.y+m.h/2+8,rand(-1,2)),2,
+        {color:[0xff5a5a,0xffd166,0x6bff9a,0x4aa3ff,0xb48cff,0xffffff],speed:0.03,grav:0.0015,drag:0.995,life:160,size:0.12,upBias:-0.2});
     } else this.cameraRig.update(this.fighters.filter(f=>!f.eliminated),dt);
     this._updateHUD();
   }
