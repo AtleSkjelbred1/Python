@@ -299,12 +299,13 @@
         <tr><td>Special</td><td>Y</td></tr>
         <tr><td>Shield</td><td>B / RB</td></tr>
         <tr><td>Grab</td><td>LB</td></tr>
+        <tr><td>Smash / aerial</td><td>Right stick</td></tr>
         <tr><td>Taunt</td><td>LT / RT</td></tr>
         <tr><td>Pause</td><td>Start</td></tr>
       </table>
     </div>
     <div class="tips">
-      Direction + Attack = tilt (while running: dash attack) · hold Attack = charged smash · Jab ×3 by tapping Attack · Up also jumps (turn off under Tap Jump) · Tap Jump = short hop, hold = higher jump<br>
+      Direction + Attack pressed together = smash (hold Attack to charge) · direction already held + Attack = tilt · while running: dash attack · Jab ×3 by tapping Attack · Up also jumps (turn off under Tap Jump) · Tap Jump = short hop, hold = higher jump<br>
       Down in the air = fast fall · Down on a thin platform = drop through · Shield + direction = roll, Shield + down = spot dodge<br>
       Specials go through shields · Shield at the moment of impact = parry · Shield in the air = air dodge · Grab, then a direction = throw (Attack = pummel)<br>
       At a ledge: toward/up = climb, Jump, Attack = get-up attack, Shield = roll, away/down = let go · Nyx &amp; Vex can wall jump<br>
@@ -568,7 +569,7 @@ class InputManager{
     let left=this.down(km.left), right=this.down(km.right), up=this.down(km.up), down=this.down(km.down);
     let jump=this.down(km.jump), attack=this.down(km.attack), special=this.down(km.special), shield=this.down(km.shield), grab=this.down(km.grab);
     let jumpP=this.pressed(km.jump), attackP=this.pressed(km.attack), specialP=this.pressed(km.special), shieldP=this.pressed(km.shield), grabP=this.pressed(km.grab), tauntP=this.pressed(km.taunt);
-    let axisX=0, axisY=0;
+    let axisX=0, axisY=0, cStick=null;
     const gp=gpIndex!=null?this.getGamepad(gpIndex):null;
     if(gp){
       const prev=this.gpPrev[gpIndex]||{};
@@ -583,11 +584,14 @@ class InputManager{
       jumpP=jumpP||(gJump&&!prev.jump); attackP=attackP||(gAttack&&!prev.attack);
       specialP=specialP||(gSpecial&&!prev.special); shieldP=shieldP||(gShield&&!prev.shield); grabP=grabP||(gGrab&&!prev.grab);
       const gTaunt=btn(6)||btn(7); tauntP=tauntP||(gTaunt&&!prev.taunt);
-      this.gpPrev[gpIndex]={jump:gJump,attack:gAttack,special:gSpecial,shield:gShield,grab:gGrab,taunt:gTaunt};
+      // right stick = C-stick: a flick is an instant smash (grounded) or aerial (airborne) in that direction
+      const rx=gp.axes[2]||0, ry=gp.axes[3]||0, rOn=Math.max(Math.abs(rx),Math.abs(ry))>0.6;
+      if(rOn && !prev.rOn) cStick=Math.abs(rx)>=Math.abs(ry)?(rx<0?'left':'right'):(ry<0?'up':'down');
+      this.gpPrev[gpIndex]={jump:gJump,attack:gAttack,special:gSpecial,shield:gShield,grab:gGrab,taunt:gTaunt,rOn};
     }
     if(left) axisX=-1; if(right) axisX=1;
     if(up) axisY=-1; if(down) axisY=1;
-    return { left,right,up,down,jump,attack,special,shield,grab,jumpP,attackP,specialP,shieldP,grabP,tauntP,axisX,axisY };
+    return { left,right,up,down,jump,attack,special,shield,grab,jumpP,attackP,specialP,shieldP,grabP,tauntP,cStick,axisX,axisY };
   }
 }
 const INPUT = new InputManager();
@@ -914,7 +918,8 @@ function knockbackScore(percentAfterHit,dmg,weight,kbg,bkb){
 const EMPTY_CMD={left:false,right:false,up:false,down:false,jump:false,attack:false,special:false,shield:false,grab:false,
   jumpP:false,attackP:false,specialP:false,shieldP:false,grabP:false,axisX:0,axisY:0};
 const TAP_JUMP={on:true}; // Up (W / arrow up / stick up) also jumps, like Smash's default
-const RUN_DELAY=7;          // frames a direction is held before walking turns into a run
+const RUN_DELAY=7;
+const SMASH_WINDOW=3;       // frames between a fresh direction press and Attack that still count as a smash          // frames a direction is held before walking turns into a run
 const BUFFER_FRAMES=6, BUFFER_KEYS=['attackP','specialP','jumpP','grabP'];
 const ITEM_THROW=new Move('itemThrow',{startup:5,active:2,recovery:10,dmg:0,noHitbox:true,itemThrow:true,name:'Item Throw'});
 const LEDGE_ATTACK=new Move('ledgeAttack',{startup:8,active:4,recovery:16,dmg:8,bkb:12,kbg:1.2,angle:30,range:1.2,name:'Ledge Attack'});
@@ -1023,6 +1028,11 @@ class Fighter{
   // ---------------- input -> action selection ----------------
   chooseAction(cmd){
     const mv=this.moveset;
+    if(cmd.cStick && !this.held){
+      const c=cmd.cStick, side=c==='left'||c==='right', dir=c==='left'?-1:1;
+      if(this.grounded){ if(side) this.facing=dir; const k=side?'smashSide':(c==='up'?'smashUp':'smashDown'); this.startAction(k,mv[k]); return true; }
+      const k=c==='up'?'aerialU':c==='down'?'aerialD':(dir===this.facing?'aerialF':'aerialB'); this.startAction(k,mv[k]); return true;
+    }
     if(cmd.attackP && !this.held) this._consume('attackP');
     if(this.held && (cmd.attackP||cmd.grabP) && !cmd.specialP){
       this._consume('attackP'); this._consume('grabP');
@@ -1054,9 +1064,13 @@ class Fighter{
         return true;
       }
       if(this.state==='run'){ this.startAction('dash',mv.dash); return true; }
-      if(cmd.down){ this.startAction('tiltDown',mv.tiltDown); return true; }
-      if(cmd.up){ this.startAction('tiltUp',mv.tiltUp); return true; }
-      if(cmd.left||cmd.right){ this.startAction('tiltSide',mv.tiltSide); return true; }
+      // humans: a direction pressed together with attack (within SMASH_WINDOW frames) is a smash, a direction
+      // already held is a tilt. Bots still upgrade a tilt by holding attack.
+      const human=this.control==='p1'||this.control==='p2', flick=human&&this._dirAge<=SMASH_WINDOW;
+      const pick=(dir,tilt,smash)=>{ const k=(flick&&this._dirKind===dir)?smash:tilt; this.startAction(k,mv[k]); return true; };
+      if(cmd.down) return pick('down','tiltDown','smashDown');
+      if(cmd.up) return pick('up','tiltUp','smashUp');
+      if(cmd.left||cmd.right) return pick('side','tiltSide','smashSide');
       let key='jab1';
       if(this.jabWindow>0 && this._lastJab==='jab1') key='jab2';
       else if(this.jabWindow>0 && this._lastJab==='jab2') key='jab3';
@@ -1085,6 +1099,11 @@ class Fighter{
     if(!this._buf) this._buf={};
     cmd=Object.assign({},cmd);
     const upP=cmd.up && !this._prevUp; this._prevUp=cmd.up;
+    this._prevL=this._lastL; this._prevR=this._lastR; this._lastL=cmd.left; this._lastR=cmd.right;
+    // how many frames ago a direction was freshly pressed (for smash-vs-tilt on digital input)
+    const lP=cmd.left&&!this._prevL, rP=cmd.right&&!this._prevR, dP=cmd.down&&!this._prevDn; this._prevDn=cmd.down;
+    this._dirAge=(this._dirAge==null?99:this._dirAge+1);
+    if(lP||rP){ this._dirAge=0; this._dirKind='side'; } else if(upP){ this._dirAge=0; this._dirKind='up'; } else if(dP){ this._dirAge=0; this._dirKind='down'; }
     if(TAP_JUMP.on && (this.control==='p1'||this.control==='p2')){
       if(upP && !cmd.attackP && !cmd.specialP && this.state!=='ledge' && !this.grabbing) cmd.jumpP=true;
       if(cmd.up) cmd.jump=true;
@@ -1174,7 +1193,12 @@ class Fighter{
     }
     if(grounded){
       if(cmd.shieldP||this.state==='shield'){
-        if(cmd.left||cmd.right){ this.shielding=false; this._startRoll(cmd.left?-1:1); this._physics(dt,world); return; }
+        // humans: shield first, then a fresh direction press rolls (or down spot-dodges); pressing both together
+        // also rolls. Holding a direction while raising the shield just blocks. Bots keep the same-frame rule.
+        const human=this.control==='p1'||this.control==='p2';
+        const lp=cmd.left&&!this._prevL, rp=cmd.right&&!this._prevR;
+        const rollDir=human?(lp?-1:rp?1:0):(cmd.left?-1:cmd.right?1:0);
+        if(rollDir){ this.shielding=false; this._startRoll(rollDir); this._physics(dt,world); return; }
         if(cmd.down && (cmd.shieldP||downP)){ this.shielding=false; this._startSpotDodge(); this._physics(dt,world); return; }
       }
       if(cmd.shield){
@@ -1355,7 +1379,7 @@ class Fighter{
     let m=a.move;
     this.actionFrame++;
     // holding attack through a tilt's startup upgrades it into the matching chargeable smash
-    if(m.id.indexOf('tilt')===0 && this._chargeHeld && this.actionFrame>3){
+    if(m.id.indexOf('tilt')===0 && this._chargeHeld && this.actionFrame>3 && !(this.control==='p1'||this.control==='p2')){
       const k='smash'+m.id.slice(4), sm=this.moveset[k];
       if(sm){ this.action={key:k,move:sm}; this.actionFrame=1; this.chargeFrames=0; this._hitTargets.clear(); m=sm; }
     }
@@ -2568,7 +2592,7 @@ class Game{
     try{ localStorage.setItem('riftclash.guide',seen+1); }catch(e){}
     const k=KEYMAP.p1, L=keyLabel, jump=TAP_JUMP.on?`<kbd>${L(k.jump)}</kbd> or <kbd>${L(k.up)}</kbd>`:`<kbd>${L(k.jump)}</kbd>`;
     el.innerHTML=`<b>P1</b> move <kbd>${L(k.left)}</kbd><kbd>${L(k.right)}</kbd> · jump ${jump} (hold = higher) · attack <kbd>${L(k.attack)}</kbd> · special <kbd>${L(k.special)}</kbd> · shield <kbd>${L(k.shield)}</kbd> · grab <kbd>${L(k.grab)}</kbd><br>`+
-      `hold a direction + attack = strong attack · hold attack = charged smash · ${L(k.special)}+${L(k.shield)} = ultimate · Esc = pause & move list`;
+      `direction + attack together = smash (hold to charge) · hold a direction, then attack = quick tilt · ${L(k.special)}+${L(k.shield)} = ultimate · Esc = pause & move list`;
     el.style.opacity=1; el.classList.remove('hidden');
     this._guideT=setTimeout(()=>{ el.style.opacity=0; },this.isTraining?9000:7000);
   }
