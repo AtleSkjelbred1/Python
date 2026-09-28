@@ -150,6 +150,9 @@
   .movelist > div{ flex:1; background:rgba(255,255,255,.03); border:1px solid #2c3140; border-radius:10px; padding:8px 10px; }
   .movelist b{ color:#ffb347; } .movelist .mh{ font-weight:800; letter-spacing:1px; margin-bottom:3px; }
   #screen-pause .panel{ max-height:94vh; overflow-y:auto; }
+  #ctrl-guide{ position:absolute; top:78px; left:50%; transform:translateX(-50%); background:rgba(10,12,18,.8); border:1px solid rgba(255,179,71,.5);
+    border-radius:10px; padding:10px 16px; font-size:13px; line-height:1.7; text-align:center; transition:opacity .6s; pointer-events:none; }
+  #ctrl-guide b{ color:#ffb347; } #ctrl-guide kbd{ background:#1c2230; border:1px solid #3d4658; border-radius:4px; padding:0 5px; font-family:monospace; }
   .rec-h{ letter-spacing:2px; font-size:12px; color:#ffb347; margin:10px 0 2px 0; }
   #win-quote{ font-style:italic; opacity:.85; font-size:15px; margin-top:4px; text-shadow:0 2px 8px #000; }
   #unlock-note{ color:#ffd166; font-size:14px; letter-spacing:1px; min-height:18px; margin-top:4px; }
@@ -194,6 +197,7 @@
     <span class="sl">MUSIC</span><div id="music-chips" class="cs-mode-select"></div>
     <span class="sl">GRAPHICS</span><div id="gfx-chips" class="cs-mode-select"></div>
     <span class="sl">BOT</span><div id="diff-chips" class="cs-mode-select"></div>
+    <span class="sl">TAP JUMP</span><div id="tapjump-chips" class="cs-mode-select"></div>
   </div>
 </div>
 
@@ -248,6 +252,7 @@
   <div id="hud-players"></div>
   <div id="hud-timer">2:00</div>
   <div id="hud-offscreen"></div>
+  <div id="ctrl-guide" class="hidden"></div>
   <div id="hud-combo"><div class="cc" id="combo-count"></div><div class="cd" id="combo-dmg"></div></div>
   <div id="big-text"></div>
   <div id="stage-label"></div>
@@ -299,7 +304,7 @@
       </table>
     </div>
     <div class="tips">
-      Tap a direction + Attack = tilt · hold Attack = charged smash · Jab ×3 by tapping Attack · Tap Jump = short hop, hold Jump = higher jump (also on the double jump)<br>
+      Direction + Attack = tilt (while running: dash attack) · hold Attack = charged smash · Jab ×3 by tapping Attack · Up also jumps (turn off under Tap Jump) · Tap Jump = short hop, hold = higher jump<br>
       Down in the air = fast fall · Down on a thin platform = drop through · Shield + direction = roll, Shield + down = spot dodge<br>
       Specials go through shields · Shield at the moment of impact = parry · Shield in the air = air dodge · Grab, then a direction = throw (Attack = pummel)<br>
       At a ledge: toward/up = climb, Jump, Attack = get-up attack, Shield = roll, away/down = let go · Nyx &amp; Vex can wall jump<br>
@@ -908,6 +913,8 @@ function knockbackScore(percentAfterHit,dmg,weight,kbg,bkb){
 }
 const EMPTY_CMD={left:false,right:false,up:false,down:false,jump:false,attack:false,special:false,shield:false,grab:false,
   jumpP:false,attackP:false,specialP:false,shieldP:false,grabP:false,axisX:0,axisY:0};
+const TAP_JUMP={on:true}; // Up (W / arrow up / stick up) also jumps, like Smash's default
+const RUN_DELAY=7;          // frames a direction is held before walking turns into a run
 const BUFFER_FRAMES=6, BUFFER_KEYS=['attackP','specialP','jumpP','grabP'];
 const ITEM_THROW=new Move('itemThrow',{startup:5,active:2,recovery:10,dmg:0,noHitbox:true,itemThrow:true,name:'Item Throw'});
 const LEDGE_ATTACK=new Move('ledgeAttack',{startup:8,active:4,recovery:16,dmg:8,bkb:12,kbg:1.2,angle:30,range:1.2,name:'Ledge Attack'});
@@ -1077,6 +1084,11 @@ class Fighter{
     this.walkCycle+=dt;
     if(!this._buf) this._buf={};
     cmd=Object.assign({},cmd);
+    const upP=cmd.up && !this._prevUp; this._prevUp=cmd.up;
+    if(TAP_JUMP.on && (this.control==='p1'||this.control==='p2')){
+      if(upP && !cmd.attackP && !cmd.specialP && this.state!=='ledge' && !this.grabbing) cmd.jumpP=true;
+      if(cmd.up) cmd.jump=true;
+    }
     for(const k of BUFFER_KEYS){
       if(cmd[k]) this._buf[k]=BUFFER_FRAMES;
       else if(this._buf[k]>0){ if(this.hitstop<=0) this._buf[k]--; if(this._canUseBuffer()) cmd[k]=true; }
@@ -1136,6 +1148,7 @@ class Fighter{
     }
     if(this.state==='land'){ this.landTimer--; this.vel.x*=0.75; this._physics(dt,world); if(this.landTimer<=0) this.state='idle'; return; }
     if(this.state==='jumpsquat'){
+      if(cmd.up && (cmd.attackP||cmd.specialP)){ this.state='idle'; if(this.chooseAction(cmd)){ this._physics(dt,world); return; } this.state='jumpsquat'; }
       this.jumpSquat--; this.vel.x*=0.9;
       if(this.jumpSquat<=0){
         const full=cmd.jump; // released during jumpsquat -> short hop
@@ -1191,13 +1204,16 @@ class Fighter{
         this._physics(dt,world); return;
       }
       if(cmd.left||cmd.right){
-        const running=Math.abs(this.vel.x)>this.cd.walkSpeed*0.8;
+        const dir=cmd.left?-1:1;
+        this._runHold=(this._runDir===dir?(this._runHold||0)+1:1); this._runDir=dir;
+        const running=this.state==='run'&&Math.sign(this.vel.x)===dir || this._runHold>=RUN_DELAY;
         const target=(cmd.left?-1:1)*(running?this.cd.runSpeed:this.cd.walkSpeed);
         this.vel.x=lerp(this.vel.x,target,0.35);
         const was=this.state; this.state=running?'run':'walk';
         if(this.state==='run' && was!=='run') this.events.push({type:'dust',dir:this.facing});
         if(Math.sign(this.vel.x)!==Math.sign(target) && Math.abs(this.vel.x)>this.cd.walkSpeed) this.events.push({type:'dust',dir:-Math.sign(this.vel.x),skid:true});
       } else {
+        this._runHold=0;
         this.vel.x=lerp(this.vel.x,0,0.4);
         this.state=cmd.down?'crouch':'idle';
       }
@@ -1212,10 +1228,11 @@ class Fighter{
           this.state='doublejump'; this.stateTimer=0; this.events.push({type:'jump2'});
         }
       }
-      const accel=this.cd.airSpeed*2.2, maxA=this.cd.airSpeed*2.4;
-      if(cmd.left) this.vel.x=Math.max(-maxA,this.vel.x-accel*dt*3);
-      else if(cmd.right) this.vel.x=Math.min(maxA,this.vel.x+accel*dt*3);
-      else if(!this.cd.sandbag) this.vel.x=lerp(this.vel.x,0,0.05); // the sandbag keeps its momentum
+      // air drift: reach full speed in ~10 frames, and settle quickly when the stick is let go
+      const accel=this.cd.airSpeed*2.4*6, maxA=this.cd.airSpeed*2.4;
+      if(cmd.left) this.vel.x=this.vel.x>-maxA?Math.max(-maxA,this.vel.x-accel*dt*(this.vel.x>0?1.6:1)):lerp(this.vel.x,-maxA,0.06);
+      else if(cmd.right) this.vel.x=this.vel.x<maxA?Math.min(maxA,this.vel.x+accel*dt*(this.vel.x<0?1.6:1)):lerp(this.vel.x,maxA,0.06);
+      else if(!this.cd.sandbag) this.vel.x=lerp(this.vel.x,0,0.1); // the sandbag keeps its momentum
       if(downP && this.vel.y<=2 && !this.fastFalling){ this.fastFalling=true; this.vel.y=-this.cd.fastFallSpeed; }
       if(this.state==='doublejump'){ if(++this.stateTimer>22) this.state=this.vel.y>0?'jump':'fall'; }
       else this.state=this.vel.y>0?'jump':'fall';
@@ -2100,7 +2117,7 @@ class Game{
     this.camera.position.set(0,8,26);
     this.postfx=new PostFX(this.renderer);
     window.addEventListener('resize',()=>this._resize()); this._resize();
-    this.settings=Object.assign({stocks:3,timeLimit:0,mode:'vs',botDifficulty:'medium',hazards:true,items:true,music:true,graphics:'high'},this._loadSettings());
+    this.settings=Object.assign({stocks:3,timeLimit:0,mode:'vs',botDifficulty:'medium',hazards:true,items:true,music:true,graphics:'high',tapJump:true},this._loadSettings());
     this.selection={p1:0,p2:1,stageIdx:0,colors:{p1:'default',p2:'default'}};
     this.training={dummy:'stand',hitboxes:true};
     PROFILE.load();
@@ -2115,7 +2132,7 @@ class Game{
     requestAnimationFrame(t=>this._loop(t));
   }
   _loadSettings(){ try{ return JSON.parse(localStorage.getItem('riftclash.settings.v1'))||{}; }catch(e){ return {}; } }
-  _saveSettings(){ try{ const s=this.settings; localStorage.setItem('riftclash.settings.v1',JSON.stringify({stocks:s.stocks,timeLimit:s.timeLimit,botDifficulty:s.botDifficulty,hazards:s.hazards,items:s.items,music:s.music,graphics:s.graphics})); }catch(e){} }
+  _saveSettings(){ try{ const s=this.settings; localStorage.setItem('riftclash.settings.v1',JSON.stringify({stocks:s.stocks,timeLimit:s.timeLimit,botDifficulty:s.botDifficulty,hazards:s.hazards,items:s.items,music:s.music,graphics:s.graphics,tapJump:s.tapJump})); }catch(e){} }
   // LOW trades shadows and resolution for frame rate on weaker machines
   _applyGraphics(){
     const low=this.settings.graphics==='low'; LOW_GFX.on=low;
@@ -2147,6 +2164,8 @@ class Game{
     this._chipRow($('item-chips'),[{label:'ON',value:true},{label:'OFF',value:false}],S.items,set('items'));
     this._chipRow($('music-chips'),[{label:'ON',value:true},{label:'OFF',value:false}],S.music,v=>{ set('music')(v); AUDIO.musicOn=v; if(!v) AUDIO.stopMusic(); });
     this._chipRow($('gfx-chips'),[{label:'HIGH',value:'high'},{label:'LOW',value:'low'}],S.graphics,v=>{ set('graphics')(v); this._applyGraphics(); });
+    this._chipRow($('tapjump-chips'),[{label:'UP JUMPS',value:true},{label:'OFF',value:false}],S.tapJump,v=>{ set('tapJump')(v); TAP_JUMP.on=v; });
+    TAP_JUMP.on=S.tapJump;
     AUDIO.musicOn=S.music; this._applyGraphics();
     $('btn-1v1').onclick=()=>{ this.settings.mode='vs'; this._toCharSelect(); };
     $('btn-cpu').onclick=()=>{ this.settings.mode='cpu'; this._toCharSelect(); };
@@ -2537,9 +2556,21 @@ class Game{
     $('training-panel').classList.toggle('hidden',!this.isTraining);
     $('hud').classList.remove('replaying'); $('unlock-note').textContent='';
     $('big-text').style.opacity=0;
-    this._updateHUD();
+    this._updateHUD(); this._showGuide();
     if(this.isTraining){ this._matchRunning=true; this._countT=[]; this._bigText('TRAINING',true); this._countT.push(setTimeout(()=>this._hideBigText(),900)); AUDIO.startMusic(this.stageData.theme); }
     else this._runCountdown();
+  }
+  // a short controls reminder for the first few matches (and every training session)
+  _showGuide(){
+    const el=document.getElementById('ctrl-guide'); clearTimeout(this._guideT);
+    let seen=0; try{ seen=+localStorage.getItem('riftclash.guide')||0; }catch(e){}
+    if(seen>=3 && !this.isTraining){ el.classList.add('hidden'); return; }
+    try{ localStorage.setItem('riftclash.guide',seen+1); }catch(e){}
+    const k=KEYMAP.p1, L=keyLabel, jump=TAP_JUMP.on?`<kbd>${L(k.jump)}</kbd> or <kbd>${L(k.up)}</kbd>`:`<kbd>${L(k.jump)}</kbd>`;
+    el.innerHTML=`<b>P1</b> move <kbd>${L(k.left)}</kbd><kbd>${L(k.right)}</kbd> · jump ${jump} (hold = higher) · attack <kbd>${L(k.attack)}</kbd> · special <kbd>${L(k.special)}</kbd> · shield <kbd>${L(k.shield)}</kbd> · grab <kbd>${L(k.grab)}</kbd><br>`+
+      `hold a direction + attack = strong attack · hold attack = charged smash · ${L(k.special)}+${L(k.shield)} = ultimate · Esc = pause & move list`;
+    el.style.opacity=1; el.classList.remove('hidden');
+    this._guideT=setTimeout(()=>{ el.style.opacity=0; },this.isTraining?9000:7000);
   }
   _buildHUD(){
     const n=this.fighters.length, row=document.getElementById('hud-players'), off=document.getElementById('hud-offscreen');
