@@ -312,7 +312,7 @@
       Down in the air = fast fall · Down on a thin platform = drop through · Shield + direction = roll, Shield + down = spot dodge<br>
       Specials go through shields · Shield at the moment of impact = parry · Shield in the air = air dodge · Grab, then a direction = throw (Attack = pummel)<br>
       At a ledge: toward/up = climb, Jump, Attack = get-up attack, Shield = roll, away/down = let go · Nyx &amp; Vex can wall jump<br>
-      Items: hit a crate to break it · Attack or Grab next to an item picks it up · Attack while holding = throw (hold up/down/sideways to aim) · potions heal on pickup
+      Items: hit a crate to break it · Attack or Grab next to an item picks it up · Attack while holding = throw (hold up/down/sideways to aim) · potions heal on pickup · the Rune Wand shoots bolts (Up/Down+Attack or Grab throws it)
     </div>
     <div class="gp-status" id="gp-status">Gamepads: none connected</div>
     <div class="gp-status">Characters, animations and stage props: KayKit by Kay Lousberg (kaylousberg.com), CC0.</div>
@@ -946,6 +946,7 @@ const TAP_JUMP={on:true}; // Up (W / arrow up / stick up) also jumps, like Smash
 const RUN_DELAY=7;
 const SMASH_WINDOW=3;       // frames between a fresh direction press and Attack that still count as a smash          // frames a direction is held before walking turns into a run
 const BUFFER_FRAMES=6, BUFFER_KEYS=['attackP','specialP','jumpP','grabP'];
+const ITEM_SHOOT=new Move('itemShoot',{name:'Rune Bolt',startup:6,active:2,recovery:12,dmg:6,bkb:7,kbg:1.35,angle:25,projectile:true,noHitbox:true,speed:16,pvis:'fire',color:0xb48cff,itemShoot:true});
 const ITEM_THROW=new Move('itemThrow',{startup:5,active:2,recovery:10,dmg:0,noHitbox:true,itemThrow:true,name:'Item Throw'});
 const LEDGE_ATTACK=new Move('ledgeAttack',{startup:8,active:4,recovery:16,dmg:8,bkb:12,kbg:1.2,angle:30,range:1.2,name:'Ledge Attack'});
 const LOW_GFX={on:false};
@@ -1084,6 +1085,10 @@ class Fighter{
       const k=c==='up'?'aerialU':c==='down'?'aerialD':(dir===this.facing?'aerialF':'aerialB'); this.startAction(k,mv[k]); return true;
     }
     if(cmd.attackP && !this.held) this._consume('attackP');
+    if(this.held && this.held.charges>0 && cmd.attackP && !cmd.grabP && !cmd.up && !cmd.down && !cmd.specialP){
+      this._consume('attackP'); if(cmd.left||cmd.right) this.facing=cmd.left?-1:1;
+      this.startAction('itemShoot',ITEM_SHOOT); return true;
+    }
     if(this.held && (cmd.attackP||cmd.grabP) && !cmd.specialP){
       this._consume('attackP'); this._consume('grabP');
       this._throwDir=cmd.up?'up':cmd.down?'down':(cmd.left?-1:cmd.right?1:this.facing);
@@ -2235,6 +2240,8 @@ const ITEM_TYPES={
   axe:{name:'Throwing Axe',model:'axe_1handed',scale:0.9,weight:0.35,
     move:new Move('itemAxe',{name:'Throwing Axe',dmg:10,bkb:10,kbg:2.1,angle:35,pvis:'item',model:'axe_1handed',scale:0.9,gravity:6,spin:0.45,radius:0.5,color:0xd8d8d8})},
   potion:{name:'Healing Potion',model:'bottle_A_green',scale:0.9,weight:0.25,heal:30},
+  wand:{name:'Rune Wand',model:'Skeleton_Staff',scale:0.55,weight:0.2,charges:6,
+    move:new Move('itemWand',{name:'Rune Wand',dmg:6,bkb:8,kbg:1.6,angle:35,pvis:'item',model:'Skeleton_Staff',scale:0.55,gravity:8,spin:0.4,radius:0.5,color:0xb48cff})},
 };
 function pickItemType(){ let r=Math.random(); for(const k in ITEM_TYPES){ r-=ITEM_TYPES[k].weight; if(r<=0) return k; } return 'bomb'; }
 
@@ -2321,7 +2328,7 @@ class Game{
     this._chipRow($('tp-hitbox'),[{label:'Show',value:true},{label:'Hide',value:false}],true,v=>{ this.training.hitboxes=v; });
     $('tp-reset').onclick=()=>this._trainingReset();
     this._chipRow($('tp-speed'),[{label:'1×',value:1},{label:'½×',value:0.5},{label:'¼×',value:0.25}],1,v=>{ this.training.speed=v; });
-    this._chipRow($('tp-items'),[{label:'Bomb',value:'bomb'},{label:'Axe',value:'axe'},{label:'Potion',value:'potion'},{label:'Crate',value:'crate'}],null,v=>{
+    this._chipRow($('tp-items'),[{label:'Bomb',value:'bomb'},{label:'Axe',value:'axe'},{label:'Potion',value:'potion'},{label:'Wand',value:'wand'},{label:'Crate',value:'crate'}],null,v=>{
       if(!this.f1||!this.isTraining) return;
       if(v==='crate') this._spawnCrate(); else this._spawnItem(v,new THREE.Vector3(this.f1.pos.x+this.f1.facing*1.5,this.f1.pos.y+3,0),new THREE.Vector3(0,2,0));
       setTimeout(()=>[...$('tp-items').children].forEach(x=>x.classList.remove('active')),200);
@@ -2959,6 +2966,10 @@ class Game{
       const vel=new THREE.Vector3(f.facing*(m.speed||8),lob?(m.lobVy||7):0,0);
       this.projectiles.push(new Projectile(this.scene,f,m,pos,vel,'bolt'));
       AUDIO.playShot(m.pvis);
+      if(m.itemShoot && f.held && --f.held.charges<=0){ // wand spent: it crumbles away
+        const at=new THREE.Vector3(); f.held.mesh.getWorldPosition(at);
+        this.particles.spawn(at,16,{color:[0xb48cff,0xffffff],speed:0.12,life:20,additive:true}); this._dropHeld(f,true);
+      }
     }
     if(m.itemThrow && !f._projSpawned && f.held){
       f._projSpawned=true; this._throwItem(f);
@@ -3384,7 +3395,7 @@ class Game{
     const T=ITEM_TYPES[type], mesh=MODELS.item(T.model); mesh.scale.setScalar(T.scale); this.scene.add(mesh);
     const glow=new THREE.Mesh(new THREE.RingGeometry(0.35,0.5,24),new THREE.MeshBasicMaterial({color:type==='potion'?0x6bff9a:0xffd27a,transparent:true,opacity:0.6,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending}));
     glow.rotation.x=-Math.PI/2; this.scene.add(glow);
-    this.items.push({type,pos:pos.clone(),vel:vel||new THREE.Vector3(),mesh,glow,age:0,taken:false,grounded:false});
+    this.items.push({type,pos:pos.clone(),vel:vel||new THREE.Vector3(),mesh,glow,age:0,taken:false,grounded:false,charges:T.charges||0});
   }
   _removeItem(it){ this.scene.remove(it.mesh); this.scene.remove(it.glow); it.glow.geometry.dispose(); it.glow.material.dispose(); it.gone=true; }
   _updateItems(dt){
@@ -3848,7 +3859,7 @@ const MODELS={
     this._measureHits();
   },
   prop(name){ const o=this.props.getObjectByName(name)||this.props2.getObjectByName(name); return o?o.clone():new THREE.Group(); },
-  item(name){ const o=this.items.getObjectByName(name); return o?o.clone():new THREE.Group(); },
+  item(name){ const o=this.items.getObjectByName(name)||this.templates[name]; return o?o.clone():new THREE.Group(); },
   // The strike moment of each clip = where the hands and feet move fastest. Attacks are time-warped so that
   // moment lands exactly on the move's first active frame.
   _measureHits(){
@@ -3901,7 +3912,7 @@ const ANIM_COMMON={
   tiltSide:'1H_Melee_Attack_Slice_Horizontal',tiltUp:'Spellcast_Raise',tiltDown:'Unarmed_Melee_Attack_Kick',
   smashSide:'2H_Melee_Attack_Chop',smashUp:'2H_Melee_Attack_Spin',smashDown:'2H_Melee_Attack_Spinning',
   aerialN:'2H_Melee_Attack_Spin',aerialF:'1H_Melee_Attack_Chop',aerialB:'Unarmed_Melee_Attack_Kick',aerialU:'Spellcast_Raise',aerialD:'2H_Melee_Attack_Chop',
-  grab:'Interact',itemThrow:'Throw',ledgeAttack:'1H_Melee_Attack_Slice_Horizontal',ultimate:'2H_Melee_Attack_Chop',
+  grab:'Interact',itemThrow:'Throw',itemShoot:'Spellcast_Shoot',ledgeAttack:'1H_Melee_Attack_Slice_Horizontal',ultimate:'2H_Melee_Attack_Chop',
   specialN:'Spellcast_Shoot',specialSide:'1H_Melee_Attack_Stab',specialUp:'Jump_Full_Long',specialDown:'Block',counterStrike:'Block_Attack',
 };
 const ANIM_SETS={
