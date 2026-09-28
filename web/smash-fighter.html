@@ -469,7 +469,8 @@ class AudioManager{
   // ---- procedural battle music: a looping bass/drum/arp pattern per stage theme ----
   startMusic(theme){
     this.stopMusic(); if(!this.musicOn) return; this.ensure();
-    const T={fortress:{root:57,scale:[0,3,5,7,10],bpm:124},volcano:{root:50,scale:[0,1,5,7,8],bpm:136},storm:{root:52,scale:[0,2,3,7,10],bpm:128},meadow:{root:60,scale:[0,2,4,7,9],bpm:118}}[theme]||{root:57,scale:[0,3,5,7,10],bpm:124};
+    const menu=theme==='menu';
+    const T={menu:{root:57,scale:[0,2,4,7,9],bpm:92},fortress:{root:57,scale:[0,3,5,7,10],bpm:124},volcano:{root:50,scale:[0,1,5,7,8],bpm:136},storm:{root:52,scale:[0,2,3,7,10],bpm:128},meadow:{root:60,scale:[0,2,4,7,9],bpm:118}}[theme]||{root:57,scale:[0,3,5,7,10],bpm:124};
     const m={T,step:0,next:this.now+0.1,spb:60/T.bpm/4,timer:null};
     const hz=n=>440*Math.pow(2,(n-69)/12), deg=d=>T.root+T.scale[((d%5)+5)%5]+12*Math.floor(d/5);
     const bassline=[0,0,3,0,0,4,3,2], arp=[0,2,4,7,4,2,5,3];
@@ -477,16 +478,18 @@ class AudioManager{
       while(m.next<this.now+0.12){
         const s=m.step%64, t=m.next, beat=s%4===0, bar=(s/16|0)%4;
         const chord=[0,3,5,4][bar];
-        if(beat||s%16===10) this._drum(t,'kick');
-        if(s%8===4) this._drum(t,'snare');
-        if(s%2===1) this._drum(t,'hat');
+        if(!menu){
+          if(beat||s%16===10) this._drum(t,'kick');
+          if(s%8===4) this._drum(t,'snare');
+          if(s%2===1) this._drum(t,'hat');
+        } else if(s%16===0) this._drum(t,'kick');
         if(s%2===0) this._note(t,hz(deg(chord+bassline[(s/2|0)%8]%3)-24),m.spb*1.8,'sawtooth',0.18,500);
         if(s%4===2||s%4===3) this._note(t,hz(deg(chord+arp[s%8])+12),m.spb*0.9,'triangle',0.06,3000);
         if(s%16===0) [0,2,4].forEach(k=>this._note(t,hz(deg(chord+k)),m.spb*15,'sine',0.035,1500));
         m.step++; m.next+=m.spb;
       }
     };
-    m.timer=setInterval(tick,30); tick(); this.music=m;
+    m.timer=setInterval(tick,30); tick(); this.music=m; m.theme=theme;
     this.musicBus.gain.cancelScheduledValues(this.now); this.musicBus.gain.setValueAtTime(0.2,this.now);
   }
   stopMusic(){ if(this.music){ clearInterval(this.music.timer); this.music=null; } }
@@ -2135,6 +2138,9 @@ class Game{
     window.addEventListener('keydown',e=>this._menuKey(e.code));
     this._refreshGamepadStatus();
     setInterval(()=>this._refreshGamepadStatus(),1000);
+    // browsers only allow audio after a user gesture: start the menu theme on the first click or key
+    const firstGesture=()=>{ if(['menu','charselect','stageselect','records','controls'].includes(this.state) && !AUDIO.music) AUDIO.startMusic('menu'); };
+    window.addEventListener('pointerdown',firstGesture,{once:true}); window.addEventListener('keydown',firstGesture,{once:true});
     INPUT.initTouch(()=>{ if(this.state==='battle') this._pause(); else if(this.state==='paused') this._resume(); });
   }
   _menuKey(code){
@@ -2193,8 +2199,9 @@ class Game{
     document.getElementById('touch').classList.toggle('active',id==='__hud__');
     document.getElementById('hud').classList.toggle('hidden',!(id==='__hud__'||id==='pause'));
   }
-  _toMainMenu(){ this.state='menu'; this._showScreen('mainmenu'); this._teardownScene(); AUDIO.stopMusic(); }
+  _toMainMenu(){ this.state='menu'; this._showScreen('mainmenu'); this._teardownScene(); AUDIO.stopMusic(); if(AUDIO.ctx) AUDIO.startMusic('menu'); }
   _toCharSelect(){
+    if(AUDIO.ctx && (!AUDIO.music||AUDIO.music.theme!=='menu')) AUDIO.startMusic('menu');
     this.state='charselect'; this._showScreen('charselect');
     const mode=this.settings.mode;
     document.getElementById('p2-label').textContent=mode==='cpu'?'BOT ('+this.settings.botDifficulty.toUpperCase()+')':(mode==='training'?'TRAINING DUMMY':(mode==='arcade'?'ARCADE: 5 RANDOM RIVALS':
