@@ -196,8 +196,8 @@
     <span class="sl">ITEMS</span><div id="item-chips" class="cs-mode-select"></div>
     <span class="sl">MUSIC</span><div id="music-chips" class="cs-mode-select"></div>
     <span class="sl">GRAPHICS</span><div id="gfx-chips" class="cs-mode-select"></div>
-    <span class="sl">BOT</span><div id="diff-chips" class="cs-mode-select"></div>
     <span class="sl">TAP JUMP</span><div id="tapjump-chips" class="cs-mode-select"></div>
+    <span class="sl" style="grid-column:1">CPU LEVEL</span><div id="diff-chips" class="cs-mode-select" style="grid-column:span 3"></div>
   </div>
 </div>
 
@@ -261,6 +261,7 @@
     <div class="tp-title">TRAINING</div>
     <div class="tp-row"><span class="tp-label">Dummy</span><div id="tp-dummy" class="cs-mode-select"></div></div>
     <div class="tp-row"><span class="tp-label">Dummy %</span><div id="tp-pct" class="cs-mode-select"></div></div>
+    <div class="tp-row"><span class="tp-label">Speed</span><div id="tp-speed" class="cs-mode-select"></div></div>
     <div class="tp-row"><span class="tp-label">Items</span><div id="tp-items" class="cs-mode-select"></div></div>
     <div class="tp-row"><span class="tp-label">Hitboxes</span><div id="tp-hitbox" class="cs-mode-select"></div><div id="tp-reset" class="chip">Reset positions</div></div>
     <pre id="frame-data">Attack to see frame data.</pre>
@@ -607,8 +608,8 @@ const ARCH_COEF = {
   zoner:   { dmg:1.02, kb:1.02, spd:1.06, range:1.04 },
   grappler:{ dmg:1.13, kb:1.05, spd:0.96, range:1.12 },
   assassin:{ dmg:0.94, kb:1.00, spd:1.24, range:0.94 },
-  ranger:  { dmg:0.86, kb:0.95, spd:1.10, range:0.96 },
-  brawler: { dmg:0.98, kb:1.01, spd:1.20, range:0.90 },
+  ranger:  { dmg:0.90, kb:0.98, spd:1.12, range:0.98 },
+  brawler: { dmg:1.00, kb:1.05, spd:1.20, range:0.92 },
 };
 const BASE_MOVES = {
   jab1:{startup:3,active:3,recovery:6,dmg:2.5,bkb:5,kbg:0.85,angle:40,range:1.0,name:'Jab'},
@@ -688,16 +689,16 @@ const SPECIALS = {
     down:{name:'Vanish',startup:4,active:12,recovery:14,dmg:0,noHitbox:true,vanish:true,vanishDist:4,color:0x9b5de5},
   },
   wren:{
-    n:{name:'Crossbow Bolt',startup:12,active:4,recovery:20,dmg:4.5,bkb:5,kbg:1.1,angle:15,range:1.5,projectile:true,noHitbox:true,speed:14,pvis:'arrow',color:0x9be870},
+    n:{name:'Crossbow Bolt',startup:12,active:4,recovery:18,dmg:5,bkb:5,kbg:1.2,angle:15,range:1.5,projectile:true,noHitbox:true,speed:14,pvis:'arrow',color:0x9be870},
     side:{name:'Smoke Bomb',startup:14,active:4,recovery:20,dmg:8,bkb:10,kbg:2.0,angle:55,range:1.2,projectile:true,noHitbox:true,lob:true,lobVy:6,speed:8,pvis:'bomb',explode:1.6,color:0x9be870},
     up:{name:'Grapple Line',startup:7,active:6,recovery:14,dmg:6,bkb:8,kbg:2.2,angle:80,range:1.0,recoveryMove:true,vel:19,color:0x9be870},
     down:{name:'Snare Wire',startup:10,active:2,recovery:16,dmg:7,bkb:8,kbg:1.9,angle:75,range:0.9,trap:true,noHitbox:true,stun:24,color:0x9be870},
   },
   morrow:{
-    n:{name:'Soul Orb',startup:14,active:5,recovery:18,dmg:10,bkb:9,kbg:1.9,angle:30,range:1.6,projectile:true,noHitbox:true,speed:5.5,pvis:'orb',life:150,color:0x7cf2c8},
+    n:{name:'Soul Orb',startup:15,active:5,recovery:19,dmg:9,bkb:9,kbg:1.9,angle:30,range:1.6,projectile:true,noHitbox:true,speed:5.5,pvis:'orb',life:150,color:0x7cf2c8},
     side:{name:'Grave Spikes',startup:13,active:6,recovery:20,dmg:11,bkb:11,kbg:2.3,angle:80,range:1.2,reach:3.6,color:0x7cf2c8},
     up:{name:'Wraith Step',startup:6,active:5,recovery:16,dmg:5,bkb:6,kbg:1.8,angle:70,range:1.0,teleport:true,teleDist:8,color:0x7cf2c8},
-    down:{name:'Soul Siphon',startup:10,active:8,recovery:20,dmg:9,bkb:8,kbg:1.9,angle:60,range:1.3,aoe:true,drain:0.6,color:0x7cf2c8},
+    down:{name:'Soul Siphon',startup:10,active:8,recovery:20,dmg:9,bkb:8,kbg:1.9,angle:60,range:1.3,aoe:true,drain:0.45,color:0x7cf2c8},
   },
   rattle:{
     n:{name:'Bone Toss',startup:10,active:4,recovery:16,dmg:7,bkb:7,kbg:1.7,angle:40,range:1.3,projectile:true,noHitbox:true,lob:true,lobVy:8,speed:9,pvis:'bone',color:0xe8e0c8},
@@ -747,7 +748,7 @@ const CHAR_DATA = [
     traits:'Fast crossbow bolts, smoke bombs and snares', desc:'Cloaked crossbow ranger. Pins you down from range with bolts, bombs and snare wire.'},
   {id:'morrow',name:'Morrow the Bonecaller',color:0x2a3d4a,accent:0x7cf2c8,weight:96,walkSpeed:2.6,runSpeed:4.4,jumpVel:14.4,doubleJumpVel:12.8,fallSpeed:12.5,fastFallSpeed:20,airSpeed:3.0,size:1.02,archetype:'zoner',weapon:'Skeleton_Staff',
     traits:'Soul Siphon heals him; spikes hit at range', desc:'Skeleton necromancer. Slow soul orbs control space, grave spikes punish from afar, and his siphon steals back damage.'},
-  {id:'rattle',name:'Rattle',color:0x5a4a3a,accent:0xffb36b,weight:80,walkSpeed:3.3,runSpeed:6.3,jumpVel:15.6,doubleJumpVel:14.8,fallSpeed:14,fastFallSpeed:23,airSpeed:3.6,size:0.84,archetype:'brawler',weapon:'Skeleton_Axe',
+  {id:'rattle',name:'Rattle',color:0x5a4a3a,accent:0xffb36b,weight:85,walkSpeed:3.3,runSpeed:6.3,jumpVel:15.6,doubleJumpVel:14.8,fallSpeed:14,fastFallSpeed:23,airSpeed:3.6,size:0.84,archetype:'brawler',weapon:'Skeleton_Axe',
     traits:'Tiny hurtbox; Fall Apart dodges then bursts', desc:'A small, scrappy skeleton with a rusty axe. Fast rolls, bone tosses, and he can fall apart to dodge an attack.'},
 ];
 // one line per special for the pause-menu move list: [neutral, side, up, down, ultimate]
@@ -924,6 +925,14 @@ const BUFFER_FRAMES=6, BUFFER_KEYS=['attackP','specialP','jumpP','grabP'];
 const ITEM_THROW=new Move('itemThrow',{startup:5,active:2,recovery:10,dmg:0,noHitbox:true,itemThrow:true,name:'Item Throw'});
 const LEDGE_ATTACK=new Move('ledgeAttack',{startup:8,active:4,recovery:16,dmg:8,bkb:12,kbg:1.2,angle:30,range:1.2,name:'Ledge Attack'});
 const LOW_GFX={on:false};
+function addRim(mat,u){
+  mat.onBeforeCompile=sh=>{
+    sh.uniforms.rimColor=u.color; sh.uniforms.rimStrength=u.strength;
+    sh.fragmentShader='uniform vec3 rimColor; uniform float rimStrength;\n'+sh.fragmentShader.replace('#include <emissivemap_fragment>',
+      '#include <emissivemap_fragment>\n float rimF=pow(1.0-clamp(dot(normal,normalize(vViewPosition)),0.0,1.0),2.2); totalEmissiveRadiance+=rimColor*rimF*rimStrength;');
+  };
+  mat.customProgramCacheKey=()=>'rim';
+}
 const FACE_ANGLE=Math.PI/2-0.32; // model turns sideways, slightly toward the camera
 
 class Fighter{
@@ -962,7 +971,10 @@ class Fighter{
     const pivot=new THREE.Group(); pivot.position.y=H*0.45; g.add(pivot); this.pivot=pivot;
     const model=THREE.SkeletonUtils.clone(MODELS.templates[cd.id]);
     model.scale.setScalar(H/2.15); model.position.y=-H*0.45; pivot.add(model); this.model=model;
-    if(this.tint!=null){ const c=new THREE.Color(this.tint); model.traverse(o=>{ if(o.isMesh){ o.material=o.material.clone(); o.material.color.multiply(c); o.userData.tintMat=true; } }); }
+    // every fighter gets its own material copies: optional colour tint plus a fresnel rim light used for
+    // readability, hit flashes and the respawn shimmer
+    const c=this.tint!=null?new THREE.Color(this.tint):null; this.rimU={color:{value:new THREE.Color(0xffffff)},strength:{value:0.28}};
+    model.traverse(o=>{ if(o.isMesh){ o.material=o.material.clone(); if(c) o.material.color.multiply(c); o.userData.tintMat=true; addRim(o.material,this.rimU); } });
     if(cd.weapon){ const slot=model.getObjectByName('handslot.r'); if(slot) slot.add(MODELS.templates[cd.weapon].clone()); }
     this.trailSource=model.getObjectByName('handslot.r')||model;
     this.headBone=model.getObjectByName('head')||model;
@@ -989,6 +1001,7 @@ class Fighter{
   _consume(k){ if(this._buf) this._buf[k]=0; }
   canAct(){ return this.hitstun<=0 && !this.grabbedBy && !this.grabbing && this.shieldBroken<=0 && this.state!=='ledge' && !this.pose; }
   startAction(key,move){
+    this._actSerial=(this._actSerial||0)+1;
     this.action={key,move}; this.actionFrame=0; this.actionPhase='startup'; this.state='attack';
     this.chargeFrames=0; this._multiIdx=-1; this._hitTargets=new Set(); this._landedHit=false; this._countered=false;
     this._projSpawned=false; this._cloneSpawned=false; this.armorActive=false; this.counterActive=false;
@@ -1860,9 +1873,19 @@ const AI_PROFILES={
   medium:{react:13,rand:0.35,shield:0.35,parry:0.05,edgeguard:0.35,combo:0.5, smash:0.35,recover:0.95},
   hard:  {react:6, rand:0.1, shield:0.5, parry:0.3, edgeguard:0.85,combo:0.9, smash:0.5, recover:1},
 };
+// CPU level -> behaviour: 1 barely reacts, 5 = the old medium, 8 = the old hard, 9 reacts in 3 frames
+const AI_ANCHORS=[[1,{react:30,rand:0.85,shield:0.06,parry:0,edgeguard:0,combo:0,smash:0.1,recover:0.45}],[2,AI_PROFILES.easy],[5,AI_PROFILES.medium],[8,AI_PROFILES.hard],
+  [9,{react:3,rand:0.03,shield:0.6,parry:0.45,edgeguard:0.95,combo:1,smash:0.55,recover:1}]];
+function aiProfileFor(lv){
+  let i=0; while(i<AI_ANCHORS.length-2 && lv>AI_ANCHORS[i+1][0]) i++;
+  const [l0,a]=AI_ANCHORS[i], [l1,b]=AI_ANCHORS[i+1], t=clamp((lv-l0)/(l1-l0),0,1), o={};
+  for(const k in a) o[k]=a[k]+(b[k]-a[k])*t; o.react=Math.round(o.react); return o;
+}
 class AIController{
   constructor(fighter,difficulty){
-    this.f=fighter; this.diff=difficulty; this.p=AI_PROFILES[difficulty];
+    // difficulty is a CPU level 1-9 (names still accepted); the profile is blended between anchor levels
+    const lv=typeof difficulty==='number'?clamp(difficulty,1,9):({easy:2,medium:5,hard:8}[difficulty]||5);
+    this.f=fighter; this.level=lv; this.diff=lv<=3?'easy':lv<=6?'medium':'hard'; this.p=aiProfileFor(lv);
     this.buffer=[]; this.holdShield=0; this.holdAttack=0; this.cooldown=0; this.zoneCooldown=0; this.history=[];
     this.mode='neutral';
   }
@@ -1945,6 +1968,17 @@ class AIController{
         if(Math.abs(c.pos.x-f.pos.x)>1.6) { toward(c.pos.x); return cmd; }
         if(Math.sign(c.pos.x-f.pos.x)!==f.facing){ toward(c.pos.x); return cmd; }
         if(R()<0.3){ cmd.attackP=true; return cmd; }
+      }
+    }
+    // chase the Rift Orb when it is close and the rival is not right on top of us
+    const O=stage.orb;
+    if(O && f.ultMeter<100 && dist>2.2 && R()>P.rand*0.5){
+      const ox=O.pos.x-f.pos.x, oy=O.pos.y-(f.pos.y+1);
+      if(Math.abs(ox)<8){
+        if(Math.abs(ox)>0.8) toward(O.pos.x);
+        else if(oy>1.2){ if(f.grounded){ cmd.jumpP=true; cmd.jump=true; } else if(oy<2.6){ cmd.attackP=true; cmd.up=true; } else if(f.jumpsLeft>0) cmd.jumpP=true; }
+        else if(Math.abs(oy)<1.2) cmd.attackP=true;
+        return cmd;
       }
     }
     // incoming projectiles
@@ -2088,7 +2122,7 @@ const COLOR_UNLOCKS=[
   {id:'crimson',name:'Crimson',tint:0xff9a9a,goal:'Win a match',progress:d=>[Math.min(d.wins,1),1]},
   {id:'azure',name:'Azure',tint:0x9ec2ff,goal:'Land a 5-hit combo',progress:d=>[Math.min(d.longestCombo,5),5]},
   {id:'shadow',name:'Shadow',tint:0x6a6a78,goal:'Score 25 KOs in total',progress:d=>[Math.min(d.kos,25),25]},
-  {id:'gold',name:'Gold',tint:0xffd98a,goal:'Beat a Hard bot',progress:d=>[Math.min(d.hardWins,1),1]},
+  {id:'gold',name:'Gold',tint:0xffd98a,goal:'Beat a level 7+ CPU',progress:d=>[Math.min(d.hardWins,1),1]},
   {id:'emerald',name:'Emerald',tint:0x9ef0b4,goal:'Clear Arcade mode',progress:d=>[Math.min(d.arcadeClears||0,1),1]},
 ];
 const PROFILE={
@@ -2141,7 +2175,7 @@ class Game{
     this.camera.position.set(0,8,26);
     this.postfx=new PostFX(this.renderer);
     window.addEventListener('resize',()=>this._resize()); this._resize();
-    this.settings=Object.assign({stocks:3,timeLimit:0,mode:'vs',botDifficulty:'medium',hazards:true,items:true,music:true,graphics:'high',tapJump:true},this._loadSettings());
+    this.settings=Object.assign({stocks:3,timeLimit:0,mode:'vs',botDifficulty:5,hazards:true,items:true,music:true,graphics:'high',tapJump:true},this._loadSettings());
     this.selection={p1:0,p2:1,stageIdx:0,colors:{p1:'default',p2:'default'}};
     this.training={dummy:'stand',hitboxes:true};
     PROFILE.load();
@@ -2184,7 +2218,8 @@ class Game{
     const S=this.settings, set=k=>v=>{ S[k]=v; this._saveSettings(); AUDIO.playClick(); };
     this._chipRow($('stock-chips'),[1,2,3,4,5].map(v=>({label:v+'',value:v})),S.stocks,set('stocks'));
     this._chipRow($('time-chips'),[{label:'OFF',value:0},{label:'3:00',value:180},{label:'5:00',value:300},{label:'8:00',value:480}],S.timeLimit,set('timeLimit'));
-    this._chipRow($('diff-chips'),[{label:'EASY',value:'easy'},{label:'MEDIUM',value:'medium'},{label:'HARD',value:'hard'}],S.botDifficulty,set('botDifficulty'));
+    if(typeof S.botDifficulty!=='number') S.botDifficulty={easy:2,medium:5,hard:8}[S.botDifficulty]||5;
+    this._chipRow($('diff-chips'),[1,2,3,4,5,6,7,8,9].map(v=>({label:''+v,value:v})),S.botDifficulty,set('botDifficulty'));
     this._chipRow($('item-chips'),[{label:'ON',value:true},{label:'OFF',value:false}],S.items,set('items'));
     this._chipRow($('music-chips'),[{label:'ON',value:true},{label:'OFF',value:false}],S.music,v=>{ set('music')(v); AUDIO.musicOn=v; if(!v) AUDIO.stopMusic(); });
     this._chipRow($('gfx-chips'),[{label:'HIGH',value:'high'},{label:'LOW',value:'low'}],S.graphics,v=>{ set('graphics')(v); this._applyGraphics(); });
@@ -2210,6 +2245,7 @@ class Game{
     this._chipRow($('tp-pct'),[0,50,100,150].map(v=>({label:v+'%',value:v})),-1,v=>{ if(this.f2) this.f2.percent=v; });
     this._chipRow($('tp-hitbox'),[{label:'Show',value:true},{label:'Hide',value:false}],true,v=>{ this.training.hitboxes=v; });
     $('tp-reset').onclick=()=>this._trainingReset();
+    this._chipRow($('tp-speed'),[{label:'1×',value:1},{label:'½×',value:0.5},{label:'¼×',value:0.25}],1,v=>{ this.training.speed=v; });
     this._chipRow($('tp-items'),[{label:'Bomb',value:'bomb'},{label:'Axe',value:'axe'},{label:'Potion',value:'potion'},{label:'Crate',value:'crate'}],null,v=>{
       if(!this.f1||!this.isTraining) return;
       if(v==='crate') this._spawnCrate(); else this._spawnItem(v,new THREE.Vector3(this.f1.pos.x+this.f1.facing*1.5,this.f1.pos.y+3,0),new THREE.Vector3(0,2,0));
@@ -2314,8 +2350,8 @@ class Game{
     if(AUDIO.ctx && (!AUDIO.music||AUDIO.music.theme!=='menu')) AUDIO.startMusic('menu');
     this.state='charselect'; this._showScreen('charselect');
     const mode=this.settings.mode;
-    document.getElementById('p2-label').textContent=mode==='cpu'?'BOT ('+this.settings.botDifficulty.toUpperCase()+')':(mode==='training'?'TRAINING DUMMY':(mode==='arcade'?'ARCADE: 5 RANDOM RIVALS':
-      (mode==='homerun'?'SANDBAG — 10 SECONDS, THEN SEND IT FLYING':mode==='ffa'?(this.ffaP2==='bot'?'CPU ('+this.settings.botDifficulty.toUpperCase()+') + 2 RANDOM CPUs':'PLAYER 2 + 2 RANDOM CPUs'):'PLAYER 2')));
+    document.getElementById('p2-label').textContent=mode==='cpu'?'CPU LEVEL '+this.settings.botDifficulty:(mode==='training'?'TRAINING DUMMY':(mode==='arcade'?'ARCADE: 5 RANDOM RIVALS':
+      (mode==='homerun'?'SANDBAG — 10 SECONDS, THEN SEND IT FLYING':mode==='ffa'?(this.ffaP2==='bot'?'CPU LV '+this.settings.botDifficulty+' + 2 RANDOM CPUs':'PLAYER 2 + 2 RANDOM CPUs'):'PLAYER 2')));
     document.getElementById('ffa-p2').classList.toggle('hidden',mode!=='ffa');
     document.getElementById('ffa-teams').classList.toggle('hidden',mode!=='ffa');
     document.getElementById('btn-to-stage').innerHTML=mode==='arcade'?'START ARCADE &#8594;':'NEXT: SELECT STAGE &#8594;';
@@ -2570,8 +2606,8 @@ class Game{
     this.replayBuf=[]; this._frameHits=[]; this.replaying=false; this.replayFrames=null; this.matchFrames=0;
     if(this.viz){ this.viz=null; }
     this.projectiles=[]; this.clones=[];
-    this.items=[]; this.crates=[]; this.itemsOn=this.settings.items&&!this.isTraining&&!this.isHomerun; this.crateTimer=Math.round(rand(300,480));
-    this.timeLeft=this.settings.timeLimit; this.suddenDeath=false;
+    this.items=[]; this.crates=[]; this.itemsOn=this.settings.items&&!this.isTraining&&!this.isHomerun; this.crateTimer=Math.round(rand(300,480)); this.orb=null; this.orbTimer=Math.round(rand(1500,2400));
+    this.timeLeft=this.settings.timeLimit; this.suddenDeath=false; this.slowmo=null;
     this.matchOver=false; this.cinematic=null; this.endTimer=0; this.frame=0;
     this.bloomPulse=0; this.flash=0;
     const $=id=>document.getElementById(id);
@@ -2708,12 +2744,17 @@ class Game{
     if(move.spike){ if(defender.grounded){ ax=0.3*dir; ay=0.8; } else { ax=0.15*dir; ay=-1; } }
     const sp=kb*KB_TO_VEL;
     defender.vel.set(ax*sp,ay*sp,0);
+    // game-deciding blow: rough travel estimate (speed decays KB_DECAY per frame) past a blast line
+    if(!this.isTraining && !this.isHomerun && defender.stocks===1 && this.fighters.filter(f=>!f.eliminated).length===2 && !this.slowmo){
+      const d=sp*sp/(2*KB_DECAY*60), b=this.stage.blast, x=defender.pos.x+ax*d, y=defender.pos.y+1+Math.max(0,ay)*d;
+      if(x<b.l||x>b.r||y>b.t){ this.slowmo={t:50,f:defender}; this.flash=Math.max(this.flash,0.35); this.flashColor=0xffffff; AUDIO.playUltimate(); }
+    }
     defender.grounded=false; defender.onPlatform=null;
     defender.hitstun=Math.round(clamp(kb*0.34,6,80))+(move.stun||0);
     defender.state='hitstun'; defender.tumble=kb>75;
     defender.squash=kb>60?0.78:0.9;
     const hs=Math.round(clamp(dmg*0.45+2,2,move.ultimate?22:10));
-    defender._shakeAmt=clamp(0.03+dmg*0.012,0.04,0.22);
+    defender._shakeAmt=clamp(0.03+dmg*0.012,0.04,0.22); defender._hitFlash=8;
     defender.hitstop=hs; if(!opts.remote){ attacker.hitstop=hs; attacker._landedHit=true; }
     if(defender.lastAttacker===attacker && defender.comboTimer>0){ defender.comboCount++; defender.comboDamage+=dmg; }
     else { defender.comboCount=1; defender.comboDamage=dmg; }
@@ -3014,6 +3055,10 @@ class Game{
     this.flash=0.3; this.flashColor=f.cd.accent; this.bloomPulse=2; this.cameraRig.kick(1.4);
     AUDIO.playKO(); AUDIO.playCrowd();
     if(this._frameHits) this._frameHits.push({ko:true,at:at.clone(),col:f.cd.accent});
+    if(f.pos.y>b.t){ // knocked out through the top: a twinkle far away in the sky
+      const star=new THREE.Vector3(clamp(f.pos.x*0.6,-14,14),b.t-6,-45);
+      setTimeout(()=>{ if(this.scene&&this.particles){ this.particles.spark(star,f.cd.accent,9); this.particles.spark(star,0xffffff,5); AUDIO.tone(2400,0.25,'triangle',0.12,3200,{wet:0.8}); } },350);
+    }
     this._dropHeld(f,true);
     if(this.isHomerun && f===this.f2){ if(this.hr.phase==='fly') this._homerunDone(); else f.respawn(0,this.stage.respawnY); return; }
     if(this.isTraining||this.isHomerun){ f.respawn(0,this.stage.respawnY); return; }
@@ -3082,6 +3127,7 @@ class Game{
   }
   _endMatch(winner,reason){
     if(this.matchOver) return;
+    this.slowmo=null;
     this.matchOver=true; this.state='gameend'; this.endTimer=0; this.winner=winner;
     this.winners=winner.team==null?[winner]:this.fighters.filter(f=>f.team===winner.team);
     this.losers=this.fighters.filter(f=>!this.winners.includes(f)); this.loser=this.losers[0];
@@ -3110,7 +3156,7 @@ class Game{
       d.wins++;
       const sec=Math.round(this.matchFrames/60);
       if(d.fastestWin==null||sec<d.fastestWin){ d.fastestWin=sec; d.fastestWinChar=winner.cd.name; }
-      if((this.settings.mode==='cpu'&&this.settings.botDifficulty==='hard')||(this.arcade&&this.arcade.diffs[this.arcade.round]==='hard')) d.hardWins++;
+      if((this.settings.mode==='cpu'&&this.settings.botDifficulty>=7)||(this.arcade&&this.arcade.diffs[this.arcade.round]==='hard')) d.hardWins++;
     }
     PROFILE.save();
     const A=this.settings.mode==='arcade'&&this.arcade;
@@ -3141,7 +3187,7 @@ class Game{
     this._elimAtEnd=this.fighters.map(f=>f.eliminated);
     this.replaying=true; this.replay={frames:this.replayFrames,i:0,sub:0}; this.replayFrames=null;
     this.projectiles.forEach(p=>p.mesh.visible=false); this.clones.forEach(c=>c.group.visible=false);
-    this.items.forEach(it=>{ it.mesh.visible=false; it.glow.visible=false; }); this.crates.forEach(c=>c.mesh.visible=false);
+    this.items.forEach(it=>{ it.mesh.visible=false; it.glow.visible=false; }); this.crates.forEach(c=>c.mesh.visible=false); if(this.orb) this.orb.g.visible=false;
     this._hideBigText(); document.getElementById('hud').classList.add('replaying');
   }
   _endReplay(){
@@ -3289,6 +3335,44 @@ class Game{
     this.items=this.items.filter(it=>!it.gone);
     this.stage.items=this.items; this.stage.crates=this.crates;
   }
+  // ---------- Rift Orb: drifts over the stage; three hits crack it and fill the breaker's ultimate ----------
+  _spawnOrb(){
+    const g=new THREE.Group();
+    const core=new THREE.Mesh(new THREE.SphereGeometry(0.5,20,14),new THREE.MeshBasicMaterial({color:0xffc070}));
+    const shell=new THREE.Mesh(new THREE.IcosahedronGeometry(0.62,1),new THREE.MeshBasicMaterial({color:0xff9a3a,wireframe:true,transparent:true,opacity:0.9,blending:THREE.AdditiveBlending}));
+    const halo=new THREE.Mesh(new THREE.SphereGeometry(0.95,16,12),new THREE.MeshBasicMaterial({color:0xff7a1a,transparent:true,opacity:0.4,blending:THREE.AdditiveBlending,depthWrite:false}));
+    g.add(core,shell,halo); this.scene.add(g);
+    const m=this.stage.main;
+    this.orb={g,shell,halo,hp:3,t:0,seed:rand(0,10),cx:m.x,top:m.y+m.h/2,w:m.w*0.45,pos:new THREE.Vector3(m.x,m.y+m.h/2+9,0),hitBy:new Map(),flash:0};
+    AUDIO.playSoul(); this._bigText('RIFT ORB!',true); this._countT.push(setTimeout(()=>this._hideBigText(),900));
+  }
+  _updateOrb(){
+    if(!this.orb){ if(this.itemsOn && !this.slowmo && --this.orbTimer<=0){ this.orbTimer=Math.round(rand(2400,3600)); this._spawnOrb(); } return; }
+    const O=this.orb; O.t++; this.stage.orb=O;
+    O.pos.set(O.cx+Math.sin(O.t*0.011+O.seed)*O.w, O.top+4.2+Math.sin(O.t*0.023+O.seed*2)*2.2, 0);
+    O.g.position.copy(O.pos); O.shell.rotation.x+=0.03; O.shell.rotation.y+=0.045; O.halo.scale.setScalar(1+0.12*Math.sin(O.t*0.2)+O.flash*0.5);
+    O.flash*=0.85; O.g.visible=!this.replaying && (O.t<1080 || O.t%8<4);
+    if(this.frame%3===0) this.particles.spawn(O.pos,1,{color:[0xffb347,0xfff4d0],speed:0.03,life:20,grav:-0.002,additive:true,size:0.08});
+    const hit=(f,key)=>{
+      if(O.hitBy.get(f)===key) return; O.hitBy.set(f,key); O.hp--; O.flash=1;
+      this.particles.spawn(O.pos,14,{color:[0xffffff,0xffb347],speed:0.2,life:14,additive:true}); this.particles.spark(O.pos,0xffffff,2);
+      AUDIO.playHit(8); AUDIO.tone(1500-O.hp*300,0.12,'triangle',0.2);
+      if(O.hp<=0){
+        f.ultMeter=100; this._floatText(f,'ULTIMATE READY!');
+        this.particles.spawn(O.pos,60,{color:[0xffb347,0xffffff,0xfff4d0],speed:0.45,life:34,additive:true,size:0.1}); this.particles.ring(O.pos,0xffb347,4,24,0.12);
+        this.flash=0.3; this.flashColor=0xffd9a0; this.bloomPulse=1.8; this.cameraRig.kick(0.6); AUDIO.playUltimate();
+        this._removeOrb();
+      }
+    };
+    for(const f of this.fighters){
+      if(f.eliminated) continue;
+      const hb=f.currentHitbox();
+      if(hb && Math.hypot(hb.x-O.pos.x,hb.y-O.pos.y)<hb.radius+0.65){ hit(f,f.action.key+':'+f._multiIdx+':'+(f._actSerial||0)); if(!this.orb) return; }
+    }
+    for(const p of this.projectiles) if(p.kind==='bolt' && !p.dead && this.fighters.includes(p.owner) && p.pos.distanceTo(O.pos)<p.radius+0.65){ p.dead=true; hit(p.owner,p); if(!this.orb) return; }
+    if(O.t>1200) this._removeOrb();
+  }
+  _removeOrb(){ const O=this.orb; if(this.stage) this.stage.orb=null; if(!O) return; this.scene.remove(O.g); O.g.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }); this.orb=null; }
   _onPickup(f,it){
     const T=ITEM_TYPES[it.type];
     if(T.heal){
@@ -3394,7 +3478,7 @@ class Game{
   _stageVictory(){
     this.projectiles.forEach(p=>p.destroy()); this.projectiles=[];
     this.fighters.forEach(f=>this._dropHeld(f,true));
-    this.items.forEach(it=>this._removeItem(it)); this.items=[]; this.crates.forEach(c=>this.scene.remove(c.mesh)); this.crates=[];
+    this.items.forEach(it=>this._removeItem(it)); this.items=[]; this.crates.forEach(c=>this.scene.remove(c.mesh)); this.crates=[]; this._removeOrb();
     this.clones.forEach(c=>this.scene.remove(c.group)); this.clones=[];
     const m=this.stage.main, top=m.y+m.h/2;
     const place=(f,x,facing,pose)=>{
@@ -3430,11 +3514,12 @@ class Game{
   _loop(t){
     requestAnimationFrame(tt=>this._loop(tt));
     let dtms=t-this._last; this._last=t; dtms=Math.min(dtms,80);
-    this._accum+=dtms;
+    const tSpeed=this.isTraining&&this.training.speed?this.training.speed:1;
+    this._accum+=dtms*(this.slowmo&&this.state==='battle'?0.22:tSpeed);
     const step=1000/60; let steps=0;
     while(this._accum>=step && steps<5){ this._fixedUpdate(1/60); this._accum-=step; steps++; }
     this._pollMenuPads();
-    this._render(this.state==='paused'?0:dtms/1000);
+    this._render(this.state==='paused'?0:dtms/1000*(this.slowmo?0.22:tSpeed));
     INPUT.endFrame();
   }
   _fixedUpdate(dt){
@@ -3466,7 +3551,7 @@ class Game{
     const world={platforms:this.stage.platforms};
     for(const p of this.projectiles) p.update(dt,world);
     this._resolveProjectiles();
-    this._updateItems(dt);
+    this._updateItems(dt); this._updateOrb();
     if(this.hazardsOn) this._updateHazards();
     for(const f of this.fighters){
       const ph=f.state==='attack'?f.actionPhase:null;
@@ -3479,7 +3564,8 @@ class Game{
       }
       if(f.state==='stunned' && this.frame%10===0) this.particles.spawn(new THREE.Vector3(f.pos.x,f.pos.y+2.1*f.cd.size,0.3),2,{color:0xffe066,speed:0.04,life:20,grav:0,additive:true});
     }
-    if(this.hr) this._updateHomerun(); else this.cameraRig.update(this.fighters,dt);
+    if(this.slowmo){ const f=this.slowmo.f; this.cameraRig.update(this.fighters,dt,{x:f.pos.x,y:f.pos.y+1,dist:11}); if(--this.slowmo.t<=0||f.state==='respawn'||f.eliminated) this.slowmo=null; }
+    else if(this.hr) this._updateHomerun(); else this.cameraRig.update(this.fighters,dt);
     this.matchFrames++;
     for(const f of this.fighters) if(!this.matchOver) this._checkKO(f);
     if(!this.isTraining){ this.replayBuf.push(this._snapshot()); if(this.replayBuf.length>150) this.replayBuf.shift(); }
@@ -3608,9 +3694,14 @@ class Game{
       const stretch=f.grounded?1:1+Math.min(0.1,Math.abs(f.vel.y)/220);
       const sy=f.squash*stretch, sx=1/Math.sqrt(sy);
       f.group.scale.set(sx,sy,sx);
+      if(f.rimU && !f.isClone){
+        const inv=f.respawnInvuln>0, hit=f._hitFlash>0;
+        f.rimU.color.value.setHex(hit?0xffffff:(inv?0x9fe0ff:(f.team!=null?TEAM_COLORS[f.team]:0xffffff)));
+        f.rimU.strength.value=hit?2.4*f._hitFlash/8:(inv?0.9+0.5*Math.sin(performance.now()*0.02):(f.team!=null?0.6:0.28));
+        if(f._hitFlash>0) f._hitFlash-=dt*60;
+      }
       if(!f.isClone){
-        const blink=f.respawnInvuln>0 && Math.floor(f.respawnInvuln/4)%2===0;
-        f.group.visible=!f.eliminated && f.vanished<=0 && !blink;
+        f.group.visible=!f.eliminated && f.vanished<=0;
         f.shieldMesh.visible=f.state==='shield';
         if(f.shieldMesh.visible){
           const k=f.shieldHP/100; f.shieldMesh.scale.setScalar(0.45+0.55*k);
