@@ -1010,9 +1010,11 @@ const EMPTY_CMD={left:false,right:false,up:false,down:false,jump:false,attack:fa
   jumpP:false,attackP:false,specialP:false,shieldP:false,grabP:false,axisX:0,axisY:0};
 const TAP_JUMP={on:true}; // Up (W / arrow up / stick up) also jumps, like Smash's default
 const RUN_DELAY=7;
-const TECH_WINDOW=20;       // frames before touching the ground that a shield press still techs
+const TECH_WINDOW=20;
+const AI_TECH={on:true};       // frames before touching the ground that a shield press still techs
 const SMASH_WINDOW=3;       // frames between a fresh direction press and Attack that still count as a smash          // frames a direction is held before walking turns into a run
 const BUFFER_FRAMES=6, BUFFER_KEYS=['attackP','specialP','jumpP','grabP'];
+const BAT_SWING=new Move('batSwing',{name:'Home-Run Swing',startup:14,active:4,recovery:22,dmg:22,bkb:42,kbg:2.7,angle:38,range:1.5,chargeable:true,color:0xffd27a});
 const ITEM_SHOOT=new Move('itemShoot',{name:'Rune Bolt',startup:6,active:2,recovery:12,dmg:6,bkb:7,kbg:1.35,angle:25,projectile:true,noHitbox:true,speed:16,pvis:'fire',color:0xb48cff,itemShoot:true});
 const ITEM_THROW=new Move('itemThrow',{startup:5,active:2,recovery:10,dmg:0,noHitbox:true,itemThrow:true,name:'Item Throw'});
 const LEDGE_ATTACK=new Move('ledgeAttack',{startup:8,active:4,recovery:16,dmg:8,bkb:12,kbg:1.2,angle:30,range:1.2,name:'Ledge Attack'});
@@ -1154,6 +1156,9 @@ class Fighter{
       const k=c==='up'?'aerialU':c==='down'?'aerialD':(dir===this.facing?'aerialF':'aerialB'); this.startAction(k,mv[k]); return true;
     }
     if(cmd.attackP && !this.held) this._consume('attackP');
+    if(this.held && this.held.type==='bat' && cmd.attackP && (cmd.left||cmd.right) && !cmd.grabP){ // the bat turns a side attack into a home-run swing
+      this._consume('attackP'); this.facing=cmd.left?-1:1; this.startAction('batSwing',BAT_SWING); return true;
+    }
     if(this.held && this.held.charges>0 && cmd.attackP && !cmd.grabP && !cmd.up && !cmd.down && !cmd.specialP){
       this._consume('attackP'); if(cmd.left||cmd.right) this.facing=cmd.left?-1:1;
       this.startAction('itemShoot',ITEM_SHOOT); return true;
@@ -1223,7 +1228,8 @@ class Fighter{
     if(!this._buf) this._buf={};
     cmd=Object.assign({},cmd);
     const upP=cmd.up && !this._prevUp; this._prevUp=cmd.up;
-    if(cmd.shieldP) this._techBuf=TECH_WINDOW; else if(this._techBuf>0) this._techBuf--; // shield shortly before landing = tech
+    // tech: shield pressed while tumbling, shortly before landing (a defensive shield from before the hit does not count)
+    if(cmd.shieldP && this.hitstun>0 && this.tumble) this._techBuf=TECH_WINDOW; else if(this._techBuf>0) this._techBuf--;
     this._prevL=this._lastL; this._prevR=this._lastR; this._lastL=cmd.left; this._lastR=cmd.right;
     // how many frames ago a direction was freshly pressed (for smash-vs-tilt on digital input)
     const lP=cmd.left&&!this._prevL, rP=cmd.right&&!this._prevR, dP=cmd.down&&!this._prevDn; this._prevDn=cmd.down;
@@ -2126,7 +2132,10 @@ class AIController{
     if(f.grabbedBy){ this.mode='escape'; if(R()<(this.diff==='hard'?0.5:this.diff==='medium'?0.3:0.12)) cmd.attackP=true; return cmd; }
     if(f.hitstun>0){ // survival DI: toward the stage and upward
       this.mode='escape';
-      if(f.tumble && f.vel.y<0 && f.pos.y-(stage.main.y+stage.main.h/2)<1.4 && Math.abs(f.pos.x-stage.main.x)<stage.main.w/2 && R()<P.parry*1.6+0.05){ cmd.shieldP=true; return cmd; }
+      // only level 9 techs, decided once per knockdown: bot teching at lower levels skewed balance toward heavies,
+      // because it breaks the combos the light fighters rely on
+      if(this._techRoll!==f.hitstunStart){ this._techRoll=f.hitstunStart; this._willTech=AI_TECH.on && this.level>=9 && R()<0.35; }
+      if(this._willTech && f.tumble && f.vel.y<0 && f.pos.y-(stage.main.y+stage.main.h/2)<1.4 && Math.abs(f.pos.x-stage.main.x)<stage.main.w/2){ cmd.shieldP=true; return cmd; }
       if(R()>P.rand*0.5){ cmd.axisX=f.pos.x>main.x?-1:1; cmd.axisY=-1; }
       return cmd;
     }
@@ -2381,10 +2390,12 @@ const ITEM_TYPES={
   axe:{name:'Throwing Axe',model:'axe_1handed',scale:0.9,weight:0.35,
     move:new Move('itemAxe',{name:'Throwing Axe',dmg:10,bkb:10,kbg:2.1,angle:35,pvis:'item',model:'axe_1handed',scale:0.9,gravity:6,spin:0.45,radius:0.5,color:0xd8d8d8})},
   potion:{name:'Healing Potion',model:'bottle_A_green',scale:0.9,weight:0.25,heal:30},
+  bat:{name:'Home-Run Bat',model:'Skeleton_Axe',scale:0.8,weight:0,bat:true,
+    move:new Move('itemBat',{name:'Home-Run Bat',dmg:8,bkb:12,kbg:1.8,angle:40,pvis:'item',model:'Skeleton_Axe',scale:0.8,gravity:8,spin:0.4,radius:0.5,color:0xffd27a})},
   wand:{name:'Rune Wand',model:'Skeleton_Staff',scale:0.55,weight:0.2,charges:6,
     move:new Move('itemWand',{name:'Rune Wand',dmg:6,bkb:8,kbg:1.6,angle:35,pvis:'item',model:'Skeleton_Staff',scale:0.55,gravity:8,spin:0.4,radius:0.5,color:0xb48cff})},
 };
-function pickItemType(){ let r=Math.random(); for(const k in ITEM_TYPES){ r-=ITEM_TYPES[k].weight; if(r<=0) return k; } return 'bomb'; }
+function pickItemType(){ const tot=Object.values(ITEM_TYPES).reduce((a,t)=>a+t.weight,0); let r=Math.random()*tot; for(const k in ITEM_TYPES){ r-=ITEM_TYPES[k].weight; if(r<=0&&ITEM_TYPES[k].weight>0) return k; } return 'bomb'; }
 
 //////////////////////// GAME ////////////////////////
 class Game{
@@ -2831,6 +2842,7 @@ class Game{
     this.particles=new ParticleSystem(this.scene);
     this.isTraining=this.settings.mode==='training'; this.isHomerun=this.settings.mode==='homerun';
     this.hr=this.isHomerun?{t:HR_TIME,phase:'hit',fly:0,dist:0}:null;
+    this._batPending=this.isHomerun;
     // who is in the match and who controls them: 'p1'/'p2' keyboard+pad, 'bot', or the training 'dummy'
     const arc=mode==='arcade'&&this.arcade;
     const botDiff=arc?this.arcade.diffs[this.arcade.round]:this.settings.botDifficulty;
@@ -2882,6 +2894,7 @@ class Game{
     $('lessons-panel').classList.toggle('hidden',!this.isTraining); this._lessonsHtml=null;
     $('hud').classList.remove('replaying'); $('unlock-note').textContent='';
     $('big-text').style.opacity=0;
+    if(this._batPending){ this._batPending=false; this._spawnItem('bat',new THREE.Vector3(this.f1.pos.x+1.3,this.f1.pos.y+0.5,0),new THREE.Vector3()); }
     this._updateHUD(); this._showGuide();
     if(this.isTraining){ this._matchRunning=true; this._countT=[]; this._bigText('TRAINING',true); this._countT.push(setTimeout(()=>this._hideBigText(),900)); AUDIO.startMusic(this.stageData.theme); }
     else this._runCountdown();
@@ -3018,7 +3031,7 @@ class Game{
       if(x<b.l||x>b.r||y>b.t||(this.stamina&&defender.percent>=STAMINA_HP)){ this.slowmo={t:50,f:defender}; this.flash=Math.max(this.flash,0.35); this.flashColor=0xffffff; AUDIO.playUltimate(); }
     }
     defender.grounded=false; defender.onPlatform=null;
-    defender.hitstun=Math.round(clamp(kb*0.34,6,80))+(move.stun||0);
+    defender.hitstun=Math.round(clamp(kb*0.34,6,80))+(move.stun||0); defender.hitstunStart=(defender.hitstunStart||0)+1;
     defender.state='hitstun'; defender.tumble=kb>75;
     defender.squash=kb>60?0.78:0.9;
     const hs=Math.round(clamp(dmg*0.45+2,2,move.ultimate?22:10));
@@ -4139,7 +4152,7 @@ const ANIM_COMMON={
   tiltSide:'1H_Melee_Attack_Slice_Horizontal',tiltUp:'Spellcast_Raise',tiltDown:'Unarmed_Melee_Attack_Kick',
   smashSide:'2H_Melee_Attack_Chop',smashUp:'2H_Melee_Attack_Spin',smashDown:'2H_Melee_Attack_Spinning',
   aerialN:'2H_Melee_Attack_Spin',aerialF:'1H_Melee_Attack_Chop',aerialB:'Unarmed_Melee_Attack_Kick',aerialU:'Spellcast_Raise',aerialD:'2H_Melee_Attack_Chop',
-  grab:'Interact',itemThrow:'Throw',itemShoot:'Spellcast_Shoot',ledgeAttack:'1H_Melee_Attack_Slice_Horizontal',ultimate:'2H_Melee_Attack_Chop',
+  grab:'Interact',itemThrow:'Throw',itemShoot:'Spellcast_Shoot',batSwing:'2H_Melee_Attack_Slice',ledgeAttack:'1H_Melee_Attack_Slice_Horizontal',ultimate:'2H_Melee_Attack_Chop',
   specialN:'Spellcast_Shoot',specialSide:'1H_Melee_Attack_Stab',specialUp:'Jump_Full_Long',specialDown:'Block',counterStrike:'Block_Attack',
 };
 const ANIM_SETS={
