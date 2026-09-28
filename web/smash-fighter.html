@@ -261,6 +261,7 @@
     <div class="tp-title">TRAINING</div>
     <div class="tp-row"><span class="tp-label">Dummy</span><div id="tp-dummy" class="cs-mode-select"></div></div>
     <div class="tp-row"><span class="tp-label">Dummy %</span><div id="tp-pct" class="cs-mode-select"></div></div>
+    <div class="tp-row"><span class="tp-label">Speed</span><div id="tp-speed" class="cs-mode-select"></div></div>
     <div class="tp-row"><span class="tp-label">Items</span><div id="tp-items" class="cs-mode-select"></div></div>
     <div class="tp-row"><span class="tp-label">Hitboxes</span><div id="tp-hitbox" class="cs-mode-select"></div><div id="tp-reset" class="chip">Reset positions</div></div>
     <pre id="frame-data">Attack to see frame data.</pre>
@@ -2232,6 +2233,7 @@ class Game{
     this._chipRow($('tp-pct'),[0,50,100,150].map(v=>({label:v+'%',value:v})),-1,v=>{ if(this.f2) this.f2.percent=v; });
     this._chipRow($('tp-hitbox'),[{label:'Show',value:true},{label:'Hide',value:false}],true,v=>{ this.training.hitboxes=v; });
     $('tp-reset').onclick=()=>this._trainingReset();
+    this._chipRow($('tp-speed'),[{label:'1×',value:1},{label:'½×',value:0.5},{label:'¼×',value:0.25}],1,v=>{ this.training.speed=v; });
     this._chipRow($('tp-items'),[{label:'Bomb',value:'bomb'},{label:'Axe',value:'axe'},{label:'Potion',value:'potion'},{label:'Crate',value:'crate'}],null,v=>{
       if(!this.f1||!this.isTraining) return;
       if(v==='crate') this._spawnCrate(); else this._spawnItem(v,new THREE.Vector3(this.f1.pos.x+this.f1.facing*1.5,this.f1.pos.y+3,0),new THREE.Vector3(0,2,0));
@@ -3462,11 +3464,12 @@ class Game{
   _loop(t){
     requestAnimationFrame(tt=>this._loop(tt));
     let dtms=t-this._last; this._last=t; dtms=Math.min(dtms,80);
-    this._accum+=dtms*(this.slowmo&&this.state==='battle'?0.22:1);
+    const tSpeed=this.isTraining&&this.training.speed?this.training.speed:1;
+    this._accum+=dtms*(this.slowmo&&this.state==='battle'?0.22:tSpeed);
     const step=1000/60; let steps=0;
     while(this._accum>=step && steps<5){ this._fixedUpdate(1/60); this._accum-=step; steps++; }
     this._pollMenuPads();
-    this._render(this.state==='paused'?0:dtms/1000*(this.slowmo?0.22:1));
+    this._render(this.state==='paused'?0:dtms/1000*(this.slowmo?0.22:tSpeed));
     INPUT.endFrame();
   }
   _fixedUpdate(dt){
