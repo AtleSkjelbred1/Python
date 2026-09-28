@@ -894,6 +894,7 @@ const EMPTY_CMD={left:false,right:false,up:false,down:false,jump:false,attack:fa
 const BUFFER_FRAMES=6, BUFFER_KEYS=['attackP','specialP','jumpP','grabP'];
 const ITEM_THROW=new Move('itemThrow',{startup:5,active:2,recovery:10,dmg:0,noHitbox:true,itemThrow:true,name:'Item Throw'});
 const LEDGE_ATTACK=new Move('ledgeAttack',{startup:8,active:4,recovery:16,dmg:8,bkb:12,kbg:1.2,angle:30,range:1.2,name:'Ledge Attack'});
+const LOW_GFX={on:false};
 const FACE_ANGLE=Math.PI/2-0.32; // model turns sideways, slightly toward the camera
 
 class Fighter{
@@ -939,7 +940,9 @@ class Fighter{
     this.anim=new AnimRig(model);
     this.shieldMesh=new THREE.Mesh(new THREE.SphereGeometry(1.0*s,16,12),new THREE.MeshStandardMaterial({color:0x6fd0ff,transparent:true,opacity:0.3,emissive:0x2288ff,emissiveIntensity:0.9,depthWrite:false}));
     this.shieldMesh.position.y=0.95*s; this.shieldMesh.visible=false; g.add(this.shieldMesh);
-    this.glow=new THREE.PointLight(cd.accent,0,5); this.glow.position.y=1.1*s; g.add(this.glow);
+    // on LOW graphics the charge/counter glow is a stand-in object: fewer lights keeps shaders cheap
+    this.glow=LOW_GFX.on?new THREE.Object3D():new THREE.PointLight(cd.accent,0,5); if(LOW_GFX.on) this.glow.intensity=0;
+    this.glow.position.y=1.1*s; g.add(this.glow);
     this.scene.add(g);
   }
   // distance from a point to this fighter's capsule hurtbox (a vertical segment from shins to head)
@@ -1556,7 +1559,7 @@ class StageObj{
     }
     const m=this.main, top=m.y+m.h/2, L=m.x-m.w/2, R=m.x+m.w/2;
     this.torchLights=[];
-    const torch=(x,y,z)=>{ add('torch_lit',x,y,z,1.3); const l=new THREE.PointLight(0xff9a40,0.6,7,2); l.position.set(x,y+1.1,z+0.6); scene.add(l); this.torchLights.push(l); };
+    const torch=(x,y,z)=>{ add('torch_lit',x,y,z,1.3); if(LOW_GFX.on) return; const l=new THREE.PointLight(0xff9a40,0.6,7,2); l.position.set(x,y+1.1,z+0.6); scene.add(l); this.torchLights.push(l); };
     if(th==='fortress'){
       ['wall_arched','wall','wall_broken','wall_arched','wall'].forEach((w,i)=>add(w,L+2+i*4,top,-2.3,[1,0.8,1]));
       add('pillar_decorated',L-0.4,top,-2.2,0.8); add('pillar_decorated',R+0.4,top,-2.2,0.8);
@@ -2049,7 +2052,7 @@ class Game{
   _saveSettings(){ try{ const s=this.settings; localStorage.setItem('riftclash.settings.v1',JSON.stringify({stocks:s.stocks,timeLimit:s.timeLimit,botDifficulty:s.botDifficulty,hazards:s.hazards,items:s.items,music:s.music,graphics:s.graphics})); }catch(e){} }
   // LOW trades shadows and resolution for frame rate on weaker machines
   _applyGraphics(){
-    const low=this.settings.graphics==='low';
+    const low=this.settings.graphics==='low'; LOW_GFX.on=low;
     this.renderer.setPixelRatio(low?0.8:Math.min(devicePixelRatio,1.5));
     this.renderer.setSize(innerWidth,innerHeight); this.postfx.setSize();
     if(this.renderer.shadowMap.enabled===low){ this.renderer.shadowMap.enabled=!low; this._gfxChanged=true; }
