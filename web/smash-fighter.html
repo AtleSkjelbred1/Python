@@ -150,6 +150,9 @@
   .movelist > div{ flex:1; background:rgba(255,255,255,.03); border:1px solid #2c3140; border-radius:10px; padding:8px 10px; }
   .movelist b{ color:#ffb347; } .movelist .mh{ font-weight:800; letter-spacing:1px; margin-bottom:3px; }
   #screen-pause .panel{ max-height:94vh; overflow-y:auto; }
+  #ctrl-guide{ position:absolute; top:78px; left:50%; transform:translateX(-50%); background:rgba(10,12,18,.8); border:1px solid rgba(255,179,71,.5);
+    border-radius:10px; padding:10px 16px; font-size:13px; line-height:1.7; text-align:center; transition:opacity .6s; pointer-events:none; }
+  #ctrl-guide b{ color:#ffb347; } #ctrl-guide kbd{ background:#1c2230; border:1px solid #3d4658; border-radius:4px; padding:0 5px; font-family:monospace; }
   .rec-h{ letter-spacing:2px; font-size:12px; color:#ffb347; margin:10px 0 2px 0; }
   #win-quote{ font-style:italic; opacity:.85; font-size:15px; margin-top:4px; text-shadow:0 2px 8px #000; }
   #unlock-note{ color:#ffd166; font-size:14px; letter-spacing:1px; min-height:18px; margin-top:4px; }
@@ -194,6 +197,7 @@
     <span class="sl">MUSIC</span><div id="music-chips" class="cs-mode-select"></div>
     <span class="sl">GRAPHICS</span><div id="gfx-chips" class="cs-mode-select"></div>
     <span class="sl">BOT</span><div id="diff-chips" class="cs-mode-select"></div>
+    <span class="sl">TAP JUMP</span><div id="tapjump-chips" class="cs-mode-select"></div>
   </div>
 </div>
 
@@ -248,6 +252,7 @@
   <div id="hud-players"></div>
   <div id="hud-timer">2:00</div>
   <div id="hud-offscreen"></div>
+  <div id="ctrl-guide" class="hidden"></div>
   <div id="hud-combo"><div class="cc" id="combo-count"></div><div class="cd" id="combo-dmg"></div></div>
   <div id="big-text"></div>
   <div id="stage-label"></div>
@@ -294,12 +299,13 @@
         <tr><td>Special</td><td>Y</td></tr>
         <tr><td>Shield</td><td>B / RB</td></tr>
         <tr><td>Grab</td><td>LB</td></tr>
+        <tr><td>Smash / aerial</td><td>Right stick</td></tr>
         <tr><td>Taunt</td><td>LT / RT</td></tr>
         <tr><td>Pause</td><td>Start</td></tr>
       </table>
     </div>
     <div class="tips">
-      Tap a direction + Attack = tilt · hold Attack = charged smash · Jab ×3 by tapping Attack · Tap Jump = short hop, hold Jump = higher jump (also on the double jump)<br>
+      Direction + Attack pressed together = smash (hold Attack to charge) · direction already held + Attack = tilt · while running: dash attack · Jab ×3 by tapping Attack · Up also jumps (turn off under Tap Jump) · Tap Jump = short hop, hold = higher jump<br>
       Down in the air = fast fall · Down on a thin platform = drop through · Shield + direction = roll, Shield + down = spot dodge<br>
       Specials go through shields · Shield at the moment of impact = parry · Shield in the air = air dodge · Grab, then a direction = throw (Attack = pummel)<br>
       At a ledge: toward/up = climb, Jump, Attack = get-up attack, Shield = roll, away/down = let go · Nyx &amp; Vex can wall jump<br>
@@ -563,7 +569,7 @@ class InputManager{
     let left=this.down(km.left), right=this.down(km.right), up=this.down(km.up), down=this.down(km.down);
     let jump=this.down(km.jump), attack=this.down(km.attack), special=this.down(km.special), shield=this.down(km.shield), grab=this.down(km.grab);
     let jumpP=this.pressed(km.jump), attackP=this.pressed(km.attack), specialP=this.pressed(km.special), shieldP=this.pressed(km.shield), grabP=this.pressed(km.grab), tauntP=this.pressed(km.taunt);
-    let axisX=0, axisY=0;
+    let axisX=0, axisY=0, cStick=null;
     const gp=gpIndex!=null?this.getGamepad(gpIndex):null;
     if(gp){
       const prev=this.gpPrev[gpIndex]||{};
@@ -578,11 +584,14 @@ class InputManager{
       jumpP=jumpP||(gJump&&!prev.jump); attackP=attackP||(gAttack&&!prev.attack);
       specialP=specialP||(gSpecial&&!prev.special); shieldP=shieldP||(gShield&&!prev.shield); grabP=grabP||(gGrab&&!prev.grab);
       const gTaunt=btn(6)||btn(7); tauntP=tauntP||(gTaunt&&!prev.taunt);
-      this.gpPrev[gpIndex]={jump:gJump,attack:gAttack,special:gSpecial,shield:gShield,grab:gGrab,taunt:gTaunt};
+      // right stick = C-stick: a flick is an instant smash (grounded) or aerial (airborne) in that direction
+      const rx=gp.axes[2]||0, ry=gp.axes[3]||0, rOn=Math.max(Math.abs(rx),Math.abs(ry))>0.6;
+      if(rOn && !prev.rOn) cStick=Math.abs(rx)>=Math.abs(ry)?(rx<0?'left':'right'):(ry<0?'up':'down');
+      this.gpPrev[gpIndex]={jump:gJump,attack:gAttack,special:gSpecial,shield:gShield,grab:gGrab,taunt:gTaunt,rOn};
     }
     if(left) axisX=-1; if(right) axisX=1;
     if(up) axisY=-1; if(down) axisY=1;
-    return { left,right,up,down,jump,attack,special,shield,grab,jumpP,attackP,specialP,shieldP,grabP,tauntP,axisX,axisY };
+    return { left,right,up,down,jump,attack,special,shield,grab,jumpP,attackP,specialP,shieldP,grabP,tauntP,cStick,axisX,axisY };
   }
 }
 const INPUT = new InputManager();
@@ -908,6 +917,9 @@ function knockbackScore(percentAfterHit,dmg,weight,kbg,bkb){
 }
 const EMPTY_CMD={left:false,right:false,up:false,down:false,jump:false,attack:false,special:false,shield:false,grab:false,
   jumpP:false,attackP:false,specialP:false,shieldP:false,grabP:false,axisX:0,axisY:0};
+const TAP_JUMP={on:true}; // Up (W / arrow up / stick up) also jumps, like Smash's default
+const RUN_DELAY=7;
+const SMASH_WINDOW=3;       // frames between a fresh direction press and Attack that still count as a smash          // frames a direction is held before walking turns into a run
 const BUFFER_FRAMES=6, BUFFER_KEYS=['attackP','specialP','jumpP','grabP'];
 const ITEM_THROW=new Move('itemThrow',{startup:5,active:2,recovery:10,dmg:0,noHitbox:true,itemThrow:true,name:'Item Throw'});
 const LEDGE_ATTACK=new Move('ledgeAttack',{startup:8,active:4,recovery:16,dmg:8,bkb:12,kbg:1.2,angle:30,range:1.2,name:'Ledge Attack'});
@@ -1016,6 +1028,11 @@ class Fighter{
   // ---------------- input -> action selection ----------------
   chooseAction(cmd){
     const mv=this.moveset;
+    if(cmd.cStick && !this.held){
+      const c=cmd.cStick, side=c==='left'||c==='right', dir=c==='left'?-1:1;
+      if(this.grounded){ if(side) this.facing=dir; const k=side?'smashSide':(c==='up'?'smashUp':'smashDown'); this.startAction(k,mv[k]); return true; }
+      const k=c==='up'?'aerialU':c==='down'?'aerialD':(dir===this.facing?'aerialF':'aerialB'); this.startAction(k,mv[k]); return true;
+    }
     if(cmd.attackP && !this.held) this._consume('attackP');
     if(this.held && (cmd.attackP||cmd.grabP) && !cmd.specialP){
       this._consume('attackP'); this._consume('grabP');
@@ -1047,9 +1064,13 @@ class Fighter{
         return true;
       }
       if(this.state==='run'){ this.startAction('dash',mv.dash); return true; }
-      if(cmd.down){ this.startAction('tiltDown',mv.tiltDown); return true; }
-      if(cmd.up){ this.startAction('tiltUp',mv.tiltUp); return true; }
-      if(cmd.left||cmd.right){ this.startAction('tiltSide',mv.tiltSide); return true; }
+      // humans: a direction pressed together with attack (within SMASH_WINDOW frames) is a smash, a direction
+      // already held is a tilt. Bots still upgrade a tilt by holding attack.
+      const human=this.control==='p1'||this.control==='p2', flick=human&&this._dirAge<=SMASH_WINDOW;
+      const pick=(dir,tilt,smash)=>{ const k=(flick&&this._dirKind===dir)?smash:tilt; this.startAction(k,mv[k]); return true; };
+      if(cmd.down) return pick('down','tiltDown','smashDown');
+      if(cmd.up) return pick('up','tiltUp','smashUp');
+      if(cmd.left||cmd.right) return pick('side','tiltSide','smashSide');
       let key='jab1';
       if(this.jabWindow>0 && this._lastJab==='jab1') key='jab2';
       else if(this.jabWindow>0 && this._lastJab==='jab2') key='jab3';
@@ -1077,6 +1098,16 @@ class Fighter{
     this.walkCycle+=dt;
     if(!this._buf) this._buf={};
     cmd=Object.assign({},cmd);
+    const upP=cmd.up && !this._prevUp; this._prevUp=cmd.up;
+    this._prevL=this._lastL; this._prevR=this._lastR; this._lastL=cmd.left; this._lastR=cmd.right;
+    // how many frames ago a direction was freshly pressed (for smash-vs-tilt on digital input)
+    const lP=cmd.left&&!this._prevL, rP=cmd.right&&!this._prevR, dP=cmd.down&&!this._prevDn; this._prevDn=cmd.down;
+    this._dirAge=(this._dirAge==null?99:this._dirAge+1);
+    if(lP||rP){ this._dirAge=0; this._dirKind='side'; } else if(upP){ this._dirAge=0; this._dirKind='up'; } else if(dP){ this._dirAge=0; this._dirKind='down'; }
+    if(TAP_JUMP.on && (this.control==='p1'||this.control==='p2')){
+      if(upP && !cmd.attackP && !cmd.specialP && this.state!=='ledge' && !this.grabbing) cmd.jumpP=true;
+      if(cmd.up) cmd.jump=true;
+    }
     for(const k of BUFFER_KEYS){
       if(cmd[k]) this._buf[k]=BUFFER_FRAMES;
       else if(this._buf[k]>0){ if(this.hitstop<=0) this._buf[k]--; if(this._canUseBuffer()) cmd[k]=true; }
@@ -1136,6 +1167,7 @@ class Fighter{
     }
     if(this.state==='land'){ this.landTimer--; this.vel.x*=0.75; this._physics(dt,world); if(this.landTimer<=0) this.state='idle'; return; }
     if(this.state==='jumpsquat'){
+      if(cmd.up && (cmd.attackP||cmd.specialP)){ this.state='idle'; if(this.chooseAction(cmd)){ this._physics(dt,world); return; } this.state='jumpsquat'; }
       this.jumpSquat--; this.vel.x*=0.9;
       if(this.jumpSquat<=0){
         const full=cmd.jump; // released during jumpsquat -> short hop
@@ -1161,7 +1193,12 @@ class Fighter{
     }
     if(grounded){
       if(cmd.shieldP||this.state==='shield'){
-        if(cmd.left||cmd.right){ this.shielding=false; this._startRoll(cmd.left?-1:1); this._physics(dt,world); return; }
+        // humans: shield first, then a fresh direction press rolls (or down spot-dodges); pressing both together
+        // also rolls. Holding a direction while raising the shield just blocks. Bots keep the same-frame rule.
+        const human=this.control==='p1'||this.control==='p2';
+        const lp=cmd.left&&!this._prevL, rp=cmd.right&&!this._prevR;
+        const rollDir=human?(lp?-1:rp?1:0):(cmd.left?-1:cmd.right?1:0);
+        if(rollDir){ this.shielding=false; this._startRoll(rollDir); this._physics(dt,world); return; }
         if(cmd.down && (cmd.shieldP||downP)){ this.shielding=false; this._startSpotDodge(); this._physics(dt,world); return; }
       }
       if(cmd.shield){
@@ -1191,13 +1228,16 @@ class Fighter{
         this._physics(dt,world); return;
       }
       if(cmd.left||cmd.right){
-        const running=Math.abs(this.vel.x)>this.cd.walkSpeed*0.8;
+        const dir=cmd.left?-1:1;
+        this._runHold=(this._runDir===dir?(this._runHold||0)+1:1); this._runDir=dir;
+        const running=this.state==='run'&&Math.sign(this.vel.x)===dir || this._runHold>=RUN_DELAY;
         const target=(cmd.left?-1:1)*(running?this.cd.runSpeed:this.cd.walkSpeed);
         this.vel.x=lerp(this.vel.x,target,0.35);
         const was=this.state; this.state=running?'run':'walk';
         if(this.state==='run' && was!=='run') this.events.push({type:'dust',dir:this.facing});
         if(Math.sign(this.vel.x)!==Math.sign(target) && Math.abs(this.vel.x)>this.cd.walkSpeed) this.events.push({type:'dust',dir:-Math.sign(this.vel.x),skid:true});
       } else {
+        this._runHold=0;
         this.vel.x=lerp(this.vel.x,0,0.4);
         this.state=cmd.down?'crouch':'idle';
       }
@@ -1212,10 +1252,11 @@ class Fighter{
           this.state='doublejump'; this.stateTimer=0; this.events.push({type:'jump2'});
         }
       }
-      const accel=this.cd.airSpeed*2.2, maxA=this.cd.airSpeed*2.4;
-      if(cmd.left) this.vel.x=Math.max(-maxA,this.vel.x-accel*dt*3);
-      else if(cmd.right) this.vel.x=Math.min(maxA,this.vel.x+accel*dt*3);
-      else if(!this.cd.sandbag) this.vel.x=lerp(this.vel.x,0,0.05); // the sandbag keeps its momentum
+      // air drift: reach full speed in ~10 frames, and settle quickly when the stick is let go
+      const accel=this.cd.airSpeed*2.4*6, maxA=this.cd.airSpeed*2.4;
+      if(cmd.left) this.vel.x=this.vel.x>-maxA?Math.max(-maxA,this.vel.x-accel*dt*(this.vel.x>0?1.6:1)):lerp(this.vel.x,-maxA,0.06);
+      else if(cmd.right) this.vel.x=this.vel.x<maxA?Math.min(maxA,this.vel.x+accel*dt*(this.vel.x<0?1.6:1)):lerp(this.vel.x,maxA,0.06);
+      else if(!this.cd.sandbag) this.vel.x=lerp(this.vel.x,0,0.1); // the sandbag keeps its momentum
       if(downP && this.vel.y<=2 && !this.fastFalling){ this.fastFalling=true; this.vel.y=-this.cd.fastFallSpeed; }
       if(this.state==='doublejump'){ if(++this.stateTimer>22) this.state=this.vel.y>0?'jump':'fall'; }
       else this.state=this.vel.y>0?'jump':'fall';
@@ -1338,7 +1379,7 @@ class Fighter{
     let m=a.move;
     this.actionFrame++;
     // holding attack through a tilt's startup upgrades it into the matching chargeable smash
-    if(m.id.indexOf('tilt')===0 && this._chargeHeld && this.actionFrame>3){
+    if(m.id.indexOf('tilt')===0 && this._chargeHeld && this.actionFrame>3 && !(this.control==='p1'||this.control==='p2')){
       const k='smash'+m.id.slice(4), sm=this.moveset[k];
       if(sm){ this.action={key:k,move:sm}; this.actionFrame=1; this.chargeFrames=0; this._hitTargets.clear(); m=sm; }
     }
@@ -2100,7 +2141,7 @@ class Game{
     this.camera.position.set(0,8,26);
     this.postfx=new PostFX(this.renderer);
     window.addEventListener('resize',()=>this._resize()); this._resize();
-    this.settings=Object.assign({stocks:3,timeLimit:0,mode:'vs',botDifficulty:'medium',hazards:true,items:true,music:true,graphics:'high'},this._loadSettings());
+    this.settings=Object.assign({stocks:3,timeLimit:0,mode:'vs',botDifficulty:'medium',hazards:true,items:true,music:true,graphics:'high',tapJump:true},this._loadSettings());
     this.selection={p1:0,p2:1,stageIdx:0,colors:{p1:'default',p2:'default'}};
     this.training={dummy:'stand',hitboxes:true};
     PROFILE.load();
@@ -2115,7 +2156,7 @@ class Game{
     requestAnimationFrame(t=>this._loop(t));
   }
   _loadSettings(){ try{ return JSON.parse(localStorage.getItem('riftclash.settings.v1'))||{}; }catch(e){ return {}; } }
-  _saveSettings(){ try{ const s=this.settings; localStorage.setItem('riftclash.settings.v1',JSON.stringify({stocks:s.stocks,timeLimit:s.timeLimit,botDifficulty:s.botDifficulty,hazards:s.hazards,items:s.items,music:s.music,graphics:s.graphics})); }catch(e){} }
+  _saveSettings(){ try{ const s=this.settings; localStorage.setItem('riftclash.settings.v1',JSON.stringify({stocks:s.stocks,timeLimit:s.timeLimit,botDifficulty:s.botDifficulty,hazards:s.hazards,items:s.items,music:s.music,graphics:s.graphics,tapJump:s.tapJump})); }catch(e){} }
   // LOW trades shadows and resolution for frame rate on weaker machines
   _applyGraphics(){
     const low=this.settings.graphics==='low'; LOW_GFX.on=low;
@@ -2147,6 +2188,8 @@ class Game{
     this._chipRow($('item-chips'),[{label:'ON',value:true},{label:'OFF',value:false}],S.items,set('items'));
     this._chipRow($('music-chips'),[{label:'ON',value:true},{label:'OFF',value:false}],S.music,v=>{ set('music')(v); AUDIO.musicOn=v; if(!v) AUDIO.stopMusic(); });
     this._chipRow($('gfx-chips'),[{label:'HIGH',value:'high'},{label:'LOW',value:'low'}],S.graphics,v=>{ set('graphics')(v); this._applyGraphics(); });
+    this._chipRow($('tapjump-chips'),[{label:'UP JUMPS',value:true},{label:'OFF',value:false}],S.tapJump,v=>{ set('tapJump')(v); TAP_JUMP.on=v; });
+    TAP_JUMP.on=S.tapJump;
     AUDIO.musicOn=S.music; this._applyGraphics();
     $('btn-1v1').onclick=()=>{ this.settings.mode='vs'; this._toCharSelect(); };
     $('btn-cpu').onclick=()=>{ this.settings.mode='cpu'; this._toCharSelect(); };
@@ -2537,9 +2580,21 @@ class Game{
     $('training-panel').classList.toggle('hidden',!this.isTraining);
     $('hud').classList.remove('replaying'); $('unlock-note').textContent='';
     $('big-text').style.opacity=0;
-    this._updateHUD();
+    this._updateHUD(); this._showGuide();
     if(this.isTraining){ this._matchRunning=true; this._countT=[]; this._bigText('TRAINING',true); this._countT.push(setTimeout(()=>this._hideBigText(),900)); AUDIO.startMusic(this.stageData.theme); }
     else this._runCountdown();
+  }
+  // a short controls reminder for the first few matches (and every training session)
+  _showGuide(){
+    const el=document.getElementById('ctrl-guide'); clearTimeout(this._guideT);
+    let seen=0; try{ seen=+localStorage.getItem('riftclash.guide')||0; }catch(e){}
+    if(seen>=3 && !this.isTraining){ el.classList.add('hidden'); return; }
+    try{ localStorage.setItem('riftclash.guide',seen+1); }catch(e){}
+    const k=KEYMAP.p1, L=keyLabel, jump=TAP_JUMP.on?`<kbd>${L(k.jump)}</kbd> or <kbd>${L(k.up)}</kbd>`:`<kbd>${L(k.jump)}</kbd>`;
+    el.innerHTML=`<b>P1</b> move <kbd>${L(k.left)}</kbd><kbd>${L(k.right)}</kbd> · jump ${jump} (hold = higher) · attack <kbd>${L(k.attack)}</kbd> · special <kbd>${L(k.special)}</kbd> · shield <kbd>${L(k.shield)}</kbd> · grab <kbd>${L(k.grab)}</kbd><br>`+
+      `direction + attack together = smash (hold to charge) · hold a direction, then attack = quick tilt · ${L(k.special)}+${L(k.shield)} = ultimate · Esc = pause & move list`;
+    el.style.opacity=1; el.classList.remove('hidden');
+    this._guideT=setTimeout(()=>{ el.style.opacity=0; },this.isTraining?9000:7000);
   }
   _buildHUD(){
     const n=this.fighters.length, row=document.getElementById('hud-players'), off=document.getElementById('hud-offscreen');
