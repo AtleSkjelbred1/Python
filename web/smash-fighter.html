@@ -338,7 +338,7 @@
       </table>
     </div>
     <div class="tips">
-      Direction + Attack pressed together = smash (hold Attack to charge) · direction already held + Attack = tilt · while running: dash attack · Jab ×3 by tapping Attack · Up also jumps (turn off under Tap Jump) · Tap Jump = short hop, hold = higher jump<br>
+      Direction + Attack pressed together = smash (hold Attack to charge) · direction already held + Attack = tilt · while running: dash attack · Jab ×3 by tapping Attack · Up also jumps (turn off under Tap Jump) · Tap Jump = short hop, hold = higher jump · Jump + Attack together = short-hop aerial<br>
       Down in the air = fast fall · Down on a thin platform = drop through · Shield + direction = roll, Shield + down = spot dodge<br>
       Specials go through shields · Shield at the moment of impact = parry · Shield just before hitting the ground while tumbling = tech · Shield in the air = air dodge · Grab, then a direction = throw (Attack = pummel)<br>
       At a ledge: toward/up = climb, Jump, Attack = get-up attack, Shield = roll, away/down = let go · Nyx &amp; Vex can wall jump<br>
@@ -1340,9 +1340,11 @@ class Fighter{
     if(this.state==='land'){ this.landTimer--; this.vel.x*=0.75; this._physics(dt,world); if(this.landTimer<=0) this.state='idle'; return; }
     if(this.state==='jumpsquat'){
       if(cmd.up && (cmd.attackP||cmd.specialP)){ this.state='idle'; if(this.chooseAction(cmd)){ this._physics(dt,world); return; } this.state='jumpsquat'; }
+      // jump + attack together (within the jumpsquat) = short-hop aerial, like pressing both at once in Ultimate
+      if(cmd.attackP && !cmd.up) this._shMacro=true;
       this.jumpSquat--; this.vel.x*=0.9;
       if(this.jumpSquat<=0){
-        const full=cmd.jump; // released during jumpsquat -> short hop
+        const full=cmd.jump && !this._shMacro; this._shMacro=false; // released during jumpsquat -> short hop
         this.vel.y=this.cd.jumpVel*(full?1:0.62); this.grounded=false; this.onPlatform=null; this.state='jump'; this.jumpHold=full?JUMP_HOLD_FRAMES:0;
         this.events.push({type:'jump'});
       }
@@ -1390,6 +1392,8 @@ class Fighter{
       if(cmd.shieldP && !this.airDodged){ this._startAirDodge(cmd); this._physics(dt,world); return; }
     }
     this.shieldHP=Math.min(100,this.shieldHP+0.2);
+    // jump and attack on the same frame: short hop, and the buffered attack becomes the aerial
+    if(grounded && cmd.jumpP && cmd.attackP && !cmd.up && !cmd.cStick && !this.held && ['idle','walk','run','crouch'].includes(this.state)){ this._startJumpSquat(cmd); this._physics(dt,world); return; }
     if(this.chooseAction(cmd)){ this._physics(dt,world); return; }
 
     if(grounded){
@@ -1442,7 +1446,7 @@ class Fighter{
     this._physics(dt,world);
   }
   _facingFromCmd(cmd){ if(this.faceLock>0){this.faceLock--;return;} if(cmd.left) this.facing=-1; else if(cmd.right) this.facing=1; }
-  _startJumpSquat(){ this._consume('jumpP'); this.state='jumpsquat'; this.jumpSquat=3; }
+  _startJumpSquat(cmd){ this._consume('jumpP'); this.state='jumpsquat'; this.jumpSquat=3; this._shMacro=!!(cmd&&cmd.attackP&&!cmd.up); }
   _startRoll(dir){ this.state='roll'; this.stateTimer=0; this.invuln=Math.max(this.invuln,14); this.faceLock=26; this._rollDir=dir; }
   _startSpotDodge(){ this.state='spotdodge'; this.stateTimer=0; this.invuln=Math.max(this.invuln,14); }
   _startAirDodge(cmd){
