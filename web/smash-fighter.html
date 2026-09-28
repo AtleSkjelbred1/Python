@@ -141,6 +141,10 @@
   #screen-mainmenu{ overflow-y:auto; justify-content:flex-start; padding:4vh 0 20px; }
   #screen-mainmenu .subtitle{ margin-bottom:18px; }
   @media (max-width:760px){ .settings-grid{ grid-template-columns:auto auto; } }
+  .movelist{ display:flex; gap:18px; margin:10px 0 2px; font-size:11.5px; line-height:1.5; }
+  .movelist > div{ flex:1; background:rgba(255,255,255,.03); border:1px solid #2c3140; border-radius:10px; padding:8px 10px; }
+  .movelist b{ color:#ffb347; } .movelist .mh{ font-weight:800; letter-spacing:1px; margin-bottom:3px; }
+  #screen-pause .panel{ max-height:94vh; overflow-y:auto; }
   .rec-h{ letter-spacing:2px; font-size:12px; color:#ffb347; margin:10px 0 2px 0; }
   #win-quote{ font-style:italic; opacity:.85; font-size:15px; margin-top:4px; text-shadow:0 2px 8px #000; }
   #unlock-note{ color:#ffd166; font-size:14px; letter-spacing:1px; min-height:18px; margin-top:4px; }
@@ -289,6 +293,7 @@
       <div id="btn-restart" class="menu-btn">RESTART MATCH</div>
       <div id="btn-quit" class="menu-btn">QUIT TO MENU</div>
     </div>
+    <div id="movelist" class="movelist"></div>
     <div class="ctrl-table">
       <table id="ctrl-p1"></table>
       <table id="ctrl-p2"></table>
@@ -300,6 +305,7 @@
         <tr><td>Special</td><td>Y</td></tr>
         <tr><td>Shield</td><td>B / RB</td></tr>
         <tr><td>Grab</td><td>LB</td></tr>
+        <tr><td>Taunt</td><td>LT / RT</td></tr>
         <tr><td>Pause</td><td>Start</td></tr>
       </table>
     </div>
@@ -523,12 +529,12 @@ const AUDIO = new AudioManager();
 // Sandboxed frames can deny the Gamepad API by permissions policy, which makes getGamepads() throw.
 function readGamepads(){ try{ return navigator.getGamepads?navigator.getGamepads():[]; }catch(e){ return []; } }
 const DEFAULT_KEYMAP = {
-  p1:{ left:'KeyA',right:'KeyD',up:'KeyW',down:'KeyS',jump:'Space',attack:'KeyF',special:'KeyG',shield:'KeyH',grab:'KeyR' },
-  p2:{ left:'ArrowLeft',right:'ArrowRight',up:'ArrowUp',down:'ArrowDown',jump:'Numpad0',attack:'Numpad1',special:'Numpad2',shield:'Numpad3',grab:'Numpad5' },
+  p1:{ left:'KeyA',right:'KeyD',up:'KeyW',down:'KeyS',jump:'Space',attack:'KeyF',special:'KeyG',shield:'KeyH',grab:'KeyR',taunt:'KeyT' },
+  p2:{ left:'ArrowLeft',right:'ArrowRight',up:'ArrowUp',down:'ArrowDown',jump:'Numpad0',attack:'Numpad1',special:'Numpad2',shield:'Numpad3',grab:'Numpad5',taunt:'Numpad4' },
 };
 const KEYMAP = JSON.parse(JSON.stringify(DEFAULT_KEYMAP));
 try{ const saved=JSON.parse(localStorage.getItem('riftclash.keys.v1')); if(saved) for(const p of ['p1','p2']) Object.assign(KEYMAP[p],saved[p]||{}); }catch(e){}
-const KEY_ACTIONS=[['left','Left'],['right','Right'],['up','Up'],['down','Down'],['jump','Jump'],['attack','Attack'],['special','Special'],['shield','Shield / Dodge'],['grab','Grab']];
+const KEY_ACTIONS=[['left','Left'],['right','Right'],['up','Up'],['down','Down'],['jump','Jump'],['attack','Attack'],['special','Special'],['shield','Shield / Dodge'],['grab','Grab'],['taunt','Taunt']];
 function keyLabel(code){ return (code||'—').replace(/^Key/,'').replace(/^Digit/,'').replace(/^Numpad/,'Num ').replace(/^Arrow/,'').replace('Space','Space'); }
 class InputManager{
   constructor(){
@@ -569,7 +575,7 @@ class InputManager{
     const km=KEYMAP[scheme];
     let left=this.down(km.left), right=this.down(km.right), up=this.down(km.up), down=this.down(km.down);
     let jump=this.down(km.jump), attack=this.down(km.attack), special=this.down(km.special), shield=this.down(km.shield), grab=this.down(km.grab);
-    let jumpP=this.pressed(km.jump), attackP=this.pressed(km.attack), specialP=this.pressed(km.special), shieldP=this.pressed(km.shield), grabP=this.pressed(km.grab);
+    let jumpP=this.pressed(km.jump), attackP=this.pressed(km.attack), specialP=this.pressed(km.special), shieldP=this.pressed(km.shield), grabP=this.pressed(km.grab), tauntP=this.pressed(km.taunt);
     let axisX=0, axisY=0;
     const gp=gpIndex!=null?this.getGamepad(gpIndex):null;
     if(gp){
@@ -584,11 +590,12 @@ class InputManager{
       jump=jump||gJump; attack=attack||gAttack; special=special||gSpecial; shield=shield||gShield; grab=grab||gGrab;
       jumpP=jumpP||(gJump&&!prev.jump); attackP=attackP||(gAttack&&!prev.attack);
       specialP=specialP||(gSpecial&&!prev.special); shieldP=shieldP||(gShield&&!prev.shield); grabP=grabP||(gGrab&&!prev.grab);
-      this.gpPrev[gpIndex]={jump:gJump,attack:gAttack,special:gSpecial,shield:gShield,grab:gGrab};
+      const gTaunt=btn(6)||btn(7); tauntP=tauntP||(gTaunt&&!prev.taunt);
+      this.gpPrev[gpIndex]={jump:gJump,attack:gAttack,special:gSpecial,shield:gShield,grab:gGrab,taunt:gTaunt};
     }
     if(left) axisX=-1; if(right) axisX=1;
     if(up) axisY=-1; if(down) axisY=1;
-    return { left,right,up,down,jump,attack,special,shield,grab,jumpP,attackP,specialP,shieldP,grabP,axisX,axisY };
+    return { left,right,up,down,jump,attack,special,shield,grab,jumpP,attackP,specialP,shieldP,grabP,tauntP,axisX,axisY };
   }
 }
 const INPUT = new InputManager();
@@ -747,6 +754,18 @@ const CHAR_DATA = [
   {id:'rattle',name:'Rattle',color:0x5a4a3a,accent:0xffb36b,weight:80,walkSpeed:3.3,runSpeed:6.3,jumpVel:15.6,doubleJumpVel:14.8,fallSpeed:14,fastFallSpeed:23,airSpeed:3.6,size:0.84,archetype:'brawler',weapon:'Skeleton_Axe',
     traits:'Tiny hurtbox; Fall Apart dodges then bursts', desc:'A small, scrappy skeleton with a rusty axe. Fast rolls, bone tosses, and he can fall apart to dodge an attack.'},
 ];
+// one line per special for the pause-menu move list: [neutral, side, up, down, ultimate]
+const MOVE_NOTES={
+  kael:['Slow crescent wave that travels along the ground.','Armored charge: shrugs off hits while dashing forward.','Rising cleave — your recovery.','Counter stance: strikes back at melee and reflects projectiles.','Teleports to a nearby rival for a devastating cleave.'],
+  nyx:['Short electric dash that passes through a rival.','Three quick shocks, then a launching finisher.','Teleport in any direction you hold.','Plants a trap that stuns whoever steps on it.','Lightning-fast lunge with a massive finisher.'],
+  brakka:['Lobs a molten boulder in an arc; shatters on the ground.','Armored shoulder charge.','Erupting leap — your recovery.','Ground slam that hits all around you.','Quake that launches everyone near you.'],
+  seren:['Fast firebolt.','Dash that leaves burning flames behind.','Flaming ascent — your recovery.','Burst of fire around you.','Inferno that engulfs the area around you.'],
+  rook:['Hold to charge a piston punch.','Grapple hook: grabs from long range.','Rocket uppercut — your recovery.','Armored ground pound.','Closes in for an overdriven haymaker.'],
+  vex:['Summons a shadow clone that repeats your last landed hit.','Quick shadow dash strike.','Leap with a rising slash — your recovery.','Vanish and reappear a few steps away, briefly untouchable.','Blinks to a nearby rival for an execution strike.'],
+  wren:['Fast crossbow bolt.','Lobbed smoke bomb that bursts on contact or impact.','Grapple line — your recovery.','Snare wire trap that stuns.','Closes in and unloads a point-blank volley.'],
+  morrow:['Slow soul orb that controls space.','Bone spikes burst from the ground a few steps ahead.','Teleport in any direction — your recovery.','Siphon around you; heals you for part of the damage dealt.','A wave of grave magic around you.'],
+  rattle:['Tosses a bone in an arc.','Rolling multi-hit dash with a launching finisher.','Skull hop with a rising chop — your recovery.','Collapses into a pile of bones (untouchable), then bursts back together.','Buries a rival under an avalanche of bones.'],
+};
 const VICTORY_QUOTES={
   kael:['An oath kept is a blade that never dulls.','Stand up. Again, if you must.'],
   nyx:['Blink and you missed it. You blinked.','Too slow — the storm does not wait.'],
@@ -1122,6 +1141,7 @@ class Fighter{
       this._physics(dt,world); return;
     }
     if(this.state==='roll'||this.state==='spotdodge'||this.state==='airdodge'){ this._updateDodge(dt,world); return; }
+    if(this.state==='taunt'){ this.vel.x*=0.7; if(++this.stateTimer>54) this.state='idle'; this._physics(dt,world); return; }
     if(this.helpless){
       this.state='helpless';
       if(cmd.left) this.vel.x=Math.max(-this.cd.airSpeed*1.6,this.vel.x-0.12);
@@ -1160,6 +1180,7 @@ class Fighter{
     if(this.chooseAction(cmd)){ this._physics(dt,world); return; }
 
     if(grounded){
+      if(cmd.tauntP && this.state!=='shield'){ this.state='taunt'; this.stateTimer=0; this.events.push({type:'taunt'}); this._physics(dt,world); return; }
       if(cmd.jumpP){ this._startJumpSquat(); this._physics(dt,world); return; }
       if(downP && this.onPlatform && !this.onPlatform.solid){
         this.dropThrough=14; this.grounded=false; this.onPlatform=null; this.vel.y=-3; this.state='fall';
@@ -2393,7 +2414,7 @@ class Game{
     if(this.viz){ this.viz=null; }
     this.projectiles=[]; this.clones=[];
     this.items=[]; this.crates=[]; this.itemsOn=this.settings.items&&!this.isTraining; this.crateTimer=Math.round(rand(300,480));
-    this.timeLeft=this.settings.timeLimit;
+    this.timeLeft=this.settings.timeLimit; this.suddenDeath=false;
     this.matchOver=false; this.cinematic=null; this.endTimer=0; this.frame=0;
     this.bloomPulse=0; this.flash=0;
     const $=id=>document.getElementById(id);
@@ -2405,6 +2426,7 @@ class Game{
     $('hudport-1').style.borderColor='#'+this.p1char.accent.toString(16).padStart(6,'0');
     $('hudport-2').style.borderColor='#'+this.p2char.accent.toString(16).padStart(6,'0');
     $('big-text').style.opacity=0;
+    this._updateHUD();
     if(this.isTraining){ this._matchRunning=true; this._countT=[]; this._bigText('TRAINING',true); this._countT.push(setTimeout(()=>this._hideBigText(),900)); AUDIO.startMusic(this.stageData.theme); }
     else this._runCountdown();
   }
@@ -2431,7 +2453,16 @@ class Game{
     });
     this._countT.push(setTimeout(()=>this._hideBigText(),t));
   }
-  _pause(){ if(!this._matchRunning||this.matchOver) return; this.state='paused'; this._showScreen('pause'); AUDIO.duckMusic(true); }
+  _pause(){ if(!this._matchRunning||this.matchOver) return; this.state='paused'; this._showScreen('pause'); AUDIO.duckMusic(true); this._renderMoveList(); }
+  _renderMoveList(){
+    const dirs=['Neutral','Side','Up','Down'], keys=['n','side','up','down'];
+    document.getElementById('movelist').innerHTML=[this.p1char,this.p2char].map((cd,i)=>{
+      const sp=SPECIALS[cd.id], notes=MOVE_NOTES[cd.id]||[];
+      return `<div><div class="mh" style="color:${hex6(cd.accent)}">P${i+1} · ${cd.name.toUpperCase()}</div>`+
+        keys.map((k,j)=>`<div><b>${dirs[j]} Special — ${sp[k].name}:</b> ${notes[j]||''}</div>`).join('')+
+        `<div><b>Ultimate — ${ULTIMATES[cd.id].name}:</b> ${notes[4]||''}</div><div style="opacity:.7">${cd.traits}</div></div>`;
+    }).join('');
+  }
   _resume(){ this.state='battle'; this._showScreen('__hud__'); AUDIO.duckMusic(false); }
 
   // -------------------- COMBAT --------------------
@@ -2755,6 +2786,7 @@ class Game{
         case 'spikes': this._spikes(e.x,e.y,e.color); break;
         case 'itemthrow': AUDIO.playWhoosh(0.8); break;
         case 'pickup': if(this.items.includes(e.item)) this._onPickup(f,e.item); break;
+        case 'taunt': this._floatText(f,choice(['COME ON!','TOO EASY','HA!','BRING IT'])); AUDIO.tone(700,0.1,'triangle',0.14,900); AUDIO.tone(1050,0.12,'triangle',0.12,null,{delay:0.08}); break;
       }
     }
     f.events.length=0;
@@ -2800,6 +2832,13 @@ class Game{
     f.statLongestCombo=Math.max(f.statLongestCombo,0);
     if(f.stocks<=0){ f.interrupt(); f.eliminated=true; f.group.visible=false; this._endMatch(other,'ko'); return; }
     f.respawn(0,this.stage.respawnY);
+  }
+  // tied on stocks when time runs out: one stock each at 300%, first KO wins
+  _suddenDeath(){
+    this.suddenDeath=true; this.timeLeft=0;
+    this.fighters.forEach((f,i)=>{ f.stocks=1; f.respawn(i?3:-3,this.stage.respawnY); f.percent=300; f.respawnTimer=60; });
+    this._bigText('SUDDEN DEATH!'); this._countT.push(setTimeout(()=>this._hideBigText(),1400));
+    AUDIO.playUltimate(); this.flash=0.3; this.flashColor=0xff3030;
   }
   _endMatch(winner,reason){
     if(this.matchOver) return;
@@ -3188,12 +3227,12 @@ class Game{
     if(!this.matchOver) this._checkKO(this.f2,this.f1);
     if(!this.isTraining){ this.replayBuf.push(this._snapshot()); if(this.replayBuf.length>150) this.replayBuf.shift(); }
     else this._frameHits.length=0;
-    if(this.settings.timeLimit>0 && !this.matchOver){
+    if(this.settings.timeLimit>0 && !this.matchOver && !this.suddenDeath){
       this.timeLeft-=dt;
       if(this.timeLeft<=0){
         const a=this.f1,b=this.f2;
-        const winner=a.stocks!==b.stocks?(a.stocks>b.stocks?a:b):(a.percent<=b.percent?a:b);
-        this._endMatch(winner,'time');
+        if(a.stocks!==b.stocks) this._endMatch(a.stocks>b.stocks?a:b,'time');
+        else this._suddenDeath();
       }
     }
     this._updateHUD();
@@ -3240,7 +3279,8 @@ class Game{
       $('hudult-'+n).style.width=f.ultMeter+'%'; $('hudult-'+n).classList.toggle('full',f.ultMeter>=100);
       $('hudultlabel-'+n).style.opacity=f.ultMeter>=100?1:0;
     });
-    if(this.settings.timeLimit>0){
+    if(this.suddenDeath){ $('hud-timer').textContent='SUDDEN DEATH'; $('hud-timer').style.display=''; }
+    else if(this.settings.timeLimit>0){
       const t=Math.max(0,Math.ceil(this.timeLeft)); $('hud-timer').textContent=Math.floor(t/60)+':'+String(t%60).padStart(2,'0');
       $('hud-timer').style.display='';
     } else $('hud-timer').style.display='none';
@@ -3484,6 +3524,7 @@ function animateFighter(f,dt){
       break;
     case 'ledge': name=set.ledge; opt={at:MODELS.hitT[set.ledge],fade:0.06}; break;
     case 'victory': name=set.victory; break;
+    case 'taunt': name=set.victory; opt={at:Math.min(0.95,f.stateTimer/55),fade:0.08}; break;
     case 'defeat': name=set.defeat; break;
     default: name=set.idle;
   }
