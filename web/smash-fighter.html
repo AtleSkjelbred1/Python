@@ -1273,7 +1273,9 @@ class Fighter{
     const downP=cmd.down && !this._prevDown; this._prevDown=cmd.down;
     this._chargeHeld = this.action && this.action.move.special ? cmd.special : cmd.attack;
     this._jumpHeld=cmd.jump;
-    if(this.hitstop>0){ this.hitstop--; return; }
+    if(this.hitstop>0){ this.hitstop--;
+      if(this.grounded&&this.onPlatform){ this.pos.x+=this.onPlatform._dx||0; this.pos.y+=this.onPlatform._dy||0; } // lifts keep carrying frozen riders
+      return; }
     if(this.comboTimer>0 && --this.comboTimer<=0){ this.comboCount=0; this.comboDamage=0; this.lastAttacker=null; }
     if(this.invuln>0) this.invuln--;
     if(this.respawnInvuln>0) this.respawnInvuln--;
@@ -1869,7 +1871,7 @@ class StageObj{
     }
     const m=this.main, top=m.y+m.h/2, L=m.x-m.w/2, R=m.x+m.w/2;
     this.torchLights=[];
-    const torch=(x,y,z)=>{ add('torch_lit',x,y,z,1.3); if(LOW_GFX.on) return; const l=new THREE.PointLight(crypt?0x5fd8ff:0xff9a40,crypt?1.1:0.6,crypt?9:7,2); l.position.set(x,y+1.1,z+0.6); scene.add(l); this.torchLights.push(l); };
+    const torch=(x,y,z)=>{ add('torch_lit',x,y,z,1.3); if(LOW_GFX.on) return; const l=new THREE.PointLight(crypt?0x5fd8ff:0xff9a40,crypt?1.1:0.6,crypt?9:7,2); l.userData.base=l.intensity; l.position.set(x,y+1.1,z+0.6); scene.add(l); this.torchLights.push(l); };
     if(th==='rift'){
       // swirling nebula on a big inside-out sphere, drifting crystals and stars
       this.nebula=new THREE.Mesh(new THREE.SphereGeometry(150,32,20),new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,fog:false,
@@ -1996,7 +1998,7 @@ class StageObj{
       mv.mesh.position.set(p.x,p.y,0);
     }
     if(this.clouds) this.clouds.forEach((c,i)=>{ c.position.x+=dt*(0.4+i%3*0.2); if(c.position.x>70) c.position.x=-70; });
-    if(this.torchLights) this.torchLights.forEach((l,i)=>{ l.intensity=0.6+Math.sin(this.time*9+i*2)*0.08+Math.sin(this.time*23+i)*0.05; });
+    if(this.torchLights) this.torchLights.forEach((l,i)=>{ l.intensity=(l.userData.base||0.6)*(1+Math.sin(this.time*9+i*2)*0.13+Math.sin(this.time*23+i)*0.08); });
     if(this.nebula){ this.nebula.material.uniforms.t.value=this.time;
       this.crystals.forEach(c=>{ c.rotation.y+=dt*c.userData.spin; c.rotation.x+=dt*c.userData.spin*0.4; c.position.y+=Math.sin(this.time*0.8+c.userData.bob)*0.01; });
       if(this.riftCore){ this.riftCore.rotation.y+=dt*1.2; this.riftCore.scale.setScalar(1+0.15*Math.sin(this.time*3)); } }
@@ -4051,13 +4053,14 @@ class Game{
     for(const f of this.fighters) if(!this.matchOver) this._checkKO(f);
     if(!this.isTraining){ this.replayBuf.push(this._snapshot()); if(this.replayBuf.length>150) this.replayBuf.shift(); }
     else this._frameHits.length=0;
-    if(this.settings.timeLimit>0 && !this.matchOver && !this.suddenDeath){
+    if(this.settings.timeLimit>0 && !this.matchOver && !this.suddenDeath && !this.isTraining && !this.isHomerun){
       this.timeLeft-=dt;
       if(this.timeLeft<=0){
         const alive=this.fighters.filter(f=>!f.eliminated), best=Math.max(...alive.map(f=>f.stocks)), top=alive.filter(f=>f.stocks===best);
         if(alive.some(f=>f.team!=null)){
           const sum=t=>alive.filter(f=>f.team===t).reduce((s,f)=>s+f.stocks*1000-f.percent,0);
-          this._endMatch(alive.find(f=>f.team===(sum(0)>=sum(1)?0:1))||alive[0],'time');
+          const s0=sum(0), s1=sum(1), t=s0===s1?(Math.random()<0.5?0:1):(s0>s1?0:1); // exact tie: coin flip, not always red
+          this._endMatch(alive.find(f=>f.team===t)||alive[0],'time');
         }
         else if(top.length===1) this._endMatch(top[0],'time');
         else if(this.fighters.length===2 && !this.stamina) this._suddenDeath();
