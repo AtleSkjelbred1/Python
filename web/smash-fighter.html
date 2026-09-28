@@ -125,6 +125,12 @@
   .rec-table th,.rec-table td{ padding:6px 10px; text-align:left; border-bottom:1px solid #23283366; }
   .rec-table th{ opacity:.6; font-size:11px; letter-spacing:1px; font-weight:600; }
   .rec-table td.num{ font-variant-numeric:tabular-nums; }
+  .keycap{ display:inline-block; min-width:70px; text-align:center; padding:4px 10px; border-radius:6px; background:#1c2230; border:1px solid #3d4658; cursor:pointer; pointer-events:auto; font-family:monospace; }
+  .keycap:hover{ border-color:var(--accent); } .keycap.wait{ background:var(--accent); color:#111; }
+  .offscreen{ position:absolute; width:46px; height:46px; margin:-23px 0 0 -23px; border-radius:50%; border:3px solid #fff; background:rgba(10,12,18,.7);
+    display:none; box-shadow:0 0 14px rgba(0,0,0,.6); }
+  .offscreen .oarrow{ position:absolute; left:50%; top:50%; width:0; height:0; border-left:9px solid transparent; border-right:9px solid transparent;
+    border-bottom:14px solid #fff; transform-origin:50% 50%; }
   .rec-h{ letter-spacing:2px; font-size:12px; color:#ffb347; margin:10px 0 2px 0; }
   #unlock-note{ color:#ffd166; font-size:14px; letter-spacing:1px; min-height:18px; margin-top:4px; }
   /* -------- touch controls (shown on touch screens during a match) -------- */
@@ -157,8 +163,8 @@
   <div class="subtitle">AN ORIGINAL PLATFORM FIGHTER</div>
   <div id="loading-note" style="font-size:12px;letter-spacing:3px;color:#ffb347;margin-bottom:12px;">LOADING FIGHTERS…</div>
   <div id="btn-1v1" class="menu-btn">LOCAL VERSUS (2 PLAYERS)</div>
-  <div id="btn-cpu" class="menu-btn">VS BOT</div>
-  <div class="row"><div id="btn-training" class="menu-btn" style="min-width:180px;">TRAINING</div><div id="btn-records" class="menu-btn" style="min-width:180px;">RECORDS</div></div>
+  <div class="row"><div id="btn-cpu" class="menu-btn" style="min-width:230px;">VS BOT</div><div id="btn-arcade" class="menu-btn" style="min-width:230px;">ARCADE</div></div>
+  <div class="row"><div id="btn-training" class="menu-btn" style="min-width:150px;">TRAINING</div><div id="btn-records" class="menu-btn" style="min-width:150px;">RECORDS</div><div id="btn-controls" class="menu-btn" style="min-width:150px;">CONTROLS</div></div>
   <div class="panel" style="margin-top:22px;">
     <div class="row" style="margin-bottom:10px;">
       <span style="width:140px;opacity:.75;font-size:13px;">STOCKS</span>
@@ -256,6 +262,7 @@
     </div>
   </div>
   <div id="hud-timer">2:00</div>
+  <div class="offscreen" id="off-1"><div class="oarrow"></div></div><div class="offscreen" id="off-2"><div class="oarrow"></div></div>
   <div id="hud-combo"><div class="cc" id="combo-count"></div><div class="cd" id="combo-dmg"></div></div>
   <div id="big-text"></div>
   <div id="stage-label"></div>
@@ -264,6 +271,7 @@
     <div class="tp-title">TRAINING</div>
     <div class="tp-row"><span class="tp-label">Dummy</span><div id="tp-dummy" class="cs-mode-select"></div></div>
     <div class="tp-row"><span class="tp-label">Dummy %</span><div id="tp-pct" class="cs-mode-select"></div></div>
+    <div class="tp-row"><span class="tp-label">Items</span><div id="tp-items" class="cs-mode-select"></div></div>
     <div class="tp-row"><span class="tp-label">Hitboxes</span><div id="tp-hitbox" class="cs-mode-select"></div><div id="tp-reset" class="chip">Reset positions</div></div>
     <pre id="frame-data">Attack to see frame data.</pre>
   </div>
@@ -272,11 +280,11 @@
 <!-- ============ TOUCH CONTROLS ============ -->
 <div id="touch">
   <div id="tstick"><div id="tknob"></div></div>
-  <div class="tbtn" data-k="KeyF" style="right:108px;bottom:22px;">ATK</div>
-  <div class="tbtn" data-k="KeyG" style="right:26px;bottom:74px;">SPEC</div>
-  <div class="tbtn" data-k="Space" style="right:108px;bottom:112px;">JUMP</div>
-  <div class="tbtn" data-k="KeyH" style="right:26px;bottom:164px;">SHLD</div>
-  <div class="tbtn" data-k="KeyR" style="right:190px;bottom:22px;">GRAB</div>
+  <div class="tbtn" data-k="attack" style="right:108px;bottom:22px;">ATK</div>
+  <div class="tbtn" data-k="special" style="right:26px;bottom:74px;">SPEC</div>
+  <div class="tbtn" data-k="jump" style="right:108px;bottom:112px;">JUMP</div>
+  <div class="tbtn" data-k="shield" style="right:26px;bottom:164px;">SHLD</div>
+  <div class="tbtn" data-k="grab" style="right:190px;bottom:22px;">GRAB</div>
   <div class="tbtn" id="tpause">II</div>
 </div>
 
@@ -290,26 +298,8 @@
       <div id="btn-quit" class="menu-btn">QUIT TO MENU</div>
     </div>
     <div class="ctrl-table">
-      <table>
-        <tr><th colspan="2" style="opacity:.6;font-size:11px;">PLAYER 1</th></tr>
-        <tr><td>Move</td><td>W A S D</td></tr>
-        <tr><td>Jump</td><td>Space</td></tr>
-        <tr><td>Attack</td><td>F</td></tr>
-        <tr><td>Special</td><td>G</td></tr>
-        <tr><td>Shield/Dodge</td><td>H</td></tr>
-        <tr><td>Grab</td><td>R</td></tr>
-        <tr><td>Ultimate</td><td>G + H (meter full)</td></tr>
-      </table>
-      <table>
-        <tr><th colspan="2" style="opacity:.6;font-size:11px;">PLAYER 2</th></tr>
-        <tr><td>Move</td><td>Arrow Keys</td></tr>
-        <tr><td>Jump</td><td>Numpad 0</td></tr>
-        <tr><td>Attack</td><td>Numpad 1</td></tr>
-        <tr><td>Special</td><td>Numpad 2</td></tr>
-        <tr><td>Shield/Dodge</td><td>Numpad 3</td></tr>
-        <tr><td>Grab</td><td>Numpad 5</td></tr>
-        <tr><td>Ultimate</td><td>Num 2 + Num 3</td></tr>
-      </table>
+      <table id="ctrl-p1"></table>
+      <table id="ctrl-p2"></table>
       <table>
         <tr><th colspan="2" style="opacity:.6;font-size:11px;">GAMEPAD</th></tr>
         <tr><td>Move</td><td>Stick / D-pad</td></tr>
@@ -330,6 +320,19 @@
     </div>
     <div class="gp-status" id="gp-status">Gamepads: none connected</div>
     <div class="gp-status">Characters, animations and stage props: KayKit by Kay Lousberg (kaylousberg.com), CC0.</div>
+  </div>
+</div>
+
+<!-- ============ CONTROLS ============ -->
+<div id="screen-controls" class="screen hidden">
+  <div class="panel" style="width:min(700px,94vw);max-height:90vh;overflow:auto;">
+    <h2 style="text-align:center;letter-spacing:3px;margin-top:0;">CONTROLS</h2>
+    <div style="text-align:center;font-size:12px;opacity:.7;margin-bottom:10px;">Click a key, then press the new key. Esc cancels. Saved in this browser.</div>
+    <div class="row" style="justify-content:center;gap:40px;align-items:flex-start;"><table class="rec-table" id="bind-p1" style="width:280px"></table><table class="rec-table" id="bind-p2" style="width:280px"></table></div>
+    <div class="row" style="justify-content:center;margin-top:8px;">
+      <div id="btn-binds-reset" class="menu-btn" style="min-width:200px;">RESET TO DEFAULT</div>
+      <div id="btn-binds-back" class="menu-btn" style="min-width:200px;">BACK</div>
+    </div>
   </div>
 </div>
 
@@ -356,8 +359,9 @@
     <tr><td style="opacity:.6;">KOs</td><td id="res-ko1"></td><td id="res-ko2"></td></tr>
   </table>
   <div class="row">
-    <div id="btn-rematch" class="menu-btn">REMATCH</div>
-    <div id="btn-mainmenu" class="menu-btn">MAIN MENU</div>
+    <div id="btn-rematch" class="menu-btn" style="min-width:200px;">REMATCH</div>
+    <div id="btn-rechar" class="menu-btn" style="min-width:200px;">CHANGE FIGHTERS</div>
+    <div id="btn-mainmenu" class="menu-btn" style="min-width:200px;">MAIN MENU</div>
   </div>
 </div>
 
@@ -525,10 +529,14 @@ const AUDIO = new AudioManager();
 //////////////////////// INPUT ////////////////////////
 // Sandboxed frames can deny the Gamepad API by permissions policy, which makes getGamepads() throw.
 function readGamepads(){ try{ return navigator.getGamepads?navigator.getGamepads():[]; }catch(e){ return []; } }
-const KEYMAP = {
+const DEFAULT_KEYMAP = {
   p1:{ left:'KeyA',right:'KeyD',up:'KeyW',down:'KeyS',jump:'Space',attack:'KeyF',special:'KeyG',shield:'KeyH',grab:'KeyR' },
   p2:{ left:'ArrowLeft',right:'ArrowRight',up:'ArrowUp',down:'ArrowDown',jump:'Numpad0',attack:'Numpad1',special:'Numpad2',shield:'Numpad3',grab:'Numpad5' },
 };
+const KEYMAP = JSON.parse(JSON.stringify(DEFAULT_KEYMAP));
+try{ const saved=JSON.parse(localStorage.getItem('riftclash.keys.v1')); if(saved) for(const p of ['p1','p2']) Object.assign(KEYMAP[p],saved[p]||{}); }catch(e){}
+const KEY_ACTIONS=[['left','Left'],['right','Right'],['up','Up'],['down','Down'],['jump','Jump'],['attack','Attack'],['special','Special'],['shield','Shield / Dodge'],['grab','Grab']];
+function keyLabel(code){ return (code||'—').replace(/^Key/,'').replace(/^Digit/,'').replace(/^Numpad/,'Num ').replace(/^Arrow/,'').replace('Space','Space'); }
 class InputManager{
   constructor(){
     this.keys={}; this.prevKeys={};
@@ -545,7 +553,7 @@ class InputManager{
     if(('ontouchstart' in window)||(navigator.maxTouchPoints>0)) enable();
     window.addEventListener('touchstart',enable,{once:true,passive:true});
     const stick=document.getElementById('tstick'), knob=document.getElementById('tknob'); let sid=null;
-    const setDir=(dx,dy)=>{ const k=this.keys, dz=0.35; k.KeyA=dx<-dz; k.KeyD=dx>dz; k.KeyW=dy<-0.55; k.KeyS=dy>0.55;
+    const setDir=(dx,dy)=>{ const k=this.keys, dz=0.35; const m=KEYMAP.p1; k[m.left]=dx<-dz; k[m.right]=dx>dz; k[m.up]=dy<-0.55; k[m.down]=dy>0.55;
       knob.style.transform=`translate(${dx*44}px,${dy*44}px)`; };
     const move=e=>{ const r=stick.getBoundingClientRect(); let dx=(e.clientX-r.left-r.width/2)/(r.width/2), dy=(e.clientY-r.top-r.height/2)/(r.height/2);
       const m=Math.hypot(dx,dy); if(m>1){ dx/=m; dy/=m; } setDir(dx,dy); };
@@ -554,7 +562,7 @@ class InputManager{
     const end=e=>{ if(e.pointerId===sid){ sid=null; setDir(0,0); } };
     stick.addEventListener('pointerup',end); stick.addEventListener('pointercancel',end);
     root.querySelectorAll('.tbtn[data-k]').forEach(b=>{
-      const k=b.dataset.k, on=v=>{ this.keys[k]=v; b.classList.toggle('down',v); };
+      const on=v=>{ this.keys[KEYMAP.p1[b.dataset.k]]=v; b.classList.toggle('down',v); };
       b.addEventListener('pointerdown',e=>{ b.setPointerCapture(e.pointerId); on(true); e.preventDefault(); });
       ['pointerup','pointercancel','lostpointercapture'].forEach(ev=>b.addEventListener(ev,()=>on(false)));
     });
@@ -599,12 +607,12 @@ const INPUT = new InputManager();
 const ARCH_COEF = {
   power:   { dmg:1.16, kb:1.04, spd:0.82, range:1.17 },
   speed:   { dmg:0.82, kb:0.94, spd:1.34, range:0.86 },
-  giant:   { dmg:1.36, kb:1.10, spd:0.68, range:1.42 },
+  giant:   { dmg:1.36, kb:1.10, spd:0.72, range:1.42 },
   zoner:   { dmg:1.02, kb:1.02, spd:1.06, range:1.04 },
   grappler:{ dmg:1.13, kb:1.05, spd:0.96, range:1.12 },
-  assassin:{ dmg:0.86, kb:0.95, spd:1.24, range:0.90 },
+  assassin:{ dmg:0.90, kb:0.97, spd:1.24, range:0.92 },
   ranger:  { dmg:0.92, kb:0.98, spd:1.14, range:0.98 },
-  brawler: { dmg:0.90, kb:0.97, spd:1.20, range:0.84 },
+  brawler: { dmg:0.98, kb:1.01, spd:1.20, range:0.90 },
 };
 const BASE_MOVES = {
   jab1:{startup:3,active:3,recovery:6,dmg:2.5,bkb:5,kbg:0.85,angle:40,range:1.0,name:'Jab'},
@@ -684,8 +692,8 @@ const SPECIALS = {
     down:{name:'Vanish',startup:4,active:12,recovery:14,dmg:0,noHitbox:true,vanish:true,vanishDist:4,color:0x9b5de5},
   },
   wren:{
-    n:{name:'Crossbow Bolt',startup:9,active:4,recovery:14,dmg:6,bkb:6,kbg:1.5,angle:15,range:1.5,projectile:true,noHitbox:true,speed:18,pvis:'arrow',color:0x9be870},
-    side:{name:'Smoke Bomb',startup:12,active:4,recovery:18,dmg:9,bkb:10,kbg:2.0,angle:55,range:1.2,projectile:true,noHitbox:true,lob:true,lobVy:6,speed:8,pvis:'bomb',explode:2.0,stun:10,color:0x9be870},
+    n:{name:'Crossbow Bolt',startup:12,active:4,recovery:19,dmg:5.5,bkb:6,kbg:1.4,angle:15,range:1.5,projectile:true,noHitbox:true,speed:15,pvis:'arrow',color:0x9be870},
+    side:{name:'Smoke Bomb',startup:14,active:4,recovery:20,dmg:8,bkb:10,kbg:2.0,angle:55,range:1.2,projectile:true,noHitbox:true,lob:true,lobVy:6,speed:8,pvis:'bomb',explode:2.0,stun:10,color:0x9be870},
     up:{name:'Grapple Line',startup:7,active:6,recovery:14,dmg:6,bkb:8,kbg:2.2,angle:80,range:1.0,recoveryMove:true,vel:19,color:0x9be870},
     down:{name:'Snare Wire',startup:10,active:2,recovery:16,dmg:7,bkb:8,kbg:1.9,angle:75,range:0.9,trap:true,noHitbox:true,stun:24,color:0x9be870},
   },
@@ -698,7 +706,7 @@ const SPECIALS = {
   rattle:{
     n:{name:'Bone Toss',startup:10,active:4,recovery:16,dmg:7,bkb:7,kbg:1.7,angle:40,range:1.3,projectile:true,noHitbox:true,lob:true,lobVy:8,speed:9,pvis:'bone',color:0xe8e0c8},
     side:{name:'Rattle Roll',startup:7,active:14,recovery:16,dmg:3,bkb:4,kbg:0.5,angle:50,range:1.1,dash:9,multihit:4,
-      finisher:{dmg:5,bkb:10,kbg:2.1,angle:35},color:0xffb36b},
+      finisher:{dmg:6,bkb:11,kbg:2.4,angle:35},color:0xffb36b},
     up:{name:'Skull Hop',startup:5,active:6,recovery:14,dmg:8,bkb:9,kbg:2.4,angle:82,range:1.05,recoveryMove:true,vel:18.5,color:0xffb36b},
     down:{name:'Fall Apart',startup:12,active:6,recovery:18,dmg:10,bkb:10,kbg:2.2,angle:65,range:1.2,aoe:true,intangible:true,color:0xffb36b},
   },
@@ -737,13 +745,13 @@ const CHAR_DATA = [
     traits:'Projectiles and fire hazards; weak melee', desc:'Fire mage built for zoning with projectiles. Dangerous at range, fragile up close.'},
   {id:'rook',name:'Rook Harlan',color:0x4a4a52,accent:0xd94b4b,weight:120,walkSpeed:2.7,runSpeed:4.5,jumpVel:14,doubleJumpVel:12.5,fallSpeed:15,fastFallSpeed:23,airSpeed:2.7,size:1.06,archetype:'grappler',grabRange:1.5,throwMult:1.3,
     traits:'Long grab, +30% throw damage', desc:'Armoured skeleton brawler. Grab and throw specialist with a charged punch.'},
-  {id:'vex',name:'Vex',color:0x232028,accent:0x9b5de5,weight:70,walkSpeed:3.4,runSpeed:6.1,jumpVel:15.3,doubleJumpVel:14.6,fallSpeed:12.5,fastFallSpeed:20,airSpeed:3.7,size:0.9,archetype:'assassin',wallJump:true,weapon:'Skeleton_Blade',
+  {id:'vex',name:'Vex',color:0x232028,accent:0x9b5de5,weight:75,walkSpeed:3.4,runSpeed:6.1,jumpVel:15.3,doubleJumpVel:14.6,fallSpeed:12.5,fastFallSpeed:20,airSpeed:3.7,size:0.9,archetype:'assassin',wallJump:true,weapon:'Skeleton_Blade',
     traits:'Wall jump, clone repeats last hit', desc:'Hooded skeleton assassin who summons a shadow clone that repeats the last attack that landed. Very light.'},
-  {id:'wren',name:'Wren Talon',color:0x3f5a3a,accent:0x9be870,weight:88,walkSpeed:3.1,runSpeed:5.6,jumpVel:15.2,doubleJumpVel:13.4,fallSpeed:13.5,fastFallSpeed:22,airSpeed:3.4,size:0.96,archetype:'ranger',
+  {id:'wren',name:'Wren Talon',color:0x3f5a3a,accent:0x9be870,weight:84,walkSpeed:3.1,runSpeed:5.6,jumpVel:15.2,doubleJumpVel:13.4,fallSpeed:13.5,fastFallSpeed:22,airSpeed:3.4,size:0.96,archetype:'ranger',
     traits:'Fast crossbow bolts, smoke bombs and snares', desc:'Cloaked crossbow ranger. Pins you down from range with bolts, bombs and snare wire.'},
   {id:'morrow',name:'Morrow the Bonecaller',color:0x2a3d4a,accent:0x7cf2c8,weight:96,walkSpeed:2.6,runSpeed:4.4,jumpVel:14.4,doubleJumpVel:12.8,fallSpeed:12.5,fastFallSpeed:20,airSpeed:3.0,size:1.02,archetype:'zoner',weapon:'Skeleton_Staff',
     traits:'Soul Siphon heals him; spikes hit at range', desc:'Skeleton necromancer. Slow soul orbs control space, grave spikes punish from afar, and his siphon steals back damage.'},
-  {id:'rattle',name:'Rattle',color:0x5a4a3a,accent:0xffb36b,weight:74,walkSpeed:3.3,runSpeed:6.3,jumpVel:15.6,doubleJumpVel:14.8,fallSpeed:14,fastFallSpeed:23,airSpeed:3.6,size:0.84,archetype:'brawler',weapon:'Skeleton_Axe',
+  {id:'rattle',name:'Rattle',color:0x5a4a3a,accent:0xffb36b,weight:80,walkSpeed:3.3,runSpeed:6.3,jumpVel:15.6,doubleJumpVel:14.8,fallSpeed:14,fastFallSpeed:23,airSpeed:3.6,size:0.84,archetype:'brawler',weapon:'Skeleton_Axe',
     traits:'Tiny hurtbox; Fall Apart dodges then bursts', desc:'A small, scrappy skeleton with a rusty axe. Fast rolls, bone tosses, and he can fall apart to dodge an attack.'},
 ];
 function buildMoveset(cd){
@@ -1947,10 +1955,11 @@ const COLOR_UNLOCKS=[
   {id:'azure',name:'Azure',tint:0x9ec2ff,goal:'Land a 5-hit combo',progress:d=>[Math.min(d.longestCombo,5),5]},
   {id:'shadow',name:'Shadow',tint:0x6a6a78,goal:'Score 25 KOs in total',progress:d=>[Math.min(d.kos,25),25]},
   {id:'gold',name:'Gold',tint:0xffd98a,goal:'Beat a Hard bot',progress:d=>[Math.min(d.hardWins,1),1]},
+  {id:'emerald',name:'Emerald',tint:0x9ef0b4,goal:'Clear Arcade mode',progress:d=>[Math.min(d.arcadeClears||0,1),1]},
 ];
 const PROFILE={
   key:'riftclash.profile.v1', data:null,
-  fresh(){ return {matches:0,wins:0,kos:0,longestCombo:0,longestComboChar:null,fastestWin:null,fastestWinChar:null,mostDamage:0,hardWins:0,chars:{}}; },
+  fresh(){ return {arcadeClears:0,arcadeBest:0,matches:0,wins:0,kos:0,longestCombo:0,longestComboChar:null,fastestWin:null,fastestWinChar:null,mostDamage:0,hardWins:0,chars:{}}; },
   load(){ let d=null; try{ d=JSON.parse(localStorage.getItem(this.key)); }catch(e){} this.data=Object.assign(this.fresh(),d||{}); },
   save(){ try{ localStorage.setItem(this.key,JSON.stringify(this.data)); }catch(e){} },
   reset(){ this.data=this.fresh(); this.save(); },
@@ -2048,6 +2057,10 @@ class Game{
     $('btn-cpu').onclick=()=>{ this.settings.mode='cpu'; this._toCharSelect(); };
     $('btn-training').onclick=()=>{ this.settings.mode='training'; this._toCharSelect(); };
     $('btn-records').onclick=()=>this._toRecords();
+    $('btn-controls').onclick=()=>this._toControls();
+    $('btn-binds-back').onclick=()=>this._toMainMenu();
+    $('btn-binds-reset').onclick=()=>{ for(const p of ['p1','p2']) Object.assign(KEYMAP[p],DEFAULT_KEYMAP[p]); this._saveKeys(); this._toControls(); };
+    this._renderCtrlTables();
     $('btn-records-back').onclick=()=>this._toMainMenu();
     $('btn-records-reset').onclick=()=>{
       const b=$('btn-records-reset');
@@ -2059,14 +2072,21 @@ class Game{
     this._chipRow($('tp-pct'),[0,50,100,150].map(v=>({label:v+'%',value:v})),-1,v=>{ if(this.f2) this.f2.percent=v; });
     this._chipRow($('tp-hitbox'),[{label:'Show',value:true},{label:'Hide',value:false}],true,v=>{ this.training.hitboxes=v; });
     $('tp-reset').onclick=()=>this._trainingReset();
+    this._chipRow($('tp-items'),[{label:'Bomb',value:'bomb'},{label:'Axe',value:'axe'},{label:'Potion',value:'potion'},{label:'Crate',value:'crate'}],null,v=>{
+      if(!this.f1||!this.isTraining) return;
+      if(v==='crate') this._spawnCrate(); else this._spawnItem(v,new THREE.Vector3(this.f1.pos.x+this.f1.facing*1.5,this.f1.pos.y+3,0),new THREE.Vector3(0,2,0));
+      setTimeout(()=>[...$('tp-items').children].forEach(x=>x.classList.remove('active')),200);
+    });
     $('btn-to-stage').onclick=()=>this._toStageSelect();
     $('btn-back-cs').onclick=()=>this._toCharSelect();
     $('btn-start-match').onclick=()=>this._startMatch();
     $('btn-resume').onclick=()=>this._resume();
     $('btn-restart').onclick=()=>this._startMatch(true);
+    $('btn-arcade').onclick=()=>{ this.settings.mode='arcade'; this._toCharSelect(); };
     $('btn-quit').onclick=()=>this._toMainMenu();
-    $('btn-rematch').onclick=()=>this._startMatch(true);
+    $('btn-rematch').onclick=()=>this._rematch();
     $('btn-mainmenu').onclick=()=>this._toMainMenu();
+    $('btn-rechar').onclick=()=>{ this._teardownScene(); AUDIO.stopMusic(); this._toCharSelect(); };
     $('cs1-left').onclick=()=>this._cycleChar('p1',-1);
     $('cs1-right').onclick=()=>this._cycleChar('p1',1);
     $('cs2-left').onclick=()=>this._cycleChar('p2',-1);
@@ -2086,6 +2106,7 @@ class Game{
   }
   _menuKey(code){
     const st=this.state;
+    if(st==='controls'){ if(this._binding) return this._bindKey(code); if(code==='Escape') return this._toMainMenu(); return; }
     if(st==='battle'&&(code==='KeyP'||code==='Escape')) return this._pause();
     if(st==='paused'&&(code==='KeyP'||code==='Escape')) return this._resume();
     if(this.replaying&&['Enter','Escape','Space','KeyF','Numpad1'].includes(code)) return this._endReplay();
@@ -2101,7 +2122,7 @@ class Game{
       if(code==='KeyD'||code==='ArrowRight') this._selectStage((this.selection.stageIdx+1)%n);
       if(code==='Enter') this._startMatch(); if(code==='Escape') this._toCharSelect();
     } else if(st==='results'){
-      if(code==='Enter') this._startMatch(true); if(code==='Escape') this._toMainMenu();
+      if(code==='Enter') this._rematch(); if(code==='Escape') this._toMainMenu();
     }
   }
   _pollMenuPads(){
@@ -2121,7 +2142,7 @@ class Game{
         if(edge('l')) this._selectStage((this.selection.stageIdx+n-1)%n); if(edge('r')) this._selectStage((this.selection.stageIdx+1)%n);
         if(edge('a')) this._startMatch(); if(edge('back')) this._toCharSelect();
       } else if(st==='menu'&&edge('a')) document.getElementById('btn-1v1').onclick();
-      else if(st==='results'&&edge('a')) this._startMatch(true);
+      else if(st==='results'&&edge('a')) this._rematch();
       this._menuPad[i]=now;
     }
   }
@@ -2135,14 +2156,16 @@ class Game{
     document.getElementById('gp-status').textContent=connected.length?('Gamepads: '+connected.map((n,i)=>'P'+(i+1)+' '+n.slice(0,24)).join('  |  ')):'Gamepads: none connected';
   }
   _showScreen(id){
-    ['mainmenu','charselect','stageselect','pause','results','records'].forEach(s=>document.getElementById('screen-'+s).classList.toggle('hidden',s!==id));
+    ['mainmenu','charselect','stageselect','pause','results','records','controls'].forEach(s=>document.getElementById('screen-'+s).classList.toggle('hidden',s!==id));
     document.getElementById('touch').classList.toggle('active',id==='__hud__');
     document.getElementById('hud').classList.toggle('hidden',!(id==='__hud__'||id==='pause'));
   }
   _toMainMenu(){ this.state='menu'; this._showScreen('mainmenu'); this._teardownScene(); AUDIO.stopMusic(); }
   _toCharSelect(){
     this.state='charselect'; this._showScreen('charselect');
-    document.getElementById('p2-label').textContent=this.settings.mode==='cpu'?'BOT ('+this.settings.botDifficulty.toUpperCase()+')':(this.settings.mode==='training'?'TRAINING DUMMY':'PLAYER 2');
+    const mode=this.settings.mode;
+    document.getElementById('p2-label').textContent=mode==='cpu'?'BOT ('+this.settings.botDifficulty.toUpperCase()+')':(mode==='training'?'TRAINING DUMMY':(mode==='arcade'?'ARCADE: 5 RANDOM RIVALS':'PLAYER 2'));
+    document.getElementById('btn-to-stage').innerHTML=mode==='arcade'?'START ARCADE &#8594;':'NEXT: SELECT STAGE &#8594;';
     this._refreshCharUI('p1'); this._refreshCharUI('p2');
   }
   _cycleChar(who,dir){ this.selection[who]=(this.selection[who]+dir+CHAR_DATA.length)%CHAR_DATA.length; this._refreshCharUI(who); }
@@ -2171,6 +2194,37 @@ class Game{
       t.querySelector('.b1').style.display=i===this.selection.p1?'':'none'; t.querySelector('.b2').style.display=i===this.selection.p2?'':'none'; });
   }
   _tintOf(who){ const c=COLOR_UNLOCKS.find(x=>x.id===this.selection.colors[who]); return c&&PROFILE.unlocked(c)?c.tint:null; }
+  _saveKeys(){ try{ localStorage.setItem('riftclash.keys.v1',JSON.stringify(KEYMAP)); }catch(e){} this._renderCtrlTables(); }
+  _renderCtrlTables(){
+    for(const p of ['p1','p2']){
+      const k=KEYMAP[p], L=keyLabel;
+      document.getElementById('ctrl-'+p).innerHTML=`<tr><th colspan="2" style="opacity:.6;font-size:11px;">PLAYER ${p==='p1'?1:2}</th></tr>`+
+        `<tr><td>Move</td><td>${[k.up,k.left,k.down,k.right].map(L).join(' ')}</td></tr>`+
+        KEY_ACTIONS.slice(4).map(([a,n])=>`<tr><td>${n}</td><td>${L(k[a])}</td></tr>`).join('')+
+        `<tr><td>Ultimate</td><td>${L(k.special)} + ${L(k.shield)}</td></tr>`;
+    }
+  }
+  _toControls(){
+    this.state='controls'; this._showScreen('controls'); this._binding=null;
+    for(const p of ['p1','p2']){
+      const t=document.getElementById('bind-'+p);
+      t.innerHTML=`<tr><th colspan="2">PLAYER ${p==='p1'?1:2}</th></tr>`+KEY_ACTIONS.map(([a,n])=>`<tr><td>${n}</td><td><span class="keycap" data-p="${p}" data-a="${a}">${keyLabel(KEYMAP[p][a])}</span></td></tr>`).join('');
+    }
+    document.querySelectorAll('#screen-controls .keycap').forEach(el=>el.onclick=()=>{
+      document.querySelectorAll('#screen-controls .keycap.wait').forEach(x=>x.classList.remove('wait'));
+      el.classList.add('wait'); el.textContent='press…'; this._binding={p:el.dataset.p,a:el.dataset.a};
+    });
+  }
+  _bindKey(code){
+    const b=this._binding; this._binding=null;
+    if(code!=='Escape'){
+      // a key can only do one job: whoever had it before gets this action's old key
+      const old=KEYMAP[b.p][b.a];
+      for(const p of ['p1','p2']) for(const a in KEYMAP[p]) if(KEYMAP[p][a]===code){ KEYMAP[p][a]=old; }
+      KEYMAP[b.p][b.a]=code; this._saveKeys(); AUDIO.playClick();
+    }
+    this._toControls();
+  }
   _toRecords(){
     this.state='records'; this._showScreen('records');
     const d=PROFILE.data, fmt=s=>s==null?'—':Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
@@ -2179,7 +2233,8 @@ class Game{
       `<tr><td>Total KOs</td><td class="num">${d.kos}</td></tr>`+
       `<tr><td>Longest combo</td><td class="num">${d.longestCombo} hits${d.longestComboChar?' · '+d.longestComboChar:''}</td></tr>`+
       `<tr><td>Fastest win</td><td class="num">${fmt(d.fastestWin)}${d.fastestWinChar?' · '+d.fastestWinChar:''}</td></tr>`+
-      `<tr><td>Most damage in one match</td><td class="num">${d.mostDamage}%</td></tr></table>`;
+      `<tr><td>Most damage in one match</td><td class="num">${d.mostDamage}%</td></tr>`+
+      `<tr><td>Arcade</td><td class="num">${d.arcadeClears||0} clears · best ${d.arcadeBest||0} / 5 rounds</td></tr></table>`;
     h+='<div class="rec-h">FIGHTERS</div><table class="rec-table"><tr><th>Fighter</th><th>Played</th><th>Wins</th><th>Win rate</th></tr>';
     CHAR_DATA.forEach(cd=>{ const c=d.chars[cd.id]||{played:0,wins:0}; h+=`<tr><td>${cd.name}</td><td class="num">${c.played}</td><td class="num">${c.wins}</td><td class="num">${c.played?Math.round(100*c.wins/c.played)+'%':'—'}</td></tr>`; });
     h+='</table><div class="rec-h">COLOURS</div><table class="rec-table"><tr><th></th><th>Colour</th><th>How to unlock</th><th>Progress</th></tr>';
@@ -2235,7 +2290,28 @@ class Game{
     rig.setChar(CHAR_DATA[this.selection[who]],this._tintOf(who));
     return url;
   }
-  _toStageSelect(){ this.state='stageselect'; this._showScreen('stageselect'); AUDIO.playClick(); }
+  _toStageSelect(){ if(this.settings.mode==='arcade') return this._startArcade(); this.state='stageselect'; this._showScreen('stageselect'); AUDIO.playClick(); }
+  // ---------- arcade: five rounds against random rivals, getting harder ----------
+  _startArcade(){
+    const me=this.selection.p1, pool=CHAR_DATA.map((c,i)=>i).filter(i=>i!==me);
+    for(let i=pool.length-1;i>0;i--){ const j=Math.random()*(i+1)|0; [pool[i],pool[j]]=[pool[j],pool[i]]; }
+    this.arcade={round:0,rivals:pool.slice(0,5),stages:pool.slice(0,5).map(()=>Math.random()*STAGES.length|0),diffs:['easy','medium','medium','hard','hard']};
+    this._arcadeRound();
+  }
+  _arcadeRound(){
+    const A=this.arcade; this.selection.p2=A.rivals[A.round]; this.selection.stageIdx=A.stages[A.round]; this.p1char=null;
+    this._startMatch();
+    const lbl=document.getElementById('stage-label'); lbl.textContent='ARCADE ROUND '+(A.round+1)+' / 5  ·  '+A.diffs[A.round].toUpperCase()+'  ·  '+lbl.textContent;
+  }
+  _rematch(){
+    const A=this.arcade;
+    if(this.settings.mode==='arcade' && A){
+      if(A.cleared){ this.arcade=null; return this._toMainMenu(); }
+      if(A.won) A.round++;
+      return this._arcadeRound();
+    }
+    this._startMatch(true);
+  }
   _buildRoster(){
     const el=document.getElementById('roster'); el.innerHTML=''; this._rosterTiles=[];
     CHAR_DATA.forEach((cd,i)=>{
@@ -2275,7 +2351,9 @@ class Game{
       pad.visible=false; this.scene.add(pad); return pad;
     });
     this.cameraRig=new CameraRig(this.camera);
-    this.ai=this.settings.mode==='cpu'?new AIController(this.f2,this.settings.botDifficulty):null;
+    const arc=this.settings.mode==='arcade'&&this.arcade;
+    if(arc){ this.arcade.won=false; this.f1.stocks=this.f2.stocks=2; }
+    this.ai=(this.settings.mode==='cpu'||arc)?new AIController(this.f2,arc?this.arcade.diffs[this.arcade.round]:this.settings.botDifficulty):null;
     this._dummyAI=null; this._lastMove=null; this._lastHit=null;
     this.hazards=[]; this.hazardsOn=this.settings.hazards&&!this.isTraining; this.hazardTimer=Math.round(rand(420,660));
     this.replayBuf=[]; this._frameHits=[]; this.replaying=false; this.replayFrames=null; this.matchFrames=0;
@@ -2701,7 +2779,7 @@ class Game{
   }
   _recordProfile(winner){
     const d=PROFILE.data, before=COLOR_UNLOCKS.filter(c=>PROFILE.unlocked(c)).map(c=>c.id);
-    const humans=this.settings.mode==='cpu'?[this.f1]:[this.f1,this.f2];
+    const vsBot=this.settings.mode==='cpu'||this.settings.mode==='arcade', humans=vsBot?[this.f1]:[this.f1,this.f2];
     d.matches++;
     for(const f of humans){
       const c=PROFILE.char(f.cd.id); c.played++; if(f===winner) c.wins++;
@@ -2713,9 +2791,11 @@ class Game{
       d.wins++;
       const sec=Math.round(this.matchFrames/60);
       if(d.fastestWin==null||sec<d.fastestWin){ d.fastestWin=sec; d.fastestWinChar=winner.cd.name; }
-      if(this.settings.mode==='cpu'&&this.settings.botDifficulty==='hard') d.hardWins++;
+      if((this.settings.mode==='cpu'&&this.settings.botDifficulty==='hard')||(this.arcade&&this.arcade.diffs[this.arcade.round]==='hard')) d.hardWins++;
     }
     PROFILE.save();
+    const A=this.settings.mode==='arcade'&&this.arcade;
+    if(A){ A.won=winner===this.f1; d.arcadeBest=Math.max(d.arcadeBest||0,A.round+(A.won?1:0)); if(A.won&&A.round===4){ A.cleared=true; d.arcadeClears=(d.arcadeClears||0)+1; } PROFILE.save(); }
     const fresh=COLOR_UNLOCKS.filter(c=>PROFILE.unlocked(c)&&!before.includes(c.id)).map(c=>c.name);
     document.getElementById('unlock-note').textContent=fresh.length?'New colour unlocked: '+fresh.join(', ')+'!':'';
   }
@@ -3004,6 +3084,9 @@ class Game{
     this._hideBigText();
     const $=id=>document.getElementById(id);
     $('winner-banner').textContent=this.winner.cd.name+' WINS!';
+    const A=this.settings.mode==='arcade'&&this.arcade;
+    $('btn-rematch').textContent=A?(A.cleared?'FINISH':(A.won?'NEXT ROUND':'RETRY ROUND')):'REMATCH';
+    if(A) $('winner-banner').textContent=A.cleared?'ARCADE CLEAR!':(A.won?'ROUND '+(A.round+1)+' CLEAR!':'DEFEAT — ROUND '+(A.round+1)+' / 5');
     $('res-n1').textContent=this.p1char.name; $('res-n2').textContent=this.p2char.name;
     $('res-dmg1').textContent=this.f1.statDamageDealt.toFixed(1)+'%'; $('res-dmg2').textContent=this.f2.statDamageDealt.toFixed(1)+'%';
     $('res-combo1').textContent=this.f1.statLongestCombo+' hits'; $('res-combo2').textContent=this.f2.statLongestCombo+' hits';
@@ -3129,6 +3212,22 @@ class Game{
     if(this.isTraining && this.f1) this._updateTrainingHUD();
   }
 
+  // fighters knocked outside the camera get a bubble pinned to the screen edge, pointing at them
+  _updateOffscreen(){
+    this.camera.updateMatrixWorld();
+    this.fighters.forEach((f,i)=>{
+      const el=document.getElementById('off-'+(i+1));
+      const v=new THREE.Vector3(f.pos.x,f.pos.y+0.9*f.cd.size,0).project(this.camera);
+      const out=!f.eliminated && f.state!=='respawn' && !this.replaying && (Math.abs(v.x)>1.02||Math.abs(v.y)>1.02);
+      el.style.display=out?'block':'none'; if(!out) return;
+      const mx=1-60/innerWidth*2, my=1-60/innerHeight*2, cx=clamp(v.x,-mx,mx), cy=clamp(v.y,-my,my);
+      el.style.left=((cx+1)/2*innerWidth)+'px'; el.style.top=((1-cy)/2*innerHeight)+'px';
+      const col=hex6(f.cd.accent); el.style.borderColor=col;
+      const ang=Math.atan2(-(v.y-cy),v.x-cx), a=el.firstChild;
+      a.style.borderBottomColor=col;
+      a.style.transform=`translate(-50%,-50%) rotate(${ang+Math.PI/2}rad) translateY(-26px)`;
+    });
+  }
   // -------------------- RENDER --------------------
   _render(dt){
     if(!this.scene||!['battle','paused','gameend','results'].includes(this.state)) return;
@@ -3163,6 +3262,7 @@ class Game{
       if(pad.visible){ pad.position.set(f.pos.x,f.pos.y-0.1,0); pad.rotation.y+=0.05; }
     });
     if(this.isTraining||this.viz) this._updateHitboxViz();
+    this._updateOffscreen();
     const bl=this.stageData.bloom||{threshold:0.8,strength:0.45};
     this.postfx.brightMat.uniforms.threshold.value=bl.threshold;
     this.postfx.render(this.scene,this.camera,{strength:bl.strength+Math.min(2.5,this.bloomPulse)*(bl.strength/0.45),flash:this.flash,flashColor:this.flashColor,
