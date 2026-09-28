@@ -229,6 +229,7 @@
   <div class="cs-players">
     <div class="cs-col">
       <h2 style="color:#7fd0ff">PLAYER 1</h2>
+      <div id="p1-ctrl" class="cs-mode-select hidden" style="margin:0;"></div>
       <canvas id="cs-canvas-1" class="cs-preview" width="230" height="230"></canvas>
       <div class="cs-arrows">
         <div class="cs-arrow" id="cs1-left">&#10094;</div>
@@ -2434,7 +2435,8 @@ class Game{
     $('btn-arcade').onclick=()=>{ this.settings.mode='arcade'; this._toCharSelect(); };
     $('btn-homerun').onclick=()=>{ this.settings.mode='homerun'; this._toCharSelect(); };
     $('btn-ffa').onclick=()=>{ this.settings.mode='ffa'; this._toCharSelect(); };
-    this.ffaP2='bot'; this.ffaTeams=false;
+    this.ffaP2='bot'; this.ffaTeams=false; this.p1cpu=false;
+    this._chipRow($('p1-ctrl'),[{label:'P1: HUMAN',value:false},{label:'P1: CPU (WATCH)',value:true}],false,v=>{ this.p1cpu=v; AUDIO.playClick(); });
     this._chipRow($('ffa-teams'),[{label:'FREE-FOR-ALL',value:false},{label:'2 vs 2 (P1+P2 vs CPUs)',value:true}],false,v=>{ this.ffaTeams=v; AUDIO.playClick(); this._toCharSelect(); });
     this._chipRow($('ffa-p2'),[{label:'P2: CPU',value:'bot'},{label:'P2: HUMAN',value:'p2'}],'bot',v=>{ this.ffaP2=v; AUDIO.playClick(); this._toCharSelect(); });
     $('btn-quit').onclick=()=>this._toMainMenu();
@@ -2531,6 +2533,7 @@ class Game{
       (mode==='homerun'?'SANDBAG — 10 SECONDS, THEN SEND IT FLYING':mode==='ffa'?(this.ffaP2==='bot'?'CPU LV '+this.settings.botDifficulty+' + 2 RANDOM CPUs':'PLAYER 2 + 2 RANDOM CPUs'):'PLAYER 2')));
     document.getElementById('ffa-p2').classList.toggle('hidden',mode!=='ffa');
     document.getElementById('ffa-teams').classList.toggle('hidden',mode!=='ffa');
+    document.getElementById('p1-ctrl').classList.toggle('hidden',!(mode==='cpu'||mode==='ffa'));
     document.getElementById('btn-to-stage').innerHTML=mode==='arcade'?'START ARCADE &#8594;':'NEXT: SELECT STAGE &#8594;';
     this._refreshCharUI('p1'); this._refreshCharUI('p2');
   }
@@ -2753,7 +2756,8 @@ class Game{
     // who is in the match and who controls them: 'p1'/'p2' keyboard+pad, 'bot', or the training 'dummy'
     const arc=mode==='arcade'&&this.arcade;
     const botDiff=arc?this.arcade.diffs[this.arcade.round]:this.settings.botDifficulty;
-    const roster=[{cd:this.p1char,tint:this._tintOf('p1'),control:'p1'},
+    const p1bot=this.p1cpu&&(mode==='cpu'||mode==='ffa');
+    const roster=[{cd:this.p1char,tint:this._tintOf('p1'),control:p1bot?'bot':'p1'},
       {cd:this.p2char,tint:mode==='homerun'?0xd8b98a:this._tintOf('p2'),control:(this.isTraining||mode==='homerun')?'dummy':(mode==='cpu'||arc||(ffa&&this.ffaP2==='bot'))?'bot':'p2'}];
     this.extraChars.forEach(cd=>roster.push({cd,tint:null,control:'bot'}));
     const spare=[0x9ec2ff,0xff9a9a,0x9ef0b4,0xffd98a,0x6a6a78];
@@ -3346,6 +3350,7 @@ class Game{
     if(this.isHomerun){ document.getElementById('unlock-note').textContent=''; return; }
     const d=PROFILE.data, before=COLOR_UNLOCKS.filter(c=>PROFILE.unlocked(c)).map(c=>c.id);
     const humans=this.fighters.filter(f=>f.control==='p1'||f.control==='p2');
+    if(!humans.length){ document.getElementById('unlock-note').textContent=''; return; } // bots-only matches are not recorded
     d.matches++;
     for(const f of humans){
       const c=PROFILE.char(f.cd.id); c.played++; if(this.winners.includes(f)) c.wins++;
