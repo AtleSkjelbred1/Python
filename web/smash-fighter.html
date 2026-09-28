@@ -60,6 +60,7 @@
   .rtile .b1{ left:3px; background:#7fd0ff; color:#111; } .rtile .b2{ right:3px; background:#ff9b7f; color:#111; }
   .chip{ pointer-events:auto; cursor:pointer; padding:6px 14px; border-radius:16px; font-size:12px;
     background:#1a1e28; border:1px solid #333c4d; }
+  .chip.focus, .keycap.focus, .swatch.focus{ outline:2px solid #fff; outline-offset:2px; }
   .chip.active{ background:var(--accent); color:#111; border-color:var(--accent); font-weight:700; }
   /* -------- Stage select -------- */
   .stage-grid{ display:flex; gap:22px; }
@@ -186,6 +187,7 @@
   .tbtn.down{ background:rgba(255,179,71,.55); border-color:#ffb347; }
   #tpause{ position:absolute; top:12px; left:50%; transform:translateX(-50%); margin-top:48px; width:44px; height:34px; border-radius:8px; }
   @media (max-height:520px){
+    #ctrl-guide{ top:100px; font-size:11px; padding:6px 10px; max-width:52vw; }
     .cs-preview{ width:150px; height:150px; } .cs-moves{ display:none; } .cs-stats{ font-size:10px; } .cs-stats > div[style]{ display:none; }
     .rtile{ width:56px; } .rtile img{ height:44px; } #screen-charselect{ padding-top:6px; } h1.title{ font-size:42px; }
     .portrait-hud{ width:200px; top:6px; padding:4px 8px; } .hud-pct{ font-size:26px; } .hud-portrait{ width:40px; height:40px; }
@@ -333,7 +335,7 @@
     <div class="tips">
       Direction + Attack pressed together = smash (hold Attack to charge) · direction already held + Attack = tilt · while running: dash attack · Jab ×3 by tapping Attack · Up also jumps (turn off under Tap Jump) · Tap Jump = short hop, hold = higher jump<br>
       Down in the air = fast fall · Down on a thin platform = drop through · Shield + direction = roll, Shield + down = spot dodge<br>
-      Specials go through shields · Shield at the moment of impact = parry · Shield in the air = air dodge · Grab, then a direction = throw (Attack = pummel)<br>
+      Specials go through shields · Shield at the moment of impact = parry · Shield just before hitting the ground while tumbling = tech · Shield in the air = air dodge · Grab, then a direction = throw (Attack = pummel)<br>
       At a ledge: toward/up = climb, Jump, Attack = get-up attack, Shield = roll, away/down = let go · Nyx &amp; Vex can wall jump<br>
       Items: hit a crate to break it · Attack or Grab next to an item picks it up · Attack while holding = throw (hold up/down/sideways to aim) · potions heal on pickup · the Rune Wand shoots bolts (Up/Down+Attack or Grab throws it)
     </div>
@@ -555,6 +557,11 @@ const AUDIO = new AudioManager();
 
 //////////////////////// INPUT ////////////////////////
 // Sandboxed frames can deny the Gamepad API by permissions policy, which makes getGamepads() throw.
+// controller vibration for human players (Chrome/Edge: vibrationActuator dual-rumble)
+function rumble(f,strength,ms){
+  const idx=f&&f.control==='p1'?0:f&&f.control==='p2'?1:-1; if(idx<0) return;
+  try{ const gp=readGamepads()[idx], a=gp&&gp.vibrationActuator; if(a&&a.playEffect) a.playEffect('dual-rumble',{duration:ms,strongMagnitude:strength,weakMagnitude:Math.min(1,strength*1.2)}); }catch(e){}
+}
 function readGamepads(){ try{ return navigator.getGamepads?navigator.getGamepads():[]; }catch(e){ return []; } }
 const DEFAULT_KEYMAP = {
   p1:{ left:'KeyA',right:'KeyD',up:'KeyW',down:'KeyS',jump:'Space',attack:'KeyF',special:'KeyG',shield:'KeyH',grab:'KeyR',taunt:'KeyT' },
@@ -1003,12 +1010,14 @@ const EMPTY_CMD={left:false,right:false,up:false,down:false,jump:false,attack:fa
   jumpP:false,attackP:false,specialP:false,shieldP:false,grabP:false,axisX:0,axisY:0};
 const TAP_JUMP={on:true}; // Up (W / arrow up / stick up) also jumps, like Smash's default
 const RUN_DELAY=7;
+const TECH_WINDOW=20;       // frames before touching the ground that a shield press still techs
 const SMASH_WINDOW=3;       // frames between a fresh direction press and Attack that still count as a smash          // frames a direction is held before walking turns into a run
 const BUFFER_FRAMES=6, BUFFER_KEYS=['attackP','specialP','jumpP','grabP'];
 const ITEM_SHOOT=new Move('itemShoot',{name:'Rune Bolt',startup:6,active:2,recovery:12,dmg:6,bkb:7,kbg:1.35,angle:25,projectile:true,noHitbox:true,speed:16,pvis:'fire',color:0xb48cff,itemShoot:true});
 const ITEM_THROW=new Move('itemThrow',{startup:5,active:2,recovery:10,dmg:0,noHitbox:true,itemThrow:true,name:'Item Throw'});
 const LEDGE_ATTACK=new Move('ledgeAttack',{startup:8,active:4,recovery:16,dmg:8,bkb:12,kbg:1.2,angle:30,range:1.2,name:'Ledge Attack'});
 const LOW_GFX={on:false};
+const FOCUS_SCREENS={menu:'screen-mainmenu',paused:'screen-pause',results:'screen-results',records:'screen-records',controls:'screen-controls'};
 const CAMERA_FX={shake:true};
 // three.js strips '.' from node names on load ('handslot.r' -> 'handslotr'), so look up both spellings
 function bone(root,name){ return root.getObjectByName(name)||root.getObjectByName(name.replace(/\./g,'')); }
@@ -1214,6 +1223,7 @@ class Fighter{
     if(!this._buf) this._buf={};
     cmd=Object.assign({},cmd);
     const upP=cmd.up && !this._prevUp; this._prevUp=cmd.up;
+    if(cmd.shieldP) this._techBuf=TECH_WINDOW; else if(this._techBuf>0) this._techBuf--; // shield shortly before landing = tech
     this._prevL=this._lastL; this._prevR=this._lastR; this._lastL=cmd.left; this._lastR=cmd.right;
     // how many frames ago a direction was freshly pressed (for smash-vs-tilt on digital input)
     const lP=cmd.left&&!this._prevL, rP=cmd.right&&!this._prevR, dP=cmd.down&&!this._prevDn; this._prevDn=cmd.down;
@@ -1257,7 +1267,7 @@ class Fighter{
       } else this.vel.x*=0.8;
       this.hitstun--; this.state='hitstun';
       this._physics(dt,world);
-      if(this.hitstun<=0){ this.tumble=false; this.state=this.grounded?'idle':'fall'; }
+      if(this.hitstun<=0){ if(this._teched) this._teched=false; else { this.tumble=false; this.state=this.grounded?'idle':'fall'; } }
       return;
     }
     if(this.grabbedBy){
@@ -1420,7 +1430,15 @@ class Fighter{
     this.squash=this.state==='hitstun'?0.8:(this.fastFalling?0.64:0.75);
     this.airDodged=false; this.jumpsLeft=1; this.upSpecialUsed=false; this.wallJumpUsed=false; this.fastFalling=false;
     this.events.push({type:'land',heavy:this.cd.weight>=140});
-    if(this.hitstun>0) return;
+    if(this.hitstun>0){
+      if(this.tumble && this._techBuf>0){ // tech: recover on the spot or roll toward the held direction
+        const dir=this._lastL?-1:this._lastR?1:0;
+        this.hitstun=0; this.tumble=false; this.vel.set(0,0,0); this._techBuf=0; this.invuln=Math.max(this.invuln,20); this._teched=true; this._techs=(this._techs||0)+1;
+        if(dir){ this._startRoll(dir); } else { this.state='spotdodge'; this.stateTimer=0; }
+        this.events.push({type:'tech'});
+      }
+      return;
+    }
     if(this.helpless){ this.helpless=false; this.state='land'; this.landTimer=8; return; }
     if(this.state==='attack' && this.action){
       const m=this.action.move;
@@ -2108,6 +2126,7 @@ class AIController{
     if(f.grabbedBy){ this.mode='escape'; if(R()<(this.diff==='hard'?0.5:this.diff==='medium'?0.3:0.12)) cmd.attackP=true; return cmd; }
     if(f.hitstun>0){ // survival DI: toward the stage and upward
       this.mode='escape';
+      if(f.tumble && f.vel.y<0 && f.pos.y-(stage.main.y+stage.main.h/2)<1.4 && Math.abs(f.pos.x-stage.main.x)<stage.main.w/2 && R()<P.parry*1.6+0.05){ cmd.shieldP=true; return cmd; }
       if(R()>P.rand*0.5){ cmd.axisX=f.pos.x>main.x?-1:1; cmd.axisY=-1; }
       return cmd;
     }
@@ -2506,6 +2525,11 @@ class Game{
     if(st==='paused'&&(code==='KeyP'||code==='Escape')) return this._resume();
     if(this.replaying&&['Enter','Escape','Space','KeyF','Numpad1'].includes(code)) return this._endReplay();
     if(st==='records'&&code==='Escape') return this._toMainMenu();
+    if(FOCUS_SCREENS[st] && !(st==='controls'&&this._binding)){
+      const dir={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right'}[code];
+      if(dir){ this._navFocus(dir); return; }
+      if(code==='Enter' && document.querySelector('.focus') && this._focusables().some(e=>e.classList.contains('focus'))){ this._activateFocus(); return; }
+    }
     if(st==='menu'&&code==='Enter') return document.getElementById('btn-1v1').onclick();
     if(st==='charselect'){
       if(code==='KeyA') this._cycleChar('p1',-1); if(code==='KeyD') this._cycleChar('p1',1);
@@ -2525,7 +2549,7 @@ class Game{
     for(let i=0;i<2;i++){
       const gp=gps[i]; if(!gp) continue;
       const b=k=>!!(gp.buttons[k]&&gp.buttons[k].pressed);
-      const now={l:b(14)||gp.axes[0]<-0.6,r:b(15)||gp.axes[0]>0.6,a:b(0),back:b(1),start:b(9)};
+      const now={l:b(14)||gp.axes[0]<-0.6,r:b(15)||gp.axes[0]>0.6,u:b(12)||gp.axes[1]<-0.6,d:b(13)||gp.axes[1]>0.6,a:b(0),back:b(1),start:b(9)};
       const prev=this._menuPad[i], edge=k=>now[k]&&!prev[k];
       const st=this.state;
       if(edge('start')){ if(st==='battle') this._pause(); else if(st==='paused') this._resume(); }
@@ -2536,11 +2560,31 @@ class Game{
         const n=STAGES.length;
         if(edge('l')) this._selectStage((this.selection.stageIdx+n)%(n+1)); if(edge('r')) this._selectStage((this.selection.stageIdx+1)%(n+1));
         if(edge('a')) this._startMatch(); if(edge('back')) this._toCharSelect();
-      } else if(st==='menu'&&edge('a')) document.getElementById('btn-1v1').onclick();
-      else if(st==='results'&&edge('a')) this._rematch();
+      } else if(FOCUS_SCREENS[st]){
+        for(const [k,dir] of [['l','left'],['r','right'],['u','up'],['d','down']]) if(edge(k)) this._navFocus(dir);
+        if(edge('a')) this._activateFocus(); if(edge('back')) this._menuBack();
+      }
       this._menuPad[i]=now;
     }
   }
+  // spatial focus navigation for controller / arrow keys on button-and-chip screens
+  _focusables(){
+    const root=document.getElementById(FOCUS_SCREENS[this.state]); if(!root) return [];
+    return [...root.querySelectorAll('.menu-btn, .chip, .keycap, .swatch')].filter(e=>e.offsetParent!==null);
+  }
+  _navFocus(dir){
+    const els=this._focusables(); if(!els.length) return;
+    let cur=els.find(e=>e.classList.contains('focus'));
+    if(!cur){ this._setFocus(els[0]); return; }
+    const c=cur.getBoundingClientRect(), cx=c.left+c.width/2, cy=c.top+c.height/2; let best=null, bs=1e9;
+    for(const e of els){ if(e===cur) continue; const r=e.getBoundingClientRect(), dx=r.left+r.width/2-cx, dy=r.top+r.height/2-cy;
+      const main=dir==='left'?-dx:dir==='right'?dx:dir==='up'?-dy:dy, side=dir==='left'||dir==='right'?Math.abs(dy):Math.abs(dx);
+      if(main<=4) continue; const s=main+side*2.2; if(s<bs){ bs=s; best=e; } }
+    if(best){ this._setFocus(best); AUDIO.playClick(); }
+  }
+  _setFocus(e){ document.querySelectorAll('.focus').forEach(x=>x.classList.remove('focus')); e.classList.add('focus'); e.scrollIntoView({block:'nearest'}); }
+  _activateFocus(){ const e=this._focusables().find(x=>x.classList.contains('focus')); if(e){ e.click(); return true; } this._navFocus('down'); return false; }
+  _menuBack(){ const st=this.state; if(st==='paused') this._resume(); else if(st==='results'||st==='records'||st==='controls') this._toMainMenu(); }
   _selectStage(i){
     this.selection.stageIdx=i;
     [...document.getElementById('stage-grid').children].forEach((c,j)=>c.classList.toggle('sel',j===i));
@@ -2848,6 +2892,8 @@ class Game{
     const k=KEYMAP.p1, L=keyLabel, jump=TAP_JUMP.on?`<kbd>${L(k.jump)}</kbd> or <kbd>${L(k.up)}</kbd>`:`<kbd>${L(k.jump)}</kbd>`;
     el.innerHTML=`<b>P1</b> move <kbd>${L(k.left)}</kbd><kbd>${L(k.right)}</kbd> · jump ${jump} (hold = higher) · attack <kbd>${L(k.attack)}</kbd> · special <kbd>${L(k.special)}</kbd> · shield <kbd>${L(k.shield)}</kbd> · grab <kbd>${L(k.grab)}</kbd><br>`+
       `direction + attack together = smash (hold to charge) · hold a direction, then attack = quick tilt · ${L(k.special)}+${L(k.shield)} = ultimate · Esc = pause & move list`;
+    if(document.body.classList.contains('touch-on')) // touch players get a short guide for the on-screen buttons
+      el.innerHTML=`stick = move (up jumps) · <b>ATK</b> attack · <b>SPEC</b> special · <b>SHLD</b> shield · <b>GRAB</b><br>flick the stick + ATK = smash · SPEC + SHLD = ultimate · <b>II</b> = pause`;
     el.style.opacity=1; el.classList.remove('hidden');
     this._guideT=setTimeout(()=>{ el.style.opacity=0; },this.isTraining?9000:7000);
   }
@@ -3008,6 +3054,7 @@ class Game{
     this.bloomPulse=Math.max(this.bloomPulse,clamp(dmg/18,0.12,1.1)+(move.special?0.3:0));
     this.cameraRig.kick(kb>85?clamp((kb-60)/80,0.25,1.2):0.08);
     if(kb>80 && !defender.cd.armorAll) fighterVoice(defender,'hurt');
+    rumble(defender,clamp(0.25+dmg*0.03,0.25,1),clamp(60+dmg*6,60,240)); if(this.fighters.includes(attacker)) rumble(attacker,0.2,50);
     if(kb>95) this.cameraRig.punch=Math.max(this.cameraRig.punch,clamp((kb-95)/90,0.3,1));
     if(defender===this.f2) this._lastHit={name:move.name||move.id,dmg,kb:Math.round(kb),hitstun:defender.hitstun,speed:+(kb*KB_TO_VEL).toFixed(1)};
     if(move.ultimate){
@@ -3240,6 +3287,7 @@ class Game{
         case 'itemthrow': AUDIO.playWhoosh(0.8); break;
         case 'pickup': if(this.items.includes(e.item)) this._onPickup(f,e.item); break;
         case 'dust': if(this.frame%3===0||!e.skid) P.spawn(new THREE.Vector3(f.pos.x-e.dir*0.3,f.pos.y+0.08,0.3),e.skid?3:7,{color:[0xbdb4a4,0x9a8f80],speed:0.07,upBias:0.5,grav:0.002,life:20,size:0.1,dirX:-e.dir}); break;
+        case 'tech': this._floatText(f,'TECH!'); AUDIO.playParry(); P.spawn(new THREE.Vector3(f.pos.x,f.pos.y+0.3,0.3),12,{color:[0xffffff,0x9fe0ff],speed:0.12,upBias:0.4,life:16,additive:true}); break;
         case 'taunt': this._floatText(f,choice(['COME ON!','TOO EASY','HA!','BRING IT'])); AUDIO.tone(700,0.1,'triangle',0.14,900); AUDIO.tone(1050,0.12,'triangle',0.12,null,{delay:0.08}); break;
       }
     }
@@ -3289,7 +3337,7 @@ class Game{
     this.particles.spawn(at,70,{color:[f.cd.accent,0xffffff,0xffee88],speed:0.55,life:40,upBias:1,grav:0.004,additive:true,size:0.11});
     this.particles.ring(at,f.cd.accent,7,30,0.18); this.particles.ring(at,0xffffff,4,20,0.1);
     this.flash=0.3; this.flashColor=f.cd.accent; this.bloomPulse=2; this.cameraRig.kick(1.4);
-    AUDIO.playKO(); AUDIO.playCrowd(); fighterVoice(f,'ko');
+    AUDIO.playKO(); AUDIO.playCrowd(); fighterVoice(f,'ko'); rumble(f,1,450);
     if(this._frameHits) this._frameHits.push({ko:true,at:at.clone(),col:f.cd.accent});
     if(f.pos.y>b.t){ // knocked out through the top: a twinkle far away in the sky
       const star=new THREE.Vector3(clamp(f.pos.x*0.6,-14,14),b.t-6,-45);
@@ -3687,6 +3735,7 @@ class Game{
       ['dodge','Dodge: '+K(k.shield)+' then a direction',f=>f.state==='roll'||f.state==='spotdodge'||f.state==='airdodge'],
       ['grab','Grab '+K(k.grab)+' near the dummy, then a direction to throw',f=>f.state==='throw'&&f.throwKey!=='break'],
       ['ledge','Grab a ledge (fall past the stage edge)',f=>f.state==='ledge'],
+      ['tech','Tech: when knocked down, press '+K(k.shield)+' just before you land (set the dummy to CPU)',f=>(f._techs||0)>0],
       ['ult','Ultimate: '+K(k.special)+'+'+K(k.shield)+' when the meter is full',f=>f.action&&f.action.key==='ultimate'],
     ];
   }
