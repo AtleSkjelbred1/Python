@@ -150,6 +150,18 @@
   .movelist > div{ flex:1; background:rgba(255,255,255,.03); border:1px solid #2c3140; border-radius:10px; padding:8px 10px; }
   .movelist b{ color:#ffb347; } .movelist .mh{ font-weight:800; letter-spacing:1px; margin-bottom:3px; }
   #screen-pause .panel{ max-height:94vh; overflow-y:auto; }
+  #cutin{ position:absolute; inset:0; pointer-events:none; overflow:hidden; opacity:0; }
+  #cutin.on{ animation:cutFade 1.1s ease-out forwards; }
+  #cutin .cut-band{ position:absolute; top:34%; left:-10%; right:-10%; height:150px; transform:skewY(-6deg) translateX(-110%);
+    display:flex; align-items:center; gap:26px; padding-left:22%; background:linear-gradient(90deg,rgba(0,0,0,.85),var(--cut,#ffb347) 60%,rgba(255,255,255,.9));
+    box-shadow:0 0 40px var(--cut,#ffb347); }
+  #cutin.on .cut-band{ animation:cutSlide 1.1s cubic-bezier(.2,.9,.2,1) forwards; }
+  #cutin img{ width:130px; height:130px; border-radius:50%; border:4px solid #fff; object-fit:cover; transform:skewY(6deg); background:#0d1018; }
+  #cut-name{ font-size:18px; letter-spacing:4px; font-weight:800; color:#fff; text-shadow:0 2px 6px #000; transform:skewY(6deg); }
+  #cut-move{ font-size:44px; font-weight:900; letter-spacing:3px; color:#fff; text-shadow:0 4px 14px #000; transform:skewY(6deg); }
+  @keyframes cutSlide{ 0%{transform:skewY(-6deg) translateX(-110%);} 25%{transform:skewY(-6deg) translateX(0);} 80%{transform:skewY(-6deg) translateX(3%);} 100%{transform:skewY(-6deg) translateX(120%);} }
+  @keyframes cutFade{ 0%{opacity:1;} 85%{opacity:1;} 100%{opacity:0;} }
+  .stock-ico{ width:15px; height:15px; border-radius:50%; object-fit:cover; margin-right:2px; vertical-align:middle; border:1px solid rgba(255,255,255,.4); }
   #ctrl-guide{ position:absolute; top:78px; left:50%; transform:translateX(-50%); background:rgba(10,12,18,.8); border:1px solid rgba(255,179,71,.5);
     border-radius:10px; padding:10px 16px; font-size:13px; line-height:1.7; text-align:center; transition:opacity .6s; pointer-events:none; }
   #ctrl-guide b{ color:#ffb347; } #ctrl-guide kbd{ background:#1c2230; border:1px solid #3d4658; border-radius:4px; padding:0 5px; font-family:monospace; }
@@ -198,6 +210,7 @@
     <span class="sl">MUSIC</span><div id="music-chips" class="cs-mode-select"></div>
     <span class="sl">GRAPHICS</span><div id="gfx-chips" class="cs-mode-select"></div>
     <span class="sl">TAP JUMP</span><div id="tapjump-chips" class="cs-mode-select"></div>
+    <span class="sl">SCREEN SHAKE</span><div id="shake-chips" class="cs-mode-select"></div>
     <span class="sl" style="grid-column:1">CPU LEVEL</span><div id="diff-chips" class="cs-mode-select" style="grid-column:span 3"></div>
   </div>
 </div>
@@ -255,6 +268,7 @@
   <div id="hud-timer">2:00</div>
   <div id="hud-offscreen"></div>
   <div id="ctrl-guide" class="hidden"></div>
+  <div id="cutin"><div class="cut-band"><img id="cut-img" alt=""><div><div id="cut-name"></div><div id="cut-move"></div></div></div></div>
   <div id="hud-combo"><div class="cc" id="combo-count"></div><div class="cd" id="combo-dmg"></div></div>
   <div id="big-text"></div>
   <div id="stage-label"></div>
@@ -489,7 +503,7 @@ class AudioManager{
   startMusic(theme){
     this.stopMusic(); if(!this.musicOn) return; this.ensure();
     const menu=theme==='menu';
-    const T={menu:{root:57,scale:[0,2,4,7,9],bpm:92},fortress:{root:57,scale:[0,3,5,7,10],bpm:124},volcano:{root:50,scale:[0,1,5,7,8],bpm:136},storm:{root:52,scale:[0,2,3,7,10],bpm:128},meadow:{root:60,scale:[0,2,4,7,9],bpm:118},crypt:{root:50,scale:[0,3,5,6,10],bpm:112}}[theme]||{root:57,scale:[0,3,5,7,10],bpm:124};
+    const T={menu:{root:57,scale:[0,2,4,7,9],bpm:92},fortress:{root:57,scale:[0,3,5,7,10],bpm:124},volcano:{root:50,scale:[0,1,5,7,8],bpm:136},storm:{root:52,scale:[0,2,3,7,10],bpm:128},meadow:{root:60,scale:[0,2,4,7,9],bpm:118},crypt:{root:50,scale:[0,3,5,6,10],bpm:112},rift:{root:53,scale:[0,2,3,7,8],bpm:134}}[theme]||{root:57,scale:[0,3,5,7,10],bpm:124};
     const m={T,step:0,next:this.now+0.1,spb:60/T.bpm/4,timer:null};
     const hz=n=>440*Math.pow(2,(n-69)/12), deg=d=>T.root+T.scale[((d%5)+5)%5]+12*Math.floor(d/5);
     const bassline=[0,0,3,0,0,4,3,2], arp=[0,2,4,7,4,2,5,3];
@@ -837,6 +851,9 @@ const STAGES = [
     movers:[{axis:'y',x:-10.2,w:3.4,h:0.5,from:-3.5,to:6.5,speed:2.4,pause:0.9,glow:0x3fd9ff,body:0x2a3440,deck:'floor_tile_large'},
             {axis:'y',x:10.2,w:3.4,h:0.5,from:-3.5,to:6.5,speed:2.4,pause:0.9,start:10,startDir:-1,glow:0x3fd9ff,body:0x2a3440,deck:'floor_tile_large'}],
     blast:{l:-26,r:26,t:22,b:-18}, sky:0x0c1016, fog:0x111822 },
+  { id:'rift', name:'The Rift', desc:'One flat platform above a swirling void. No hazards.', theme:'rift',
+    platforms:[{x:0,y:-1,w:19,h:3,solid:true}],
+    blast:{l:-26,r:26,t:22,b:-18}, sky:0x05030c, fog:0x0a0618 },
 ];
 
 // Home-Run Contest: a small arena fenced by barriers that drop when the 10 s timer ends, then a 1 km runway.
@@ -858,26 +875,67 @@ class Hitbox{
 }
 
 //////////////////////// PARTICLES / FX ////////////////////////
+// Particles live in two fixed-size GPU point buffers (normal + additive blending): one draw call each,
+// no per-particle meshes or materials. Rings, sparks and scripted effects stay as small meshes in `fx`.
+const PARTICLE_VIEW={h:720};
+class PointPool{
+  constructor(scene,cap,additive){
+    this.cap=cap; this.n=0; this.cursor=0;
+    this.pos=new Float32Array(cap*3); this.col=new Float32Array(cap*4); this.size=new Float32Array(cap);
+    this.vel=new Float32Array(cap*3); this.life=new Float32Array(cap); this.max=new Float32Array(cap); this.base=new Float32Array(cap);
+    this.grav=new Float32Array(cap); this.drag=new Float32Array(cap);
+    const g=new THREE.BufferGeometry();
+    g.setAttribute('position',new THREE.BufferAttribute(this.pos,3)); g.setAttribute('pcolor',new THREE.BufferAttribute(this.col,4)); g.setAttribute('psize',new THREE.BufferAttribute(this.size,1));
+    this.geo=g;
+    this.mat=new THREE.ShaderMaterial({transparent:true,depthWrite:false,blending:additive?THREE.AdditiveBlending:THREE.NormalBlending,
+      uniforms:{vh:{value:720}},
+      vertexShader:`attribute vec4 pcolor; attribute float psize; uniform float vh; varying vec4 vC;
+        void main(){ vC=pcolor; vec4 mv=modelViewMatrix*vec4(position,1.0); gl_Position=projectionMatrix*mv;
+          gl_PointSize=psize<=0.0?0.0:max(1.0,psize*projectionMatrix[1][1]*vh*0.5/max(0.1,-mv.z)); }`,
+      fragmentShader:`varying vec4 vC; void main(){ vec2 d=gl_PointCoord-0.5; float r=length(d); if(r>0.5) discard;
+          float a=vC.a*smoothstep(0.5,0.3,r); gl_FragColor=vec4(vC.rgb,a); }`});
+    this.points=new THREE.Points(g,this.mat); this.points.frustumCulled=false; scene.add(this.points);
+  }
+  add(x,y,z,vx,vy,vz,color,size,life,grav,drag){
+    // reuse a dead slot near the cursor; if all are busy, overwrite the oldest-ish one
+    let i=this.cursor, tries=0; while(this.life[i]>0 && tries<this.cap){ i=(i+1)%this.cap; tries++; }
+    this.cursor=(i+1)%this.cap;
+    const c=_pc.setHex(color);
+    this.pos[i*3]=x; this.pos[i*3+1]=y; this.pos[i*3+2]=z; this.vel[i*3]=vx; this.vel[i*3+1]=vy; this.vel[i*3+2]=vz;
+    this.col[i*4]=c.r; this.col[i*4+1]=c.g; this.col[i*4+2]=c.b; this.col[i*4+3]=1;
+    this.base[i]=size*2; this.size[i]=size*2; this.life[i]=life; this.max[i]=life; this.grav[i]=grav; this.drag[i]=drag;
+  }
+  update(){
+    let alive=0;
+    for(let i=0;i<this.cap;i++){
+      if(this.life[i]<=0){ if(this.size[i]!==0){ this.size[i]=0; this.col[i*4+3]=0; } continue; }
+      alive++;
+      const j=i*3, d=this.drag[i];
+      this.vel[j+1]-=this.grav[i]; this.vel[j]*=d; this.vel[j+1]*=d; this.vel[j+2]*=d;
+      this.pos[j]+=this.vel[j]; this.pos[j+1]+=this.vel[j+1]; this.pos[j+2]+=this.vel[j+2];
+      const k=Math.max(0,--this.life[i]/this.max[i]);
+      this.col[i*4+3]=k; this.size[i]=this.life[i]>0?this.base[i]*Math.max(0.15,k):0;
+    }
+    this.n=alive; this.mat.uniforms.vh.value=PARTICLE_VIEW.h;
+    this.geo.attributes.position.needsUpdate=true; this.geo.attributes.pcolor.needsUpdate=true; this.geo.attributes.psize.needsUpdate=true;
+  }
+}
+const _pc=new THREE.Color();
 class ParticleSystem{
-  constructor(scene){ this.scene=scene; this.pool=[]; this.fx=[]; this.geos={}; }
-  _geo(size){ const k=size.toFixed(3); if(!this.geos[k]) this.geos[k]=new THREE.SphereGeometry(size,5,4); return this.geos[k]; }
+  constructor(scene){ this.scene=scene; this.fx=[]; this.normal=new PointPool(scene,1200,false); this.glow=new PointPool(scene,1600,true); }
+  get count(){ return this.normal.n+this.glow.n; }
   spawn(pos,count,opts){
     opts=opts||{};
-    const geo=this._geo(opts.size||0.09);
+    const pool=opts.additive?this.glow:this.normal, size=opts.size||0.09, spd=opts.speed!=null?opts.speed:0.15, up=opts.upBias!=null?opts.upBias:1;
+    const grav=opts.grav!=null?opts.grav:0.01, drag=opts.drag||0.97;
     for(let i=0;i<count;i++){
       const color=Array.isArray(opts.color)?choice(opts.color):(opts.color!=null?opts.color:0xffffff);
-      const mat=new THREE.MeshBasicMaterial({color,transparent:true,opacity:1,depthWrite:false});
-      if(opts.additive) mat.blending=THREE.AdditiveBlending;
-      const mesh=new THREE.Mesh(geo,mat);
-      mesh.position.copy(pos);
-      if(opts.spread){ mesh.position.x+=rand(-opts.spread,opts.spread); mesh.position.y+=rand(-opts.spread,opts.spread)*0.6; }
-      const dir=new THREE.Vector3(rand(-1,1),rand(0.1,1.1)*(opts.upBias!=null?opts.upBias:1),rand(-0.4,0.4));
-      if(opts.dirX) dir.x=Math.abs(dir.x)*opts.dirX;
-      dir.normalize();
-      const life=Math.round((opts.life||30)*rand(0.7,1.2));
-      this.scene.add(mesh);
-      this.pool.push({mesh,vel:dir.multiplyScalar((opts.speed!=null?opts.speed:0.15)*rand(0.5,1.3)),life,maxLife:life,
-        grav:opts.grav!=null?opts.grav:0.01,drag:opts.drag||0.97});
+      let x=pos.x, y=pos.y; if(opts.spread){ x+=rand(-opts.spread,opts.spread); y+=rand(-opts.spread,opts.spread)*0.6; }
+      let vx,vy,vz;
+      if(opts.vel){ vx=opts.vel.x; vy=opts.vel.y; vz=opts.vel.z||0; }
+      else { let dx=rand(-1,1), dy=rand(0.1,1.1)*up, dz=rand(-0.4,0.4); if(opts.dirX) dx=Math.abs(dx)*opts.dirX;
+        const l=Math.hypot(dx,dy,dz)||1, s=spd*rand(0.5,1.3); vx=dx/l*s; vy=dy/l*s; vz=dz/l*s; }
+      pool.add(x,y,pos.z,vx,vy,vz,color,size,Math.round((opts.life||30)*rand(0.7,1.2)),grav,drag);
     }
   }
   trail(pos,color,size){ this.spawn(pos,1,{color,size:size||0.08,speed:0,grav:0,life:10,additive:true}); }
@@ -905,15 +963,7 @@ class ParticleSystem{
   // short-lived scripted effect: fn(obj,progress) each frame, then removed and cleaned up
   custom(obj,life,fn,cleanup){ this.fx.push({mesh:obj,life,maxLife:life,fn,cleanup}); }
   update(){
-    for(let i=this.pool.length-1;i>=0;i--){
-      const p=this.pool[i];
-      p.vel.y-=p.grav; p.vel.multiplyScalar(p.drag);
-      p.mesh.position.add(p.vel);
-      p.life--;
-      const k=clamp(p.life/p.maxLife,0,1);
-      p.mesh.material.opacity=k; p.mesh.scale.setScalar(Math.max(0.15,k));
-      if(p.life<=0){ this.scene.remove(p.mesh); p.mesh.material.dispose(); this.pool.splice(i,1); }
-    }
+    this.normal.update(); this.glow.update();
     for(let i=this.fx.length-1;i>=0;i--){
       const e=this.fx[i]; e.life--;
       const t=1-e.life/e.maxLife;
@@ -950,6 +1000,7 @@ const ITEM_SHOOT=new Move('itemShoot',{name:'Rune Bolt',startup:6,active:2,recov
 const ITEM_THROW=new Move('itemThrow',{startup:5,active:2,recovery:10,dmg:0,noHitbox:true,itemThrow:true,name:'Item Throw'});
 const LEDGE_ATTACK=new Move('ledgeAttack',{startup:8,active:4,recovery:16,dmg:8,bkb:12,kbg:1.2,angle:30,range:1.2,name:'Ledge Attack'});
 const LOW_GFX={on:false};
+const CAMERA_FX={shake:true};
 // three.js strips '.' from node names on load ('handslot.r' -> 'handslotr'), so look up both spellings
 function bone(root,name){ return root.getObjectByName(name)||root.getObjectByName(name.replace(/\./g,'')); }
 function addRim(mat,u){
@@ -1693,6 +1744,18 @@ class StageObj{
     const topTile={fortress:'floor_tile_large',volcano:'floor_dirt_large_rocky',storm:'floor_dirt_large_rocky',meadow:null,crypt:'floor_tile_large',homerun:null}[th];
     for(const p of this.platforms){
       const top=p.y+p.h/2;
+      if(th==='rift'){ // dark metal slab with glowing edge strips and a glowing core underneath
+        const slab=new THREE.Mesh(new THREE.BoxGeometry(p.w,p.h,3.6),std({color:0x2a2442,metalness:0.25,roughness:0.6,emissive:0x140a2a,emissiveIntensity:0.8}));
+        slab.position.set(p.x,p.y,0); slab.receiveShadow=slab.castShadow=true; scene.add(slab);
+        const topPlate=new THREE.Mesh(new THREE.BoxGeometry(p.w-0.2,0.08,3.4),std({color:0x3a3358,metalness:0.1,roughness:0.85})); topPlate.position.set(p.x,top+0.01,0); topPlate.receiveShadow=true; scene.add(topPlate);
+        const glow=c=>new THREE.MeshBasicMaterial({color:c});
+        for(const z of [1.8,-1.8]){ const e=new THREE.Mesh(new THREE.BoxGeometry(p.w+0.05,0.06,0.06),glow(0xb07aff)); e.position.set(p.x,top,z); scene.add(e); }
+        for(const x of [p.x-p.w/2,p.x+p.w/2]){ const e=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.06,3.62),glow(0x4ee1ff)); e.position.set(x,top,0); scene.add(e); }
+        const cone=new THREE.Mesh(new THREE.ConeGeometry(p.w*0.42,9,4,1,true),std({color:0x201a36,metalness:0.2,roughness:0.6,emissive:0x1a0a3a,emissiveIntensity:0.9,side:THREE.DoubleSide}));
+        cone.rotation.set(Math.PI,Math.PI/4,0); cone.scale.z=0.35; cone.position.set(p.x,p.y-p.h/2-4.5,0); scene.add(cone);
+        const core=new THREE.Mesh(new THREE.OctahedronGeometry(0.9),glow(0xb07aff)); core.position.set(p.x,p.y-p.h/2-8.6,0); scene.add(core); this.riftCore=core;
+        continue;
+      }
       if(p.barrier){ // glassy force field that fences the arena until time is up
         p.mesh=new THREE.Mesh(new THREE.BoxGeometry(p.w,p.h,3.4),new THREE.MeshBasicMaterial({color:0x8fd8ff,transparent:true,opacity:0.22,depthWrite:false,blending:THREE.AdditiveBlending}));
         p.mesh.position.set(p.x,p.y,0); scene.add(p.mesh); continue;
@@ -1717,7 +1780,23 @@ class StageObj{
     const m=this.main, top=m.y+m.h/2, L=m.x-m.w/2, R=m.x+m.w/2;
     this.torchLights=[];
     const torch=(x,y,z)=>{ add('torch_lit',x,y,z,1.3); if(LOW_GFX.on) return; const l=new THREE.PointLight(crypt?0x5fd8ff:0xff9a40,crypt?1.1:0.6,crypt?9:7,2); l.position.set(x,y+1.1,z+0.6); scene.add(l); this.torchLights.push(l); };
-    if(homerun){
+    if(th==='rift'){
+      // swirling nebula on a big inside-out sphere, drifting crystals and stars
+      this.nebula=new THREE.Mesh(new THREE.SphereGeometry(150,32,20),new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,fog:false,
+        uniforms:{t:{value:0}},
+        vertexShader:'varying vec3 vP; void main(){ vP=normalize(position); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+        fragmentShader:`uniform float t; varying vec3 vP;
+          float n(vec3 p){ return sin(p.x*3.1+t*0.2)*sin(p.y*2.7-t*0.15)*sin(p.z*3.3+t*0.1); }
+          void main(){ vec3 p=vP*2.0; float a=atan(p.y,p.x)+length(p.xy)*1.6-t*0.05;
+            float s=0.5+0.5*sin(a*3.0+n(p*1.7)*2.0); float f=pow(s,3.0)*(0.6+0.4*n(p*2.3+vec3(t*0.05)));
+            vec3 c=mix(vec3(0.03,0.01,0.08),vec3(0.35,0.12,0.6),f)+vec3(0.05,0.35,0.45)*pow(max(0.0,n(p*3.1)),3.0);
+            gl_FragColor=vec4(c,1.0); }`}));
+      scene.add(this.nebula);
+      this.stars=this._points(600,0xffffff,0.3,[-120,120],[-40,90],[-140,-60]);
+      this.crystals=[];
+      for(let i=0;i<9;i++){ const c=new THREE.Mesh(new THREE.OctahedronGeometry(rand(0.4,1.4)),new THREE.MeshStandardMaterial({color:0x2a1a4a,emissive:i%2?0x6a3aff:0x2ad4ff,emissiveIntensity:0.9,metalness:0.6,roughness:0.2}));
+        c.position.set(rand(-34,34),rand(-10,22),rand(-40,-14)); c.userData.spin=rand(0.2,0.8); c.userData.bob=rand(0,6); scene.add(c); this.crystals.push(c); }
+    } else if(homerun){
       const lake=new THREE.Mesh(new THREE.PlaneGeometry(1400,200),std({color:0x3d8fc9,roughness:0.75,metalness:0}));
       lake.rotation.x=-Math.PI/2; lake.position.set(500,-14,0); scene.add(lake);
       // distance boards every 25 m along the runway
@@ -1828,6 +1907,9 @@ class StageObj{
     }
     if(this.clouds) this.clouds.forEach((c,i)=>{ c.position.x+=dt*(0.4+i%3*0.2); if(c.position.x>70) c.position.x=-70; });
     if(this.torchLights) this.torchLights.forEach((l,i)=>{ l.intensity=0.6+Math.sin(this.time*9+i*2)*0.08+Math.sin(this.time*23+i)*0.05; });
+    if(this.nebula){ this.nebula.material.uniforms.t.value=this.time;
+      this.crystals.forEach(c=>{ c.rotation.y+=dt*c.userData.spin; c.rotation.x+=dt*c.userData.spin*0.4; c.position.y+=Math.sin(this.time*0.8+c.userData.bob)*0.01; });
+      if(this.riftCore){ this.riftCore.rotation.y+=dt*1.2; this.riftCore.scale.setScalar(1+0.15*Math.sin(this.time*3)); } }
     if(this.mist){
       const a=this.mist.geometry.attributes.position.array;
       for(let i=0;i<a.length;i+=3){ a[i+1]+=dt*rand(0.3,0.9); a[i]+=Math.sin(this.time*0.6+i)*0.006; if(a[i+1]>4) a[i+1]=-18; }
@@ -1882,7 +1964,7 @@ class CameraRig{
     if(this.shake>0.01){ this.camera.position.x+=rand(-1,1)*this.shake*0.35; this.camera.position.y+=rand(-1,1)*this.shake*0.35; }
     this.camera.lookAt(this.look);
   }
-  kick(a){ this.shake=Math.max(this.shake,a); }
+  kick(a){ if(CAMERA_FX.shake) this.shake=Math.max(this.shake,a); }
 }
 
 //////////////////////// POST-PROCESSING (BLOOM) ////////////////////////
@@ -1915,7 +1997,7 @@ class PostFX{
     this.targets=[]; this.setSize();
   }
   setSize(){
-    const v=this.r.getDrawingBufferSize(new THREE.Vector2()), w=Math.max(1,v.x), h=Math.max(1,v.y);
+    const v=this.r.getDrawingBufferSize(new THREE.Vector2()), w=Math.max(1,v.x), h=Math.max(1,v.y); PARTICLE_VIEW.h=h;
     this.targets.forEach(t=>t.dispose());
     const opt={minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,format:THREE.RGBAFormat};
     this.rtScene=(this.r.capabilities.isWebGL2 && THREE.WebGLMultisampleRenderTarget) ? new THREE.WebGLMultisampleRenderTarget(w,h,opt) : new THREE.WebGLRenderTarget(w,h,opt);
@@ -2256,7 +2338,7 @@ class Game{
     this.camera.position.set(0,8,26);
     this.postfx=new PostFX(this.renderer);
     window.addEventListener('resize',()=>this._resize()); this._resize();
-    this.settings=Object.assign({stocks:3,timeLimit:0,mode:'vs',botDifficulty:5,rules:'stock',hazards:true,items:true,music:true,graphics:'high',tapJump:true},this._loadSettings());
+    this.settings=Object.assign({stocks:3,timeLimit:0,mode:'vs',botDifficulty:5,rules:'stock',hazards:true,items:true,music:true,graphics:'high',tapJump:true,shake:true},this._loadSettings());
     this.selection={p1:0,p2:1,stageIdx:0,colors:{p1:'default',p2:'default'}};
     this.training={dummy:'stand',hitboxes:true};
     PROFILE.load();
@@ -2271,7 +2353,7 @@ class Game{
     requestAnimationFrame(t=>this._loop(t));
   }
   _loadSettings(){ try{ return JSON.parse(localStorage.getItem('riftclash.settings.v1'))||{}; }catch(e){ return {}; } }
-  _saveSettings(){ try{ const s=this.settings; localStorage.setItem('riftclash.settings.v1',JSON.stringify({stocks:s.stocks,timeLimit:s.timeLimit,botDifficulty:s.botDifficulty,hazards:s.hazards,items:s.items,music:s.music,graphics:s.graphics,tapJump:s.tapJump,rules:s.rules})); }catch(e){} }
+  _saveSettings(){ try{ const s=this.settings; localStorage.setItem('riftclash.settings.v1',JSON.stringify({stocks:s.stocks,timeLimit:s.timeLimit,botDifficulty:s.botDifficulty,hazards:s.hazards,items:s.items,music:s.music,graphics:s.graphics,tapJump:s.tapJump,rules:s.rules,shake:s.shake})); }catch(e){} }
   // LOW trades shadows and resolution for frame rate on weaker machines
   _applyGraphics(){
     const low=this.settings.graphics==='low'; LOW_GFX.on=low;
@@ -2307,6 +2389,8 @@ class Game{
     this._chipRow($('gfx-chips'),[{label:'HIGH',value:'high'},{label:'LOW',value:'low'}],S.graphics,v=>{ set('graphics')(v); this._applyGraphics(); });
     this._chipRow($('tapjump-chips'),[{label:'UP JUMPS',value:true},{label:'OFF',value:false}],S.tapJump,v=>{ set('tapJump')(v); TAP_JUMP.on=v; });
     TAP_JUMP.on=S.tapJump;
+    this._chipRow($('shake-chips'),[{label:'ON',value:true},{label:'OFF',value:false}],S.shake,v=>{ set('shake')(v); CAMERA_FX.shake=v; });
+    CAMERA_FX.shake=S.shake;
     AUDIO.musicOn=S.music; this._applyGraphics();
     $('btn-1v1').onclick=()=>{ this.settings.mode='vs'; this._toCharSelect(); };
     $('btn-cpu').onclick=()=>{ this.settings.mode='cpu'; this._toCharSelect(); };
@@ -2355,7 +2439,7 @@ class Game{
     const grid=$('stage-grid');
     STAGES.forEach((s,i)=>{
       const c=document.createElement('div'); c.className='stage-card'+(i===0?' sel':'');
-      c.style.background=s.theme==='crypt'?'linear-gradient(180deg,#0c1016,#1e3848 160%)':s.theme==='volcano'?'linear-gradient(180deg,#3a1810,#ff5500 160%)':(s.theme==='storm'?'linear-gradient(180deg,#232b3c,#0c1018)':(s.theme==='meadow'?'linear-gradient(180deg,#5aa7df,#3f7d2e 130%)':'linear-gradient(180deg,#2b3550,#0d1420)'));
+      c.style.background=s.theme==='rift'?'radial-gradient(circle at 50% 30%,#4a2a80,#0a0618 70%)':s.theme==='crypt'?'linear-gradient(180deg,#0c1016,#1e3848 160%)':s.theme==='volcano'?'linear-gradient(180deg,#3a1810,#ff5500 160%)':(s.theme==='storm'?'linear-gradient(180deg,#232b3c,#0c1018)':(s.theme==='meadow'?'linear-gradient(180deg,#5aa7df,#3f7d2e 130%)':'linear-gradient(180deg,#2b3550,#0d1420)'));
       c.innerHTML=`<div class="nm">${s.name}</div><div class="desc">${s.desc}</div>`;
       c.onclick=()=>this._selectStage(i);
       grid.appendChild(c);
@@ -3092,7 +3176,7 @@ class Game{
           AUDIO.tone(120,0.35,'sawtooth',0.2,60); break;
         case 'ultimate': {
           this.cinematic={f,t:50};
-          this._bigText(f.moveset.ultimate.name.toUpperCase(),true);
+          this._cutIn(f);
           AUDIO.playUltimate(); this.flash=0.35; this.flashColor=f.cd.accent; this.bloomPulse=1.6; this.cameraRig.kick(0.4);
           P.ring(new THREE.Vector3(f.pos.x,f.pos.y+s,0),f.cd.accent,4,40,0.12);
           break;
@@ -3124,6 +3208,14 @@ class Game{
     this.particles.spawn(new THREE.Vector3(x,y+0.2,0.3),20,{color:[0x7cf2c8,0xe8e0c8],speed:0.18,life:24,upBias:1.6,additive:true});
     this.particles.custom(g,26,(o,k)=>{ const up=k<0.25?easeOutBack(k/0.25):1-Math.max(0,(k-0.6)/0.4); o.scale.set(1,Math.max(0.01,up),1); },()=>mat.dispose());
     AUDIO.playBone(); AUDIO.playSoul(); this.cameraRig.kick(0.25);
+  }
+  // Smash-style cut-in banner for ultimates: portrait + move name sweeping across the screen
+  _cutIn(f){
+    const el=document.getElementById('cutin'), img=document.getElementById('hudport-'+(f.idx+1));
+    el.style.setProperty('--cut',hex6(f.cd.accent)); document.getElementById('cut-img').src=img?img.src:'';
+    document.getElementById('cut-name').textContent=f.cd.name.toUpperCase();
+    document.getElementById('cut-move').textContent=f.moveset.ultimate.name.toUpperCase();
+    el.classList.remove('on'); void el.offsetWidth; el.classList.add('on');
   }
   _floatText(f,text){
     const el=document.createElement('div'); el.className='float-text'; el.textContent=text;
@@ -3325,8 +3417,7 @@ class Game{
           if(!f.grounded) f.vel.x=clamp(f.vel.x+h.dir*0.32*k,-10,10);
           else if(f.state!=='shield') f.pos.x+=h.dir*0.028*k;
         }
-        if(this.frame%3===0) this.particles.spawn(new THREE.Vector3(-h.dir*22,rand(-2,14),rand(-1,1)),2,{color:[0x8fcf5a,0xd8e89a,0xffffff],speed:0,grav:0,life:60,size:0.07,drag:1,dirX:h.dir});
-        this.particles.pool.slice(-2).forEach(p=>{ if(p.vel.length()===0) p.vel.set(h.dir*0.75*Math.max(0.3,k),rand(-0.03,0.03),0); });
+        if(this.frame%3===0) for(let j=0;j<2;j++) this.particles.spawn(new THREE.Vector3(-h.dir*22,rand(-2,14),rand(-1,1)),1,{color:[0x8fcf5a,0xd8e89a,0xffffff],grav:0,life:60,size:0.07,drag:1,vel:{x:h.dir*0.75*Math.max(0.3,k),y:rand(-0.03,0.03),z:0}});
         if(h.t>c.warn+c.active) h.done=true;
         continue;
       }
@@ -3725,7 +3816,10 @@ class Game{
       const sh=this.hudShake[n];
       el.style.transform=sh>0.4?`translate(${rand(-1,1)*sh}px,${rand(-1,1)*sh*0.6}px) scale(${1+sh*0.02})`:'';
       this.hudShake[n]*=0.82;
-      $('hudstocks-'+n).textContent=isFinite(f.stocks)?'●'.repeat(Math.max(0,f.stocks)):'∞';
+      const st=isFinite(f.stocks)?Math.max(0,f.stocks):-1, sEl=$('hudstocks-'+n);
+      if(sEl._n!==st){ sEl._n=st; // small portrait per remaining life
+        if(st<0) sEl.textContent='∞';
+        else { const src=$('hudport-'+n).src; sEl.innerHTML=st>6?`<img class="stock-ico" src="${src}">×${st}`:Array.from({length:st},()=>`<img class="stock-ico" src="${src}">`).join(''); } }
       $('hudult-'+n).style.width=f.ultMeter+'%'; $('hudult-'+n).classList.toggle('full',f.ultMeter>=100);
       $('hudultlabel-'+n).style.opacity=f.ultMeter>=100?1:0;
     });
