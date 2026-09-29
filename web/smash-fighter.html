@@ -1056,6 +1056,14 @@ class ParticleSystem{
     const m=new THREE.Mesh(new THREE.PlaneGeometry(len,len*0.16),mat); m.position.copy(pos); m.rotation.z=angle; this.scene.add(m);
     this.custom(m,life||14,(o,k)=>{ o.scale.set(0.3+easeOutCubic(Math.min(1,k*2.5))*0.9,1-k*0.7,1); mat.opacity=k<0.3?1:1-(k-0.3)/0.7; },()=>{ tex.dispose(); mat.dispose(); });
   }
+  koBeam(at,center,color){ // Smash-style KO blast: a wide beam fired from the blast line back across the stage
+    const dir=new THREE.Vector3(center.x-at.x,center.y-at.y,0).normalize(), len=30, g=new THREE.Group();
+    const mk=(r,col,op)=>{ const m=new THREE.Mesh(new THREE.ConeGeometry(r,len,28,1,true),new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:op,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
+      m.rotation.x=Math.PI; m.position.y=len/2; m.userData.op=op; g.add(m); return m; }; // cone flipped: wide end at the blast line
+    const parts=[mk(3.6,color,0.32),mk(1.9,color,0.5),mk(0.8,0xffffff,0.75)];
+    g.position.set(at.x,at.y,-0.5); g.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir); this.scene.add(g);
+    this.custom(g,32,(o,k)=>{ const grow=Math.min(1,k*7); o.scale.set(1+k*0.5,grow,1+k*0.5); for(const m of parts) m.material.opacity=m.userData.op*(1-k)*(1-k); },()=>parts.forEach(m=>m.material.dispose()));
+  }
   pillar(pos,color,height,radius,life){ // column of light or fire rising from the ground
     const mat=new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.8,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide});
     const m=new THREE.Mesh(new THREE.CylinderGeometry(radius*0.3,radius,height,20,1,true),mat); m.position.set(pos.x,pos.y+height/2,pos.z); this.scene.add(m);
@@ -3692,6 +3700,8 @@ class Game{
     if(hpOut){ this.particles.spawn(at,50,{color:[0xffffff,f.cd.accent,0x333333],speed:0.4,life:40,grav:0.01,size:0.14}); this._bigText('K.O.!',true); this._countT.push(setTimeout(()=>this._hideBigText(),700)); }
     this.particles.spawn(at,70,{color:[f.cd.accent,0xffffff,0xffee88],speed:0.55,life:40,upBias:1,grav:0.004,additive:true,size:0.11});
     this.particles.ring(at,f.cd.accent,7,30,0.18); this.particles.ring(at,0xffffff,4,20,0.1);
+    if(!hpOut){ this.particles.koBeam(at,new THREE.Vector3(this.stage.main.x,this.stage.main.y+4,0),f.lastHitBy?f.lastHitBy.cd.accent:f.cd.accent);
+      const el=f.lastHitBy&&ELEMENT[f.lastHitBy.cd.id]; if(el) this.particles.element(at,el,30,Math.sign(f.pos.x)||1); }
     this.flash=0.3; this.flashColor=f.cd.accent; this.bloomPulse=2; this.cameraRig.kick(1.4);
     AUDIO.playKO(); AUDIO.playCrowd(); fighterVoice(f,'ko'); rumble(f,1,450);
     if(this._frameHits) this._frameHits.push({ko:true,at:at.clone(),col:f.cd.accent});
@@ -4342,7 +4352,7 @@ class Game{
       if(f.state==='respawn'){ f.group.visible=true; }
     });
     for(const h of s.hits){ const at=new THREE.Vector3(h[0],h[1],0.4);
-      if(h[4]){ this.particles.spawn(at,70,{color:[h[2],0xffffff,0xffee88],speed:0.55,life:40,grav:0.004,additive:true,size:0.11}); this.particles.ring(at,h[2],7,30,0.18); this.flash=0.3; this.flashColor=h[2]; this.bloomPulse=2; this.cameraRig.kick(1.2); AUDIO.playKO(); }
+      if(h[4]){ this.particles.koBeam(at,new THREE.Vector3(this.stage.main.x,this.stage.main.y+4,0),h[2]); this.particles.spawn(at,70,{color:[h[2],0xffffff,0xffee88],speed:0.55,life:40,grav:0.004,additive:true,size:0.11}); this.particles.ring(at,h[2],7,30,0.18); this.flash=0.3; this.flashColor=h[2]; this.bloomPulse=2; this.cameraRig.kick(1.2); AUDIO.playKO(); }
       else { this.particles.spawn(at,Math.round(6+h[3]),{color:[0xffffff,0xfff0b0,h[2]],speed:0.14+h[5]*0.0025,life:20,additive:true,size:0.07}); this.particles.spark(at,0xffffff,0.7+h[3]*0.05);
         this.bloomPulse=Math.max(this.bloomPulse,clamp(h[3]/18,0.12,1.1)); AUDIO.playHit(h[3]); if(h[5]>85) this.cameraRig.kick(0.6); }
     }
