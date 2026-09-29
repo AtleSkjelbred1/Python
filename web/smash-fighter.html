@@ -211,7 +211,7 @@
   <div id="loading-note" style="font-size:12px;letter-spacing:3px;color:#ffb347;margin-bottom:12px;">LOADING FIGHTERS…</div>
   <div class="row"><div id="btn-1v1" class="menu-btn" style="min-width:230px;">VERSUS (2 PLAYERS)</div><div id="btn-ffa" class="menu-btn" style="min-width:230px;">FREE-FOR-ALL (4)</div></div>
   <div class="row"><div id="btn-cpu" class="menu-btn" style="min-width:230px;">VS BOT</div><div id="btn-arcade" class="menu-btn" style="min-width:230px;">ARCADE</div></div>
-  <div class="row"><div id="btn-homerun" class="menu-btn" style="min-width:230px;">HOME-RUN CONTEST</div></div>
+  <div class="row"><div id="btn-homerun" class="menu-btn" style="min-width:230px;">HOME-RUN CONTEST</div><div id="btn-targets" class="menu-btn" style="min-width:230px;">BREAK THE TARGETS</div></div>
   <div class="row"><div id="btn-training" class="menu-btn" style="min-width:150px;">TRAINING</div><div id="btn-records" class="menu-btn" style="min-width:150px;">RECORDS</div><div id="btn-controls" class="menu-btn" style="min-width:150px;">CONTROLS</div></div>
   <div class="row"><div id="btn-online" class="menu-btn" style="min-width:230px;">ONLINE (BETA)</div></div>
   <div class="panel settings-grid" style="margin-top:14px;">
@@ -916,6 +916,12 @@ const HOMERUN_STAGE={ id:'homerun', name:'Home-Run Field', desc:'', theme:'homer
   platforms:[{x:0,y:-1,w:12,h:3,solid:true},{x:506.6,y:-9,w:1000,h:2,solid:true,noUnder:true,noLedge:true,runway:true},
     {x:6.35,y:4,w:0.5,h:10,solid:true,barrier:true,noUnder:true,noLedge:true},{x:-6.35,y:4,w:0.5,h:10,solid:true,barrier:true,noUnder:true,noLedge:true}],
   blast:{l:-40,r:1100,t:90,b:-40}, sky:0x6fb3e0, fog:0x9ccbe8, bloom:{threshold:0.97,strength:0.18} };
+// Break the Targets: a tower of small ledges on the Rift's slabs, ten targets placed to need every kind of movement
+const TARGET_STAGE={ id:'targets', name:'Target Tower', desc:'', theme:'rift',
+  platforms:[{x:0,y:-1,w:12,h:3,solid:true},{x:-8.5,y:3,w:3.4,h:0.5,solid:false},{x:8.5,y:3,w:3.4,h:0.5,solid:false},
+    {x:-3.8,y:7,w:3,h:0.5,solid:false},{x:4.2,y:9.6,w:3,h:0.5,solid:false}],
+  blast:{l:-25,r:25,t:26,b:-17}, sky:0x05030c, fog:0x0a0618 };
+const TARGET_SPOTS=[[-3,1.6],[5,3.2],[-8.5,4.6],[8.5,5],[-3.8,8.6],[4.2,11.2],[-10.8,-1.6],[10.8,-1.2],[0.2,14.4],[-12.4,6.4]];
 const SANDBAG_CD=Object.assign({},CHAR_DATA.find(c=>c.id==='rattle'),{name:'Sandbag',weight:100,sandbag:true,traits:'',desc:''});
 const HR_TIME=600, HR_EDGE=6.6, STAMINA_HP=150;
 // Arcade's final round: a giant armoured Brakka that only flinches from strong hits
@@ -2634,6 +2640,7 @@ class Game{
     $('btn-restart').onclick=()=>{ if(this.online){ if(!this.netGuest&&NET.open) this._netStartMatch(); return; } this._startMatch(true); };
     $('btn-arcade').onclick=()=>{ this.settings.mode='arcade'; this._toCharSelect(); };
     $('btn-homerun').onclick=()=>{ this.settings.mode='homerun'; this._toCharSelect(); };
+    $('btn-targets').onclick=()=>{ this.settings.mode='targets'; this._toCharSelect(); };
     $('btn-ffa').onclick=()=>{ this.settings.mode='ffa'; this._toCharSelect(); };
     this.ffaP2='bot'; this.ffaTeams=false; this.p1cpu=false;
     this._chipRow($('p1-ctrl'),[{label:'P1: HUMAN',value:false},{label:'P1: CPU (WATCH)',value:true}],false,v=>{ this.p1cpu=v; AUDIO.playClick(); });
@@ -2757,7 +2764,7 @@ class Game{
     this.state='charselect'; this._showScreen('charselect');
     const mode=this.settings.mode;
     document.getElementById('p2-label').textContent=mode==='cpu'?'CPU LEVEL '+this.settings.botDifficulty:(mode==='training'?'TRAINING DUMMY':(mode==='arcade'?'ARCADE: 5 RIVALS + A FINAL BOSS':
-      (mode==='homerun'?'SANDBAG — 10 SECONDS, THEN SEND IT FLYING':mode==='ffa'?(this.ffaP2==='bot'?'CPU LV '+this.settings.botDifficulty+' + 2 RANDOM CPUs':'PLAYER 2 + 2 RANDOM CPUs'):'PLAYER 2')));
+      (mode==='homerun'?'SANDBAG — 10 SECONDS, THEN SEND IT FLYING':mode==='targets'?'BREAK ALL 10 TARGETS AS FAST AS YOU CAN':mode==='ffa'?(this.ffaP2==='bot'?'CPU LV '+this.settings.botDifficulty+' + 2 RANDOM CPUs':'PLAYER 2 + 2 RANDOM CPUs'):'PLAYER 2')));
     document.getElementById('ffa-p2').classList.toggle('hidden',mode!=='ffa');
     document.getElementById('ffa-teams').classList.toggle('hidden',mode!=='ffa');
     document.getElementById('p1-ctrl').classList.toggle('hidden',!(mode==='cpu'||mode==='ffa'));
@@ -2913,10 +2920,11 @@ class Game{
       `<tr><td>Fastest win</td><td class="num">${fmt(d.fastestWin)}${d.fastestWinChar?' · '+d.fastestWinChar:''}</td></tr>`+
       `<tr><td>Most damage in one match</td><td class="num">${d.mostDamage}%</td></tr>`+
       `<tr><td>Arcade</td><td class="num">${d.arcadeClears||0} clears · best ${d.arcadeBest||0} / 6 rounds</td></tr>`+
-      `<tr><td>Home-Run best</td><td class="num">${(()=>{ const hr=d.homerun||{}, k=Object.keys(hr).sort((a,b)=>hr[b]-hr[a])[0]; return k?hr[k].toFixed(1)+' m · '+CHAR_DATA.find(c=>c.id===k).name:'—'; })()}</td></tr></table>`;
-    h+='<div class="rec-h">FIGHTERS</div><table class="rec-table"><tr><th>Fighter</th><th>Played</th><th>Wins</th><th>Win rate</th><th>Home-Run</th></tr>';
+      `<tr><td>Home-Run best</td><td class="num">${(()=>{ const hr=d.homerun||{}, k=Object.keys(hr).sort((a,b)=>hr[b]-hr[a])[0]; return k?hr[k].toFixed(1)+' m · '+CHAR_DATA.find(c=>c.id===k).name:'—'; })()}</td></tr>`+
+      `<tr><td>Targets best</td><td class="num">${(()=>{ const tt=d.targets||{}, k=Object.keys(tt).sort((a,b)=>tt[a]-tt[b])[0]; return k?tt[k].toFixed(2)+' s · '+CHAR_DATA.find(c=>c.id===k).name:'—'; })()}</td></tr></table>`;
+    h+='<div class="rec-h">FIGHTERS</div><table class="rec-table"><tr><th>Fighter</th><th>Played</th><th>Wins</th><th>Win rate</th><th>Home-Run</th><th>Targets</th></tr>';
     CHAR_DATA.forEach(cd=>{ const c=d.chars[cd.id]||{played:0,wins:0}, hr=(d.homerun||{})[cd.id];
-      h+=`<tr><td style="color:${hex6(cd.accent)}">${cd.name}</td><td class="num">${c.played}</td><td class="num">${c.wins}</td><td class="num">${c.played?Math.round(100*c.wins/c.played)+'%':'—'}</td><td class="num">${hr?hr.toFixed(1)+' m':'—'}</td></tr>`; });
+      h+=`<tr><td style="color:${hex6(cd.accent)}">${cd.name}</td><td class="num">${c.played}</td><td class="num">${c.wins}</td><td class="num">${c.played?Math.round(100*c.wins/c.played)+'%':'—'}</td><td class="num">${hr?hr.toFixed(1)+' m':'—'}</td><td class="num">${(d.targets||{})[cd.id]!=null?d.targets[cd.id].toFixed(2)+' s':'—'}</td></tr>`; });
     h+='</table><div class="rec-h">COLOURS</div><table class="rec-table"><tr><th></th><th>Colour</th><th>How to unlock</th><th>Progress</th></tr>';
     COLOR_UNLOCKS.forEach(c=>{ const open=PROFILE.unlocked(c), pr=c.progress?c.progress(d):null;
       h+=`<tr><td><div class="swatch" style="background:${c.tint!=null?hex6(c.tint):'#888'};cursor:default"></div></td><td>${c.name}</td><td>${c.goal||'Always available'}</td><td class="num">${open?'Unlocked':pr[0]+' / '+pr[1]}</td></tr>`; });
@@ -2970,7 +2978,7 @@ class Game{
     rig.setChar(this._previewCd(who),this._isRandom(who)?0x161616:this._tintOf(who));
     return url;
   }
-  _toStageSelect(){ if(this.settings.mode==='arcade') return this._startArcade(); if(this.settings.mode==='homerun') return this._startHomerun(); this.state='stageselect'; this._showScreen('stageselect'); AUDIO.playClick(); this._stageThumbs(); }
+  _toStageSelect(){ if(this.settings.mode==='arcade') return this._startArcade(); if(this.settings.mode==='homerun') return this._startHomerun(); if(this.settings.mode==='targets') return this._startTargets(); this.state='stageselect'; this._showScreen('stageselect'); AUDIO.playClick(); this._stageThumbs(); }
   // renders each stage once into its card the first time stage select opens
   _stageThumbs(){
     if(this._thumbsDone) return; this._thumbsDone=true;
@@ -2984,6 +2992,10 @@ class Game{
       scene.traverse(o=>{ if(o.userData.shared) return; if(o.userData.keepMat){ o.geometry.dispose(); return; } if(o.geometry) o.geometry.dispose(); if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(q=>q.dispose()); });
     });
     r.dispose(); if(r.forceContextLoss) r.forceContextLoss();
+  }
+  _startTargets(){
+    this.p1char=CHAR_DATA[this.selection.p1]||choice(CHAR_DATA); this.p2char=SANDBAG_CD; this.stageData=TARGET_STAGE; this.extraChars=[];
+    this._startMatch(true);
   }
   _startHomerun(){
     this.p1char=CHAR_DATA[this.selection.p1]||choice(CHAR_DATA); this.p2char=SANDBAG_CD; this.stageData=HOMERUN_STAGE; this.extraChars=[];
@@ -3048,7 +3060,7 @@ class Game{
     this.scene=new THREE.Scene();
     this.stage=new StageObj(this.scene,this.stageData);
     this.particles=new ParticleSystem(this.scene);
-    this.isTraining=this.settings.mode==='training'; this.isHomerun=this.settings.mode==='homerun';
+    this.isTraining=this.settings.mode==='training'; this.isHomerun=this.settings.mode==='homerun'; this.isTargets=this.settings.mode==='targets';
     this.hr=this.isHomerun?{t:HR_TIME,phase:'hit',fly:0,dist:0}:null;
     this._batPending=this.isHomerun;
     // who is in the match and who controls them: 'p1'/'p2' keyboard+pad, 'bot', or the training 'dummy'
@@ -3057,7 +3069,7 @@ class Game{
     const p1bot=this.p1cpu&&(mode==='cpu'||mode==='ffa');
     this.online=mode==='online'||mode==='online-guest'; this.netGuest=mode==='online-guest';
     const roster=[{cd:this.p1char,tint:this.online?null:this._tintOf('p1'),control:this.netGuest?'net':(p1bot?'bot':'p1')},
-      {cd:this.p2char,tint:mode==='homerun'?0xd8b98a:this._tintOf('p2'),control:this.netGuest?'net':mode==='online'?'remote':(this.isTraining||mode==='homerun')?'dummy':(mode==='cpu'||arc||(ffa&&this.ffaP2==='bot'))?'bot':'p2'}];
+      {cd:this.p2char,tint:mode==='homerun'?0xd8b98a:this._tintOf('p2'),control:this.netGuest?'net':mode==='online'?'remote':(this.isTraining||mode==='homerun'||mode==='targets')?'dummy':(mode==='cpu'||arc||(ffa&&this.ffaP2==='bot'))?'bot':'p2'}];
     this.extraChars.forEach(cd=>roster.push({cd,tint:null,control:'bot'}));
     const spare=[0x9ec2ff,0xff9a9a,0x9ef0b4,0xffd98a,0x6a6a78];
     roster.forEach((r,i)=>{ // repeated fighters get distinct colours so everyone stays readable
@@ -3067,7 +3079,7 @@ class Game{
     const n=roster.length, xs=n===2?[-4,4]:[-6,-2,2,6];
     this.fighters=roster.map((r,i)=>{
       const f=new Fighter(this.scene,r.cd,xs[i]<0?-1:1,'p'+(i+1),r.tint);
-      f.idx=i; f.control=r.control; f.stocks=(this.isTraining||this.isHomerun)?Infinity:(arc?2:(this.netGuest?this._netStocks:this.settings.stocks));
+      f.idx=i; f.control=r.control; f.stocks=(this.isTraining||this.isHomerun||this.isTargets)?Infinity:(arc?2:(this.netGuest?this._netStocks:this.settings.stocks));
       if(r.control==='remote' && this.netGuestTap!=null) f.tapJumpOverride=this.netGuestTap;
       f.ai=r.control==='bot'?new AIController(f,botDiff):null;
       f.team=ffa&&this.ffaTeams?(i<2?0:1):null;
@@ -3088,11 +3100,19 @@ class Game{
     if(arc) this.arcade.won=false;
     this.ai=this.f2.ai; this._targets=new Map();
     this._dummyAI=null; this._lastMove=null; this._lastHit=null;
-    this.hazards=[]; this.hazardsOn=this.settings.hazards&&!this.isTraining&&!this.isHomerun&&!this.online; this.hazardTimer=Math.round(rand(420,660));
+    this.tg=null;
+    if(this.isTargets){ // solo run: the second fighter sits out of play, the targets are the opponents
+      const f2=this.f2; f2.eliminated=true; f2.group.visible=false; f2.pos.set(0,-200,0);
+      this.tg={t:0,left:TARGET_SPOTS.length,list:TARGET_SPOTS.map(([x,y],i)=>{
+        const g=new THREE.Group(), board=MODELS.prop('target'); board.scale.setScalar(3); board.position.y=-0.9; g.add(board);
+        const ring=new THREE.Mesh(new THREE.TorusGeometry(0.78,0.06,8,32),new THREE.MeshBasicMaterial({color:0xffd166,transparent:true,opacity:0.9,blending:THREE.AdditiveBlending,depthWrite:false}));
+        g.add(ring); g.position.set(x,top+y,0.3); this.scene.add(g); return {x,y:top+y,g,ring,phase:i*0.7,alive:true}; })};
+    }
+    this.hazards=[]; this.hazardsOn=this.settings.hazards&&!this.isTraining&&!this.isHomerun&&!this.isTargets&&!this.online; this.hazardTimer=Math.round(rand(420,660));
     this.replayBuf=[]; this._frameHits=[]; this.replaying=false; this.replayFrames=null; this.matchFrames=0;
     if(this.viz){ this.viz=null; }
     this.projectiles=[]; this.clones=[];
-    this.items=[]; this.crates=[]; this.itemsOn=this.settings.items&&!this.isTraining&&!this.isHomerun&&!this.online; this.crateTimer=Math.round(rand(300,480)); this.orb=null; this.orbTimer=Math.round(rand(1500,2400));
+    this.items=[]; this.crates=[]; this.itemsOn=this.settings.items&&!this.isTraining&&!this.isHomerun&&!this.isTargets&&!this.online; this.crateTimer=Math.round(rand(300,480)); this.orb=null; this.orbTimer=Math.round(rand(1500,2400));
     this.timeLeft=this.netGuest?this._netTime:this.settings.timeLimit; this.suddenDeath=false; this.slowmo=null; this.netProj=new Map(); this.netClones=new Map(); this._netSnapAt=0; this._netHits=[]; NET.snap=null; NET.inbox.length=0; NET.last=null;
     this.stamina=this.settings.rules==='stamina' && ['vs','cpu','ffa'].includes(this.settings.mode);
     this.matchOver=false; this.cinematic=null; this.endTimer=0; this.frame=0;
@@ -3105,6 +3125,7 @@ class Game{
     $('hud').classList.remove('replaying'); $('unlock-note').textContent='';
     $('big-text').style.opacity=0;
     if(this._batPending){ this._batPending=false; this._spawnItem('bat',new THREE.Vector3(this.f1.pos.x+1.3,this.f1.pos.y+0.5,0),new THREE.Vector3()); }
+    if(this.isTargets){ const e=$('hud-p2'); if(e) e.style.display='none'; }
     this._updateHUD(); this._showGuide();
     if(this.isTraining){ this._matchRunning=true; this._countT=[]; this._bigText('TRAINING',true); this._countT.push(setTimeout(()=>this._hideBigText(),900)); AUDIO.startMusic(this.stageData.theme); }
     else this._runCountdown();
@@ -3577,7 +3598,7 @@ class Game{
     }
     this._dropHeld(f,true);
     if(this.isHomerun && f===this.f2){ if(this.hr.phase==='fly') this._homerunDone(); else f.respawn(0,this.stage.respawnY); return; }
-    if(this.isTraining||this.isHomerun){ f.respawn(0,this.stage.respawnY); return; }
+    if(this.isTraining||this.isHomerun||this.isTargets){ f.respawn(0,this.stage.respawnY); return; }
     // the KO goes to whoever hit them last (in 1v1, always the opponent)
     const others=this.fighters.filter(o=>o!==f), credit=(f.lastHitBy&&this.frame-f.lastHitAt<600)?f.lastHitBy:(others.length===1?others[0]:null);
     f.lastHitBy=null;
@@ -3630,6 +3651,27 @@ class Game{
       if(settled || H.fly>900 || (!far && H.fly>150 && bag.grounded && bag.hitstun<=0)) this._homerunDone();
     }
   }
+  _updateTargets(){
+    const T=this.tg, f=this.f1; if(this.matchOver) return;
+    if(this._matchRunning) T.t++;
+    const hb=f.currentHitbox(), shots=this.projectiles.filter(p=>p.owner===f&&!p.dead);
+    for(const g of T.list){ if(!g.alive) continue;
+      g.ring.rotation.z+=0.03; g.g.position.y=g.y+Math.sin(this.frame*0.04+g.phase)*0.12;
+      const d=(x,y)=>Math.hypot(x-g.x,y-g.g.position.y);
+      const hit=(hb&&d(hb.x,hb.y)<hb.radius+0.75)||shots.some(p=>d(p.pos.x,p.pos.y)<(p.radius||0.4)+0.7);
+      if(!hit) continue;
+      g.alive=false; this.scene.remove(g.g); g.ring.geometry.dispose(); g.ring.material.dispose(); T.left--;
+      const at=new THREE.Vector3(g.x,g.g.position.y,0.4);
+      this.particles.spawn(at,34,{color:[0xffd166,0xffffff,0xd94b4b],speed:0.32,life:26,grav:0.01,additive:true}); this.particles.ring(at,0xffd166,2.2,16);
+      AUDIO.tone(880+(10-T.left)*90,0.25,'triangle',0.16,1760); AUDIO.playHit(8); f.hitstop=Math.max(f.hitstop,3);
+      if(T.left<=0) this._targetsDone();
+    }
+  }
+  _targetsDone(){
+    const T=this.tg, secs=Math.round(T.t/60*100)/100, d=PROFILE.data; d.targets=d.targets||{};
+    const prev=d.targets[this.p1char.id]; T.record=!prev||secs<prev; if(T.record){ d.targets[this.p1char.id]=secs; PROFILE.save(); }
+    T.final=secs; this._endMatch(this.f1,'targets');
+  }
   _homerunDone(){
     const H=this.hr; if(H.phase==='done') return; H.phase='done';
     const m=Math.round(H.dist*10)/10, d=PROFILE.data; d.homerun=d.homerun||{};
@@ -3655,15 +3697,15 @@ class Game{
     this.cinematic=null;
     if(reason==='ko' && this.replayBuf.length>40) this.replayFrames=this.replayBuf.slice(-120);
     this._recordProfile(winner);
-    this._bigText(reason==='time'?'TIME!':'GAME!'); AUDIO.stopMusic();
-    if(!this.isTraining){ ANNOUNCER.say(reason==='time'?'Time!':'Game!',{rate:1,pitch:0.6});
-      if(!this.isHomerun) ANNOUNCER.say(winner.team!=null&&this.fighters.length>2?(winner.team===0?'Red':'Blue')+' team wins!':winner.cd.name.split(' ')[0]+' wins!',{queue:true,rate:0.95,pitch:0.6}); }
+    this._bigText(reason==='targets'?'COMPLETE!':reason==='time'?'TIME!':'GAME!'); AUDIO.stopMusic();
+    if(!this.isTraining){ ANNOUNCER.say(reason==='targets'?'Complete!':reason==='time'?'Time!':'Game!',{rate:1,pitch:0.6});
+      if(!this.isHomerun&&!this.isTargets) ANNOUNCER.say(winner.team!=null&&this.fighters.length>2?(winner.team===0?'Red':'Blue')+' team wins!':winner.cd.name.split(' ')[0]+' wins!',{queue:true,rate:0.95,pitch:0.6}); }
     AUDIO.tone(220,0.9,'sawtooth',0.35,55); setTimeout(()=>AUDIO.playCrowd(),300);
     this.bloomPulse=1.2;
   }
   _recordProfile(winner){
     if(this.online){ document.getElementById('unlock-note').textContent=''; return; }
-    if(this.isHomerun){ document.getElementById('unlock-note').textContent=''; return; }
+    if(this.isHomerun||this.isTargets){ document.getElementById('unlock-note').textContent=''; return; }
     const d=PROFILE.data, before=COLOR_UNLOCKS.filter(c=>PROFILE.unlocked(c)).map(c=>c.id);
     const humans=this.fighters.filter(f=>f.control==='p1'||f.control==='p2');
     if(!humans.length){ document.getElementById('unlock-note').textContent=''; return; } // bots-only matches are not recorded
@@ -4057,11 +4099,16 @@ class Game{
       $('winner-banner').textContent=H.final.toFixed(1)+' m'+(H.record?'  —  NEW RECORD!':'');
       $('win-quote').textContent=this.p1char.name+' · best '+best.toFixed(1)+' m';
     }
+    if(this.isTargets){
+      const T=this.tg, best=(PROFILE.data.targets||{})[this.p1char.id];
+      $('winner-banner').textContent=T.final.toFixed(2)+' s'+(T.record?'  —  NEW RECORD!':'');
+      $('win-quote').textContent=this.p1char.name+' · best '+(best!=null?best.toFixed(2)+' s':'—');
+    }
     const A=this.settings.mode==='arcade'&&this.arcade;
     $('btn-rematch').textContent=A?(A.cleared?'FINISH':(A.won?'NEXT ROUND':'RETRY ROUND')):'REMATCH';
     if(A) $('winner-banner').textContent=A.cleared?'ARCADE CLEAR!':(A.won?'ROUND '+(A.round+1)+' CLEAR!':(A.round===5?'THE COLOSSUS STANDS — TRY AGAIN':'DEFEAT — ROUND '+(A.round+1)+' / 6'));
     const F=this.fighters, ord=n=>['1st','2nd','3rd','4th'][n-1], cell=fn=>F.map(f=>`<td>${fn(f)}</td>`).join('');
-    if(this.isHomerun){ $('results-table').innerHTML=''; $('btn-rematch').textContent='TRY AGAIN'; return; }
+    if(this.isHomerun||this.isTargets){ $('results-table').innerHTML=''; $('btn-rematch').textContent='TRY AGAIN'; return; }
     if(this.online) $('btn-rematch').textContent=this.netGuest?'WAITING FOR HOST…':'REMATCH';
     $('results-table').innerHTML=`<tr><th></th>${F.map(f=>`<th style="color:${hex6(f.cd.accent)}">${f.cd.name}${f.control==='bot'?' (CPU)':''}</th>`).join('')}</tr>`+
       (F.length>2?`<tr><td style="opacity:.6;">Place</td>${cell(f=>ord(f.placed||F.length))}</tr>`:'')+
@@ -4115,6 +4162,7 @@ class Game{
     this._resolveProjectiles();
     this._updateItems(dt); this._updateOrb();
     if(this.hazardsOn) this._updateHazards();
+    if(this.tg) this._updateTargets();
     for(const f of this.fighters){
       const ph=f.state==='attack'?f.actionPhase:null;
       if(ph==='active' && f._lastPh!=='active' && f.action && !f.action.move.noHitbox && !f.action.move.projectile && !f.action.move.counter){
@@ -4129,12 +4177,14 @@ class Game{
       if(f.state==='stunned' && this.frame%10===0) this.particles.spawn(new THREE.Vector3(f.pos.x,f.pos.y+2.1*f.cd.size,0.3),2,{color:0xffe066,speed:0.04,life:20,grav:0,additive:true});
     }
     if(this.slowmo){ const f=this.slowmo.f; this.cameraRig.update(this.fighters,dt,{x:f.pos.x,y:f.pos.y+1,dist:11}); if(--this.slowmo.t<=0||f.state==='respawn'||f.eliminated) this.slowmo=null; }
-    else if(this.hr) this._updateHomerun(); else this.cameraRig.update(this.fighters,dt);
+    else if(this.hr) this._updateHomerun();
+    else if(this.tg){ const f=this.f1; this.cameraRig.update(this.fighters,dt,{x:clamp(f.pos.x,-10,10)*0.7,y:clamp(f.pos.y,-2,13)*0.75+2.6,dist:24}); } // wide view so the next targets stay in sight
+    else this.cameraRig.update(this.fighters,dt);
     this.matchFrames++;
     for(const f of this.fighters) if(!this.matchOver) this._checkKO(f);
     if(!this.isTraining){ this.replayBuf.push(this._snapshot()); if(this.replayBuf.length>150) this.replayBuf.shift(); }
     else this._frameHits.length=0;
-    if(this.settings.timeLimit>0 && !this.matchOver && !this.suddenDeath && !this.isTraining && !this.isHomerun){
+    if(this.settings.timeLimit>0 && !this.matchOver && !this.suddenDeath && !this.isTraining && !this.isHomerun && !this.isTargets){
       this.timeLeft-=dt;
       if(this.timeLeft<=0){
         const alive=this.fighters.filter(f=>!f.eliminated), best=Math.max(...alive.map(f=>f.stocks)), top=alive.filter(f=>f.stocks===best);
@@ -4255,6 +4305,7 @@ class Game{
       $('hudultlabel-'+n).style.opacity=f.ultMeter>=100?1:0;
     });
     if(this.hr){ const H=this.hr; $('hud-timer').textContent=H.phase==='hit'?(Math.max(0,H.t)/60).toFixed(1)+' s':(H.phase==='done'?H.final:H.dist).toFixed(1)+' m'; $('hud-timer').style.display=''; }
+    else if(this.tg){ const T=this.tg; $('hud-timer').textContent=(T.final!=null?T.final:T.t/60).toFixed(2)+' s  ·  '+T.left+' left'; $('hud-timer').style.display=''; }
     else if(this.suddenDeath){ $('hud-timer').textContent='SUDDEN DEATH'; $('hud-timer').style.display=''; }
     else if(this.settings.timeLimit>0){
       const t=Math.max(0,Math.ceil(this.timeLeft)); $('hud-timer').textContent=Math.floor(t/60)+':'+String(t%60).padStart(2,'0');
