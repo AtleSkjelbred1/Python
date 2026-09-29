@@ -4220,7 +4220,13 @@ class Game{
   _netGuestFrame(dt){
     NET.send({t:'in',c:INPUT.getCommands('p1',0)});
     const s=NET.snap;
-    if(s && s.fr!==this._netSnapAt){ this._netSnapAt=s.fr; this._netApply(s); }
+    if(s && s.fr!==this._netSnapAt){ this._netSnapAt=s.fr; this._netApply(s); this._netSince=0; }
+    else if((this._netSince=(this._netSince||0)+1)<=6){
+      // no fresh state this frame: carry fighters and projectiles along their last velocity so motion stays smooth
+      for(const f of this.fighters){ if(f.eliminated||f.hitstop>0||f.state==='respawn'||f.state==='ledge'||f.grabbedBy) continue;
+        f.pos.x+=f.vel.x*dt; f.pos.y+=f.vel.y*dt; }
+      for(const p of this.netProj.values()){ p.pos.x+=p.vel.x*dt; p.pos.y+=p.vel.y*dt; p.mesh.position.copy(p.pos); }
+    }
     for(const f of this.fighters) f.walkCycle+=dt;
     this.cameraRig.update(this.fighters,dt); this._updateHUD();
   }
