@@ -4532,6 +4532,10 @@ class Game{
         const inv=f.respawnInvuln>0, hit=f._hitFlash>0;
         f.rimU.color.value.setHex(hit?0xffffff:(inv?0x9fe0ff:(f.team!=null?TEAM_COLORS[f.team]:0xffffff)));
         f.rimU.strength.value=hit?2.4*f._hitFlash/8:(inv?0.9+0.5*Math.sin(performance.now()*0.02):(f.team!=null?0.6:0.28));
+        // charging a smash or winding up an ultimate: the rim glows and pulses in the fighter's element colour
+        const am=f.action&&f.action.move, powering=!hit&&!inv&&f.state==='attack'&&f.actionPhase==='startup'&&am&&(am.ultimate||(am.chargeable&&f.chargeFrames>0));
+        if(powering){ const ec=ELEM_COL[ELEMENT[f.cd.id]]; if(ec){ f.rimU.color.value.setHex(ec[1]);
+          f.rimU.strength.value=(am.ultimate?1.6:0.6+Math.min(1,f.chargeFrames/40)*0.9)*(0.8+0.2*Math.sin(performance.now()*0.03)); } }
         if(f._hitFlash>0) f._hitFlash-=dt*60;
       }
       if(!f.isClone){
