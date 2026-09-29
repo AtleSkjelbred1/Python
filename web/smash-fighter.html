@@ -539,7 +539,7 @@ class AudioManager{
   startMusic(theme){
     this.stopMusic(); if(!this.musicOn) return; this.ensure();
     const menu=theme==='menu';
-    const T={menu:{root:57,scale:[0,2,4,7,9],bpm:92},fortress:{root:57,scale:[0,3,5,7,10],bpm:124},volcano:{root:50,scale:[0,1,5,7,8],bpm:136},storm:{root:52,scale:[0,2,3,7,10],bpm:128},meadow:{root:60,scale:[0,2,4,7,9],bpm:118},crypt:{root:50,scale:[0,3,5,6,10],bpm:112},rift:{root:53,scale:[0,2,3,7,8],bpm:134}}[theme]||{root:57,scale:[0,3,5,7,10],bpm:124};
+    const T={menu:{root:57,scale:[0,2,4,7,9],bpm:92},fortress:{root:57,scale:[0,3,5,7,10],bpm:124},volcano:{root:50,scale:[0,1,5,7,8],bpm:136},storm:{root:52,scale:[0,2,3,7,10],bpm:128},meadow:{root:60,scale:[0,2,4,7,9],bpm:118},crypt:{root:50,scale:[0,3,5,6,10],bpm:112},rift:{root:53,scale:[0,2,3,7,8],bpm:134},frost:{root:62,scale:[0,2,3,7,9],bpm:120}}[theme]||{root:57,scale:[0,3,5,7,10],bpm:124};
     const m={T,step:0,next:this.now+0.1,spb:60/T.bpm/4,timer:null};
     const hz=n=>440*Math.pow(2,(n-69)/12), deg=d=>T.root+T.scale[((d%5)+5)%5]+12*Math.floor(d/5);
     const bassline=[0,0,3,0,0,4,3,2], arp=[0,2,4,7,4,2,5,3];
@@ -906,6 +906,9 @@ const STAGES = [
   { id:'rift', name:'The Rift', desc:'One flat platform above a swirling void. No hazards.', theme:'rift',
     platforms:[{x:0,y:-1,w:19,h:3,solid:true}],
     blast:{l:-26,r:26,t:22,b:-18}, sky:0x05030c, fog:0x0a0618 },
+  { id:'frost', name:'Frozen Peak', desc:'Slippery ice in a snowstorm; icicles break loose from above.', theme:'frost',
+    platforms:[{x:0,y:-1,w:17,h:3,solid:true,ice:true},{x:-5.2,y:4.4,w:4.4,h:0.5,solid:false,ice:true},{x:5.2,y:4.4,w:4.4,h:0.5,solid:false,ice:true}],
+    blast:{l:-26,r:26,t:22,b:-18}, sky:0x9db4cf, fog:0xb4c6da, bloom:{threshold:0.95,strength:0.16} },
 ];
 
 // Home-Run Contest: a small arena fenced by barriers that drop when the 10 s timer ends, then a 1 km runway.
@@ -1337,7 +1340,7 @@ class Fighter{
       if(this._tryCancel(cmd)){ this._physics(dt,world); return; }
       this._updateAction(dt,cmd,world); this._physics(dt,world); return;
     }
-    if(this.state==='land'){ this.landTimer--; this.vel.x*=0.75; this._physics(dt,world); if(this.landTimer<=0) this.state='idle'; return; }
+    if(this.state==='land'){ this.landTimer--; this.vel.x*=this._onIce()?0.97:0.75; this._physics(dt,world); if(this.landTimer<=0) this.state='idle'; return; }
     if(this.state==='jumpsquat'){
       if(cmd.up && (cmd.attackP||cmd.specialP)){ this.state='idle'; if(this.chooseAction(cmd)){ this._physics(dt,world); return; } this.state='jumpsquat'; }
       // jump + attack together (within the jumpsquat) = short-hop aerial, like pressing both at once in Ultimate
@@ -1408,13 +1411,13 @@ class Fighter{
         this._runHold=(this._runDir===dir?(this._runHold||0)+1:1); this._runDir=dir;
         const running=this.state==='run'&&Math.sign(this.vel.x)===dir || this._runHold>=RUN_DELAY;
         const target=(cmd.left?-1:1)*(running?this.cd.runSpeed:this.cd.walkSpeed);
-        this.vel.x=lerp(this.vel.x,target,0.35);
+        this.vel.x=lerp(this.vel.x,target,this._onIce()?0.07:0.35);
         const was=this.state; this.state=running?'run':'walk';
         if(this.state==='run' && was!=='run') this.events.push({type:'dust',dir:this.facing});
         if(Math.sign(this.vel.x)!==Math.sign(target) && Math.abs(this.vel.x)>this.cd.walkSpeed) this.events.push({type:'dust',dir:-Math.sign(this.vel.x),skid:true});
       } else {
         this._runHold=0;
-        this.vel.x=lerp(this.vel.x,0,0.4);
+        this.vel.x=lerp(this.vel.x,0,this._onIce()?0.035:0.4);
         this.state=cmd.down?'crouch':'idle';
       }
     } else {
@@ -1446,6 +1449,7 @@ class Fighter{
     this._physics(dt,world);
   }
   _facingFromCmd(cmd){ if(this.faceLock>0){this.faceLock--;return;} if(cmd.left) this.facing=-1; else if(cmd.right) this.facing=1; }
+  _onIce(){ return this.grounded && this.onPlatform && this.onPlatform.ice; }
   _startJumpSquat(cmd){ this._consume('jumpP'); this.state='jumpsquat'; this.jumpSquat=3; this._shMacro=!!(cmd&&cmd.attackP&&!cmd.up); }
   _startRoll(dir){ this.state='roll'; this.stateTimer=0; this.invuln=Math.max(this.invuln,14); this.faceLock=26; this._rollDir=dir; }
   _startSpotDodge(){ this.state='spotdodge'; this.stateTimer=0; this.invuln=Math.max(this.invuln,14); }
@@ -1582,7 +1586,7 @@ class Fighter{
     this.actionPhase=phase;
     this.armorActive=!!(m.armor && phase!=='recovery');
     this.counterActive=!!(m.counter && phase==='active' && !this._countered);
-    if(this.grounded && !m.dash) this.vel.x*=0.8;
+    if(this.grounded && !m.dash) this.vel.x*=this._onIce()?0.97:0.8;
     if(m.chargeable && phase==='startup' && this._chargeHeld && this.actionFrame>=startEnd-1 && this.chargeFrames<40){
       this.chargeFrames++; this.actionFrame=startEnd-1;
       this.glow.intensity=this.chargeFrames/40*3;
@@ -1776,6 +1780,10 @@ class Projectile{
 }
 
 //////////////////////// STAGE ////////////////////////
+// whitened copies of prop materials for the snow stage, cached so batching can still merge them
+// (textured props need the emissive lift to read as frosted)
+const SNOW_MATS=new Map();
+function snowMat(m){ let s=SNOW_MATS.get(m.uuid); if(!s){ s=m.clone(); if(s.color) s.color.lerp(new THREE.Color(0xf4f8ff),0.6); if(s.emissive){ s.emissive.setHex(0xa8b8cc); s.emissiveIntensity=0.42; } SNOW_MATS.set(m.uuid,s); } return s; }
 class StageObj{
   constructor(scene,data){
     this.scene=scene; this.data=data;
@@ -1853,10 +1861,12 @@ class StageObj{
       sun.color.setHex(TOD.sun); sun.intensity=TOD.si; sun.position.set(...TOD.sp); rim.color.setHex(TOD.rim);
       if(this.data.tod==='night'){ this.stars=this._points(400,0xffffff,0.35,[-160,160],[10,90],[-150,-110]); }
     }
+    const frost=th==='frost';
+    if(frost){ hemi.color.setHex(0xeaf3ff); hemi.groundColor.setHex(0x55657a); hemi.intensity=0.85; sun.color.setHex(0xfff4e6); sun.intensity=1.1; rim.color.setHex(0xaad8ff); }
     const std=o=>new THREE.MeshStandardMaterial(o);
     const add=(name,x,y,z,sc,ry)=>{ const o=MODELS.prop(name); o.position.set(x,y,z); if(Array.isArray(sc)) o.scale.set(sc[0],sc[1],sc[2]); else o.scale.setScalar(sc||1); o.rotation.y=ry||0; o.userData.batch=true; scene.add(o); return o; };
-    const bodyCol={fortress:0x6f7584,volcano:0x4d3a2e,storm:0x59606b,meadow:0x7a5f42,crypt:0x3a4150,homerun:0x7a5f42}[th];
-    const topTile={fortress:'floor_tile_large',volcano:'floor_dirt_large_rocky',storm:'floor_dirt_large_rocky',meadow:null,crypt:'floor_tile_large',homerun:null}[th];
+    const bodyCol={fortress:0x6f7584,volcano:0x4d3a2e,storm:0x59606b,meadow:0x7a5f42,crypt:0x3a4150,homerun:0x7a5f42,frost:0x5f6f84}[th];
+    const topTile={fortress:'floor_tile_large',volcano:'floor_dirt_large_rocky',storm:'floor_dirt_large_rocky',meadow:null,crypt:'floor_tile_large',homerun:null,frost:null}[th];
     for(const p of this.platforms){
       const top=p.y+p.h/2;
       if(th==='rift'){ // dark metal slab with glowing edge strips and a glowing core underneath
@@ -1875,13 +1885,16 @@ class StageObj{
         p.mesh=new THREE.Mesh(new THREE.BoxGeometry(p.w,p.h,3.4),new THREE.MeshBasicMaterial({color:0x8fd8ff,transparent:true,opacity:0.22,depthWrite:false,blending:THREE.AdditiveBlending}));
         p.mesh.position.set(p.x,p.y,0); scene.add(p.mesh); continue;
       }
-      const body=new THREE.Mesh(new THREE.BoxGeometry(p.w,p.h,3.4),std({color:p.solid?bodyCol:0x5b4130,roughness:0.9}));
+      const body=new THREE.Mesh(new THREE.BoxGeometry(p.w,p.h,3.4),frost&&!p.solid?std({color:0x9fd4ee,emissive:0x2a6a8a,emissiveIntensity:0.25,roughness:0.2,transparent:true,opacity:0.88}):std({color:p.solid?bodyCol:0x5b4130,roughness:0.9}));
       body.position.set(p.x,p.y-0.02,0); body.receiveShadow=body.castShadow=true; scene.add(body);
       const n=Math.max(1,Math.round(p.w/4)), tw=p.w/n;
-      if(p.solid && !topTile){ // grass cap with a darker lip
-        const grass=new THREE.Mesh(new THREE.BoxGeometry(p.w+0.12,0.32,3.55),std({color:0x4f8a32,roughness:1}));
-        grass.position.set(p.x,top-0.12,0); grass.receiveShadow=true; scene.add(grass);
-        const lip=new THREE.Mesh(new THREE.BoxGeometry(p.w+0.2,0.12,3.62),std({color:0x3a6a26,roughness:1})); lip.position.set(p.x,top-0.3,0); scene.add(lip);
+      if((p.solid||frost) && !topTile){ // grass cap with a darker lip (snow and glassy ice on Frozen Peak)
+        const grass=new THREE.Mesh(new THREE.BoxGeometry(p.w+0.12,frost&&!p.solid?0.14:0.32,3.55),frost?std({color:0xf2f7fc,roughness:0.9}):std({color:0x4f8a32,roughness:1}));
+        grass.position.set(p.x,top-(frost&&!p.solid?0.05:0.12),0); grass.receiveShadow=true; scene.add(grass);
+        if(p.solid){ const lip=new THREE.Mesh(new THREE.BoxGeometry(p.w+0.2,0.12,3.62),frost?std({color:0xa8d8f0,emissive:0x2a6a8a,emissiveIntensity:0.2,roughness:0.15}):std({color:0x3a6a26,roughness:1})); lip.position.set(p.x,top-0.3,0); scene.add(lip); }
+        if(frost) for(let i=0;i<Math.round(p.w*1.2);i++){ // icicles hanging from the underside
+          const len=rand(0.4,p.solid?1.6:0.8), ic=new THREE.Mesh(new THREE.ConeGeometry(rand(0.08,0.18),len,5),std({color:0xcdeeff,emissive:0x3a8ab0,emissiveIntensity:0.3,roughness:0.15,transparent:true,opacity:0.85}));
+          ic.rotation.x=Math.PI; ic.position.set(p.x-p.w/2+0.2+Math.random()*(p.w-0.4),p.y-p.h/2-len/2,rand(1,1.6)); scene.add(ic); }
       } else for(let i=0;i<n;i++) add(p.solid?topTile:'floor_wood_large',p.x-p.w/2+tw*(i+0.5),top-0.05,0,[tw/4,1,0.9]);
       if(p.solid && th!=='volcano' && !meadow){
         const cols=Math.round(p.w/2), cw=p.w/cols;
@@ -1981,6 +1994,18 @@ class StageObj{
       this.clouds=[];
       for(let i=0;i<12;i++){ const c=add(i%2?'cloud_small':'cloud_big',rand(-90,90),rand(14,34),rand(-110,-60),rand(3,5)); this.clouds.push(c); }
       this.pollen=this._points(160,0xfff2b0,0.1,[-30,30],[-4,20],[-12,6]);
+    } else if(frost){
+      // snowfield, white-capped mountains and pines, falling snow
+      const field=new THREE.Mesh(new THREE.PlaneGeometry(260,160),std({color:0xdfe9f3,roughness:0.95})); field.rotation.x=-Math.PI/2; field.position.y=-14; scene.add(field);
+      const snowy=(...a)=>{ const o=add(...a); o.traverse(q=>{ if(q.isMesh) q.material=snowMat(q.material); }); return o; };
+      snowy('mountain_A',-60,-14,-130,30); snowy('mountain_C',55,-14,-125,30,0.8); snowy('mountain_C',4,-14,-158,40,2);
+      snowy('hills_A_trees',-22,-14,-44,10); snowy('hills_C_trees',26,-14,-52,11,1.4);
+      snowy('trees_B_large',L+2.2,top,-2.1,2.3); snowy('tree_single_A',R-1.8,top,-2.0,2.6); snowy('tent',L+6,top,-2.3,3.2,0.8);
+      snowy('rock_single_E',L+1,top,-0.9,4); snowy('rock_single_C',R-3.5,top,-1.1,4); add('flag_red',R-0.5,top,-1.2,7);
+      for(const x of [-15,15]) snowy('trees_B_medium',x,-12,-22,7);
+      this.clouds=[];
+      for(let i=0;i<8;i++){ const c=add(i%2?'cloud_small':'cloud_big',rand(-90,90),rand(16,34),rand(-110,-60),rand(3,5)); this.clouds.push(c); }
+      this.snow=this._points(460,0xffffff,0.15,[-30,30],[-8,30],[-12,10]); this.snow.material.blending=THREE.NormalBlending; this.snow.material.opacity=0.9;
     } else {
       const sea=new THREE.Mesh(new THREE.PlaneGeometry(220,140),std({color:0x0b121c,roughness:0.85,metalness:0.1}));
       sea.rotation.x=-Math.PI/2; sea.position.y=-14; scene.add(sea);
@@ -2040,6 +2065,11 @@ class StageObj{
       for(let i=0;i<a.length;i+=3){ a[i+1]+=dt*rand(1,3); a[i]+=Math.sin(this.time+i)*0.01; if(a[i+1]>20) a[i+1]=-7; }
       this.embers.geometry.attributes.position.needsUpdate=true;
       this.lavaLight.intensity=1.3+Math.sin(this.time*3)*0.2+Math.sin(this.time*7.3)*0.1;
+    }
+    if(this.snow){
+      const a=this.snow.geometry.attributes.position.array;
+      for(let i=0;i<a.length;i+=3){ a[i+1]-=dt*(2.2+(i%7)*0.25); a[i]+=Math.sin(this.time*0.9+i)*0.012-dt*0.6; if(a[i+1]<-8){ a[i+1]=rand(26,30); a[i]=rand(-30,30); } }
+      this.snow.geometry.attributes.position.needsUpdate=true;
     }
     if(this.rain){
       const a=this.rain.geometry.attributes.position.array;
@@ -2428,6 +2458,8 @@ const HAZARDS={
   meadow:{kind:'wind',name:'Gust',warn:90,active:200},
   crypt:{kind:'spikes',name:'Spike Trap',warn:70,active:14,r:1.2,h:2.2,color:0x7fe0ff,
     move:new Move('spiketrap',{name:'Spike Trap',dmg:10,bkb:30,kbg:1.3,angle:82,color:0x9fe8ff,special:true})},
+  frost:{kind:'icicle',name:'Falling Icicle',warn:80,active:6,r:1.2,h:2.6,color:0xbfeaff,
+    move:new Move('icicle',{name:'Falling Icicle',dmg:12,bkb:26,kbg:1.35,angle:70,color:0xcff0ff,special:true})},
   fortress:{kind:'boulder',name:'Catapult Boulder',warn:85,active:6,r:1.6,h:2.4,color:0xffd27a,
     move:new Move('boulder',{name:'Catapult Boulder',dmg:13,bkb:28,kbg:1.4,angle:55,color:0xd9b88a,special:true})},
 };
@@ -2618,7 +2650,7 @@ class Game{
     const grid=$('stage-grid');
     STAGES.forEach((s,i)=>{
       const c=document.createElement('div'); c.className='stage-card'+(i===0?' sel':'');
-      c.style.background=s.theme==='rift'?'radial-gradient(circle at 50% 30%,#4a2a80,#0a0618 70%)':s.theme==='crypt'?'linear-gradient(180deg,#0c1016,#1e3848 160%)':s.theme==='volcano'?'linear-gradient(180deg,#3a1810,#ff5500 160%)':(s.theme==='storm'?'linear-gradient(180deg,#232b3c,#0c1018)':(s.theme==='meadow'?'linear-gradient(180deg,#5aa7df,#3f7d2e 130%)':'linear-gradient(180deg,#2b3550,#0d1420)'));
+      c.style.background=s.theme==='frost'?'linear-gradient(180deg,#9db4cf,#e8f1fa 140%)':s.theme==='rift'?'radial-gradient(circle at 50% 30%,#4a2a80,#0a0618 70%)':s.theme==='crypt'?'linear-gradient(180deg,#0c1016,#1e3848 160%)':s.theme==='volcano'?'linear-gradient(180deg,#3a1810,#ff5500 160%)':(s.theme==='storm'?'linear-gradient(180deg,#232b3c,#0c1018)':(s.theme==='meadow'?'linear-gradient(180deg,#5aa7df,#3f7d2e 130%)':'linear-gradient(180deg,#2b3550,#0d1420)'));
       c.innerHTML=`<div class="nm">${s.name}</div><div class="desc">${s.desc}</div>`;
       c.onclick=()=>this._selectStage(i);
       grid.appendChild(c);
@@ -3700,6 +3732,8 @@ class Game{
       const ring=new THREE.Mesh(new THREE.RingGeometry(cfg.r*0.55,cfg.r,36),new THREE.MeshBasicMaterial({color:cfg.color,transparent:true,opacity:0.8,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending}));
       ring.rotation.x=-Math.PI/2; ring.position.set(x,top+0.07,0.2); this.scene.add(ring); h.ring=ring; h.objs.push(ring);
       if(cfg.kind==='boulder'){ const b=MODELS.prop('rubble_large'); b.scale.setScalar(0.32); b.position.set(x,top+32,0); this.scene.add(b); h.boulder=b; h.objs.push(b); AUDIO.tone(900,1.2,'sine',0.12,300); }
+      if(cfg.kind==='icicle'){ const b=new THREE.Mesh(new THREE.ConeGeometry(0.55,2.6,6),new THREE.MeshStandardMaterial({color:0xcdeeff,emissive:0x3a8ab0,emissiveIntensity:0.35,roughness:0.15,transparent:true,opacity:0.9}));
+        b.rotation.x=Math.PI; b.position.set(x,top+32,0.2); this.scene.add(b); h.boulder=b; h.icicle=true; h.objs.push(b); AUDIO.tone(2400,0.9,'sine',0.05,1800); }
       if(cfg.kind==='eruption') AUDIO.noiseHit(0.8,0.25,140);
       if(cfg.kind==='lightning') AUDIO.tone(1800,0.5,'sawtooth',0.06,2600);
       this.hazards.push(h);
@@ -3725,7 +3759,7 @@ class Game{
         h.ring.material.opacity=0.35+0.55*pulse; h.ring.scale.setScalar(0.7+0.3*k);
         if(c.kind==='eruption' && h.t%4===0) this.particles.spawn(new THREE.Vector3(h.x+rand(-0.8,0.8),h.top+0.1,0.3),2,{color:[0xff7a1a,0xffc04a],speed:0.08,life:20,grav:-0.002,additive:true});
         if(c.kind==='lightning' && h.t%6===0) this.particles.spawn(new THREE.Vector3(h.x,h.top+rand(0.2,2.5),0.3),2,{color:[0xbfe0ff,0xffffff],speed:0.1,life:8,grav:0,additive:true,size:0.05});
-        if(h.boulder){ const f=1-k*k; h.boulder.position.y=h.top+0.6+31*f; h.boulder.rotation.x+=0.08; h.boulder.rotation.z+=0.05; }
+        if(h.boulder){ const f=1-k*k; h.boulder.position.y=h.top+(h.icicle?1.3:0.6)+31*f; if(h.icicle) h.boulder.rotation.y+=0.05; else { h.boulder.rotation.x+=0.08; h.boulder.rotation.z+=0.05; } }
       }
       if(h.t===c.warn+1){
         const at=new THREE.Vector3(h.x,h.top+0.5,0.3);
@@ -3743,6 +3777,10 @@ class Game{
           this.scene.add(bolt); h.objs.push(bolt);
           this.particles.spawn(at,30,{color:[0xbfe0ff,0xffffff],speed:0.35,life:14,grav:0,additive:true,size:0.06}); this.particles.ring(at,0xbfe0ff,2.4,14);
           this.flash=Math.max(this.flash,0.35); this.flashColor=0xdfe8ff; this.bloomPulse=1.4; AUDIO.playThunder(); AUDIO.playElectric(); this.cameraRig.kick(0.6);
+        } else if(c.kind==='icicle'){
+          h.boulder.visible=false;
+          this.particles.spawn(at,34,{color:[0xffffff,0xcff0ff,0x9fd8ff],speed:0.3,life:30,grav:0.015,size:0.1,upBias:1.2}); this.particles.ring(at,0xdff4ff,2.4,16);
+          AUDIO.noiseHit(0.35,0.3,3200,{type:'highpass'}); AUDIO.playHit(10); this.cameraRig.kick(0.6);
         } else {
           if(h.boulder) h.boulder.visible=false;
           this.particles.spawn(at,34,{color:[0x8a7e6e,0x6b6459,0xd9c9a8],speed:0.28,life:34,grav:0.02,size:0.12}); this.particles.ring(at,0xd9c9a8,2.6,18);

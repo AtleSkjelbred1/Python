@@ -4,7 +4,7 @@
 
 ## Rift Clash (browser game)
 
-A 3D platform fighter in a single HTML file: nine original characters, six
+A 3D platform fighter in a single HTML file: nine original characters, seven
 stages (most with hazards), items, stock or stamina rules. Modes: local
 versus, vs. CPU (levels 1–9), 4-player free-for-all or 2v2 teams, arcade with
 a final boss, home-run contest, and training with lessons and frame data.
