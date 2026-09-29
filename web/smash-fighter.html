@@ -2492,7 +2492,7 @@ function pickItemType(){ const tot=Object.values(ITEM_TYPES).reduce((a,t)=>a+t.w
 const NET={pc:null,ch:null,role:null,open:false,inbox:[],last:null,snap:null,onMsg:null,
   pack(d){ return btoa(unescape(encodeURIComponent(JSON.stringify({t:d.type,s:d.sdp})))); },
   unpack(s){ const o=JSON.parse(decodeURIComponent(escape(atob(s.trim().replace(/\s+/g,''))))); return {type:o.t,sdp:o.s}; },
-  reset(){ try{ if(this.ch) this.ch.close(); if(this.pc) this.pc.close(); }catch(e){} Object.assign(this,{pc:null,ch:null,role:null,open:false,inbox:[],last:null,snap:null}); },
+  reset(){ clearInterval(this._pingT); try{ if(this.ch) this.ch.close(); if(this.pc) this.pc.close(); }catch(e){} Object.assign(this,{pc:null,ch:null,role:null,open:false,inbox:[],last:null,snap:null,rtt:null}); },
   // STUN finds a direct route; the public TURN relay is the fallback for strict routers and mobile/CGNAT networks
   ICE:[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302','stun:stun.cloudflare.com:3478']},
     {urls:['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443','turn:openrelay.metered.ca:443?transport=tcp'],username:'openrelayproject',credential:'openrelayproject'}],
@@ -2506,10 +2506,14 @@ const NET={pc:null,ch:null,role:null,open:false,inbox:[],last:null,snap:null,onM
     for(const m of sdp.matchAll(/ typ (host|srflx|relay)/g)) r[m[1]]++; return r; },
   _gather(pc){ return new Promise(res=>{ if(pc.iceGatheringState==='complete') return res(); const t=setTimeout(res,5000);
     pc.addEventListener('icegatheringstatechange',()=>{ if(pc.iceGatheringState==='complete'){ clearTimeout(t); res(); } }); }); },
-  _chan(ch){ this.ch=ch; ch.onopen=()=>{ this.open=true; this.onMsg&&this.onMsg({t:'open'}); };
+  _chan(ch){ this.ch=ch; ch.onopen=()=>{ this.open=true; this.onMsg&&this.onMsg({t:'open'});
+      clearInterval(this._pingT); this._pingT=setInterval(()=>this.send({t:'pi',s:performance.now()}),1000); }; // round-trip time, shown in the match HUD
     ch.onclose=()=>{ if(this.open){ this.open=false; this.onMsg&&this.onMsg({t:'lost'}); } };
     ch.onmessage=e=>{ let m; try{ m=JSON.parse(e.data); }catch(x){ return; }
-      if(m.t==='in') this.inbox.push(m.c); else if(m.t==='s') this.snap=m; else this.onMsg&&this.onMsg(m); }; },
+      if(m.t==='in') this.inbox.push(m.c); else if(m.t==='s') this.snap=m;
+      else if(m.t==='pi') this.send({t:'po',s:m.s});
+      else if(m.t==='po'){ const r=performance.now()-m.s; this.rtt=this.rtt==null?r:this.rtt*0.7+r*0.3; }
+      else this.onMsg&&this.onMsg(m); }; },
   async host(){ this.reset(); this.role='host'; const pc=this.pc=this._pc(); this._chan(pc.createDataChannel('rc',{ordered:true}));
     await pc.setLocalDescription(await pc.createOffer()); await this._gather(pc); return this.pack(pc.localDescription); },
   async acceptAnswer(code){ const d=this.unpack(code);
@@ -4285,6 +4289,10 @@ class Game{
   }
   _updateHUD(){
     const $=id=>document.getElementById(id);
+    if(this.online && this.frame%30===0){ // connection quality under the stage name
+      const r=NET.rtt, sl=$('stage-label');
+      sl.textContent=this.stageData.name.toUpperCase()+(r!=null?'  ·  PING '+Math.round(r)+' MS':'');
+      sl.style.color=r==null||r<90?'':(r<180?'#ffd166':'#ff6a5a'); sl.style.opacity=r!=null&&r>=90?'.9':''; }
     const col=p=>{
       const t=clamp(p/180,0,1), stops=[[255,255,255],[255,214,102],[255,120,50],[200,20,20]];
       const x=t*3, i=Math.min(2,Math.floor(x)), k=x-i, a=stops[i], b=stops[i+1];
