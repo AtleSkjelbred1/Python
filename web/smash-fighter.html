@@ -799,6 +799,11 @@ const COMBO_ROUTES = {
   rattle:['Down Tilt → Rattle Roll','Up Tilt → Up Air → Skull Hop'],
 };
 // Ultimate: 'lunge' closes the gap to the opponent before the strike; 'aoe' is a huge burst around the user.
+// each fighter's element drives their hit bursts, weapon trails and ultimate spectacle
+const ELEMENT={kael:'holy',nyx:'volt',brakka:'magma',seren:'fire',rook:'crimson',vex:'shadow',wren:'wind',morrow:'soul',rattle:'bone'};
+const ELEM_COL={holy:[0xfff2c0,0xffc24a,0xff7a1a],fire:[0xffe08a,0xff7a1a,0xff2a0a],magma:[0xffc070,0xff5a10,0x9a2a08],crimson:[0xffc0b0,0xff3a3a,0x9a0a2a],
+  soul:[0xe0fff6,0x5ff2c8,0x1a7a8a],volt:[0xffffff,0x9ff4ff,0x2be6ff],shadow:[0xe0c8ff,0x9b5de5,0x3a1060],wind:[0xf4fff0,0xb8f09a,0x5ac850],bone:[0xfff8e8,0xe8e0c8,0xbdb49a]};
+const FIRE_ELEMS=new Set(['holy','fire','magma','crimson','soul']);
 const ULTIMATES = {
   kael:{name:'Oathbreaker Cleave',style:'lunge'},
   nyx:{name:'Thousand Volts',style:'lunge'},
@@ -942,7 +947,7 @@ class Hitbox{
 // no per-particle meshes or materials. Rings, sparks and scripted effects stay as small meshes in `fx`.
 const PARTICLE_VIEW={h:720};
 class PointPool{
-  constructor(scene,cap,additive){
+  constructor(scene,cap,additive,fire){
     this.cap=cap; this.n=0; this.cursor=0;
     this.pos=new Float32Array(cap*3); this.col=new Float32Array(cap*4); this.size=new Float32Array(cap);
     this.vel=new Float32Array(cap*3); this.life=new Float32Array(cap); this.max=new Float32Array(cap); this.base=new Float32Array(cap);
@@ -955,8 +960,13 @@ class PointPool{
       vertexShader:`attribute vec4 pcolor; attribute float psize; uniform float vh; varying vec4 vC;
         void main(){ vC=pcolor; vec4 mv=modelViewMatrix*vec4(position,1.0); gl_Position=projectionMatrix*mv;
           gl_PointSize=psize<=0.0?0.0:max(1.0,psize*projectionMatrix[1][1]*vh*0.5/max(0.1,-mv.z)); }`,
-      fragmentShader:`varying vec4 vC; void main(){ vec2 d=gl_PointCoord-0.5; float r=length(d); if(r>0.5) discard;
+      fragmentShader:fire?`varying vec4 vC; void main(){ vec2 d=gl_PointCoord-0.5; d.x*=1.0+(0.5-gl_PointCoord.y)*0.9; d.y*=0.85;
+          float r=length(d); if(r>0.5) discard; float t=1.0-vC.a;
+          vec3 c=mix(vec3(1.0,0.93,0.7),vC.rgb,smoothstep(0.0,0.22,t)); c=mix(c,vC.rgb*0.25,smoothstep(0.6,1.0,t));
+          float a=smoothstep(0.5,0.12,r)*min(1.0,vC.a*1.8)*0.9; gl_FragColor=vec4(c*1.15,a); }`
+        :`varying vec4 vC; void main(){ vec2 d=gl_PointCoord-0.5; float r=length(d); if(r>0.5) discard;
           float a=vC.a*smoothstep(0.5,0.3,r); gl_FragColor=vec4(vC.rgb,a); }`});
+    this.fire=!!fire;
     this.points=new THREE.Points(g,this.mat); this.points.frustumCulled=false; scene.add(this.points);
   }
   add(x,y,z,vx,vy,vz,color,size,life,grav,drag){
@@ -977,19 +987,20 @@ class PointPool{
       this.vel[j+1]-=this.grav[i]; this.vel[j]*=d; this.vel[j+1]*=d; this.vel[j+2]*=d;
       this.pos[j]+=this.vel[j]; this.pos[j+1]+=this.vel[j+1]; this.pos[j+2]+=this.vel[j+2];
       const k=Math.max(0,--this.life[i]/this.max[i]);
-      this.col[i*4+3]=k; this.size[i]=this.life[i]>0?this.base[i]*Math.max(0.15,k):0;
+      this.col[i*4+3]=k; this.size[i]=this.life[i]>0?this.base[i]*(this.fire?0.3+0.7*Math.sqrt(k):Math.max(0.15,k)):0;
     }
     this.n=alive; this.mat.uniforms.vh.value=PARTICLE_VIEW.h;
     this.geo.attributes.position.needsUpdate=true; this.geo.attributes.pcolor.needsUpdate=true; this.geo.attributes.psize.needsUpdate=true;
   }
 }
 const _pc=new THREE.Color();
+// flames use normal blending so their colours don't wash out to white where they overlap
 class ParticleSystem{
-  constructor(scene){ this.scene=scene; this.fx=[]; this.normal=new PointPool(scene,1200,false); this.glow=new PointPool(scene,1600,true); }
-  get count(){ return this.normal.n+this.glow.n; }
+  constructor(scene){ this.scene=scene; this.fx=[]; this.tick=0; this.normal=new PointPool(scene,1200,false); this.glow=new PointPool(scene,1600,true); this.flame=new PointPool(scene,1600,false,true); }
+  get count(){ return this.normal.n+this.glow.n+this.flame.n; }
   spawn(pos,count,opts){
     opts=opts||{};
-    const pool=opts.additive?this.glow:this.normal, size=opts.size||0.09, spd=opts.speed!=null?opts.speed:0.15, up=opts.upBias!=null?opts.upBias:1;
+    const pool=opts.fire?this.flame:opts.additive?this.glow:this.normal, size=opts.size||0.09, spd=opts.speed!=null?opts.speed:0.15, up=opts.upBias!=null?opts.upBias:1;
     const grav=opts.grav!=null?opts.grav:0.01, drag=opts.drag||0.97;
     for(let i=0;i<count;i++){
       const color=Array.isArray(opts.color)?choice(opts.color):(opts.color!=null?opts.color:0xffffff);
@@ -1023,10 +1034,57 @@ class ParticleSystem{
     const s=new THREE.Sprite(mat); s.userData.shared=true; s.position.copy(pos); this.scene.add(s); // sprite geometry is shared by three.js
     this.custom(s,10,(o,k)=>{ o.scale.setScalar(size*(0.4+easeOutCubic(k)*0.9)); o.material.opacity=0.85*(1-k*k); },()=>mat.dispose());
   }
+  // ---------- element effects: every fighter's attacks carry their element (fire, lightning, shadow, ...) ----------
+  flames(pos,el,n,o){ o=o||{}; const c=ELEM_COL[el]||ELEM_COL.fire;
+    this.spawn(pos,n,{fire:true,color:[c[1],c[1],c[2]],speed:o.speed!=null?o.speed:0.05,size:o.size||0.2,life:o.life||26,grav:o.grav!=null?o.grav:-0.0035,drag:0.93,spread:o.spread||0.15,upBias:o.up||2});
+    if(o.embers!==0) this.spawn(pos,Math.ceil(n/3),{additive:true,color:[c[0],c[1]],speed:(o.speed||0.05)*2.4+0.04,size:0.035,life:34,grav:-0.002,drag:0.97,spread:o.spread||0.15,upBias:2.5}); }
+  bolt(from,to,color,life,jag){ // jagged lightning: a bright core line plus a coloured glow line
+    const pts=[], n=Math.max(4,Math.round(from.distanceTo(to)/0.35)), j=jag||0.28;
+    for(let i=0;i<=n;i++){ const t=i/n, p=from.clone().lerp(to,t); if(i&&i<n){ p.x+=rand(-j,j); p.y+=rand(-j,j); } pts.push(p); }
+    const geo=new THREE.BufferGeometry().setFromPoints(pts), g=new THREE.Group();
+    const core=new THREE.Line(geo,new THREE.LineBasicMaterial({color:0xffffff,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));
+    const glow=new THREE.Line(geo,new THREE.LineBasicMaterial({color,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false})); glow.position.set(0.03,-0.03,-0.01);
+    g.add(core,glow); this.scene.add(g); core.userData.shared=true; // both lines share one geometry: dispose it once
+    this.custom(g,life||7,(o,k)=>{ core.material.opacity=glow.material.opacity=1-k; },()=>{ geo.dispose(); core.material.dispose(); glow.material.dispose(); });
+    for(let i=0;i<pts.length;i+=2) this.spawn(pts[i],1,{additive:true,color,speed:0.04,size:0.06,life:10,grav:0});
+  }
+  slash(pos,color,len,angle,life){ // a flat glowing blade streak (crescent-free, reads well at any angle)
+    const c=document.createElement('canvas'); c.width=256; c.height=32; const x=c.getContext('2d'), g=x.createLinearGradient(0,0,256,0);
+    g.addColorStop(0,'rgba(255,255,255,0)'); g.addColorStop(0.5,'rgba(255,255,255,1)'); g.addColorStop(1,'rgba(255,255,255,0)'); x.fillStyle=g;
+    x.beginPath(); x.moveTo(0,16); x.quadraticCurveTo(128,0,256,16); x.quadraticCurveTo(128,32,0,16); x.fill();
+    const tex=new THREE.CanvasTexture(c), mat=new THREE.MeshBasicMaterial({map:tex,color,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide});
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(len,len*0.16),mat); m.position.copy(pos); m.rotation.z=angle; this.scene.add(m);
+    this.custom(m,life||14,(o,k)=>{ o.scale.set(0.3+easeOutCubic(Math.min(1,k*2.5))*0.9,1-k*0.7,1); mat.opacity=k<0.3?1:1-(k-0.3)/0.7; },()=>{ tex.dispose(); mat.dispose(); });
+  }
+  pillar(pos,color,height,radius,life){ // column of light or fire rising from the ground
+    const mat=new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.8,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide});
+    const m=new THREE.Mesh(new THREE.CylinderGeometry(radius*0.3,radius,height,20,1,true),mat); m.position.set(pos.x,pos.y+height/2,pos.z); this.scene.add(m);
+    this.custom(m,life||26,(o,k)=>{ const g=Math.min(1,k*5); o.scale.set(1-k*0.7,g,1-k*0.7); o.position.y=pos.y+height*g/2; mat.opacity=0.6*(1-k)*(1-k); },()=>mat.dispose());
+  }
+  // hit burst in the attacker's element; power ~ damage, dir = launch direction (x)
+  element(at,el,power,dir){
+    const c=ELEM_COL[el]; if(!c) return; const p=clamp(power,2,40);
+    if(FIRE_ELEMS.has(el)){ this.flames(at,el,Math.round(5+p*1.1),{speed:0.07+p*0.004,spread:0.2,size:0.18+p*0.006}); if(el==='holy') this.spark(at,0xffe28a,1+p*0.05); }
+    else if(el==='volt'){ const n=2+Math.round(p/7); for(let i=0;i<n;i++){ const a=rand(0,Math.PI*2), l=0.9+p*0.05; this.bolt(at,new THREE.Vector3(at.x+Math.cos(a)*l,at.y+Math.sin(a)*l,at.z),c[2],6,0.18); }
+      this.spawn(at,6+p,{additive:true,color:[c[0],c[1]],speed:0.3,life:9,grav:0,size:0.05}); }
+    else if(el==='shadow'){ this.spawn(at,4+Math.round(p*0.7),{color:[0x1a0a26,0x2a1040,0x120818],speed:0.06,size:0.3,life:34,grav:-0.002,drag:0.95,spread:0.25});
+      this.spawn(at,4+p,{additive:true,color:[c[1],c[2]],speed:0.12,life:18,size:0.07,grav:0}); if(p>=10) this.slash(at,c[1],2.2+p*0.06,rand(-0.9,0.9),12); }
+    else if(el==='wind'){ const d=dir||1; for(let i=0;i<4+p;i++) this.spawn(new THREE.Vector3(at.x-d*0.4,at.y+rand(-0.5,0.5),at.z),1,{additive:true,color:[c[0],c[1]],size:0.05,life:16,grav:0,drag:0.9,vel:{x:d*rand(0.15,0.35),y:rand(-0.04,0.04),z:0}});
+      if(p>=9) this.slash(at,c[1],1.8+p*0.05,rand(-0.3,0.3),10); }
+    else if(el==='bone') this.spawn(at,4+Math.round(p*0.6),{color:[c[1],c[2],0xffffff],speed:0.18,life:26,grav:0.02,size:0.07});
+  }
+  // what the weapon trails while an attack is out (called once per sim tick)
+  weapon(pos,el,strong){
+    if(FIRE_ELEMS.has(el)) this.flames(pos,el,strong?3:2,{speed:0.025,size:strong?0.36:0.26,life:strong?24:16,spread:0.14,embers:strong?1:0});
+    else if(el==='volt'){ this.spawn(pos,strong?3:1,{additive:true,color:[0xffffff,ELEM_COL.volt[1]],speed:0.12,size:0.045,life:7,grav:0});
+      if(strong||Math.random()<0.25){ const a=rand(0,Math.PI*2); this.bolt(pos,new THREE.Vector3(pos.x+Math.cos(a)*0.6,pos.y+Math.sin(a)*0.6,pos.z),ELEM_COL.volt[2],4,0.12); } }
+    else if(el==='shadow'){ this.spawn(pos,1,{color:[0x1a0a26,0x2a1040],speed:0.01,size:strong?0.28:0.2,life:22,grav:-0.001,drag:0.95}); this.spawn(pos,1,{additive:true,color:ELEM_COL.shadow[1],speed:0.02,size:0.06,life:12,grav:0}); }
+    else if(el==='wind') this.spawn(pos,strong?2:1,{additive:true,color:[ELEM_COL.wind[0],ELEM_COL.wind[1]],speed:0.03,size:0.05,life:12,grav:0});
+  }
   // short-lived scripted effect: fn(obj,progress) each frame, then removed and cleaned up
   custom(obj,life,fn,cleanup){ this.fx.push({mesh:obj,life,maxLife:life,fn,cleanup}); }
   update(){
-    this.normal.update(); this.glow.update();
+    this.tick++; this.normal.update(); this.glow.update(); this.flame.update();
     for(let i=this.fx.length-1;i>=0;i--){
       const e=this.fx[i]; e.life--;
       const t=1-e.life/e.maxLife;
@@ -3298,11 +3356,8 @@ class Game{
     }
     const col=move.color||attacker.cd.accent;
     this.particles.spawn(at,Math.round(6+dmg),{color:[0xffffff,0xfff0b0,col],speed:0.14+kb*0.0025,life:20,additive:true,size:0.07});
-    if(id==='nyx') this.particles.spawn(at,10,{color:[0x2be6ff,0xffffff],speed:0.35,life:8,grav:0,additive:true,size:0.05});
-    if(id==='seren') this.particles.spawn(at,10,{color:[0xff7a1a,0xffce54],speed:0.08,life:30,grav:-0.004,additive:true});
+    if(ELEMENT[id]&&(elemental||dmg>=6)) this.particles.element(at,ELEMENT[id],move.ultimate?40:dmg*(move.special?1.3:1),Math.sign(defender.pos.x-attacker.pos.x)||attacker.facing);
     if(id==='brakka') this.particles.spawn(at,10,{color:[0x6b6459,0x8a7e6e],speed:0.2,life:30,grav:0.02,size:0.12});
-    if(id==='morrow') this.particles.spawn(at,10,{color:[0x7cf2c8,0x2a3d4a],speed:0.07,life:34,grav:-0.005,additive:true});
-    if(id==='rattle') this.particles.spawn(at,8,{color:[0xe8e0c8,0xbdb49a],speed:0.2,life:26,grav:0.02,size:0.07});
     if(kb>70) this.particles.ring(at,col,1.2+kb*0.012,14);
     this.particles.spark(at,0xffffff,0.7+dmg*0.05); if(dmg>=9) this.particles.spark(at,col,1.0+dmg*0.08);
     this.bloomPulse=Math.max(this.bloomPulse,clamp(dmg/18,0.12,1.1)+(move.special?0.3:0));
@@ -3312,11 +3367,40 @@ class Game{
     if(kb>95) this.cameraRig.punch=Math.max(this.cameraRig.punch,clamp((kb-95)/90,0.3,1));
     if(defender===this.f2) this._lastHit={name:move.name||move.id,dmg,kb:Math.round(kb),hitstun:defender.hitstun,speed:+(kb*KB_TO_VEL).toFixed(1)};
     if(move.ultimate){
+      this._ultImpact(attacker,defender,at);
       this.particles.spawn(at,70,{color:[col,0xffffff],speed:0.5,life:40,additive:true,size:0.1});
       this.particles.ring(at,col,6,30,0.15);
       this.flash=0.45; this.flashColor=col; this.bloomPulse=2.2; this.cameraRig.kick(1.6);
       AUDIO.playKO();
     }
+  }
+  _ultImpact(f,d,at){
+    const P=this.particles, el=ELEMENT[f.cd.id], c=ELEM_COL[el]||ELEM_COL.fire, top=this.stage.main.y+this.stage.main.h/2;
+    if(el==='volt') for(let i=0;i<6;i++) setTimeout(()=>{ if(!this.scene) return; const x=at.x+rand(-3,3); P.bolt(new THREE.Vector3(x+rand(-1,1),at.y+14,0.3),new THREE.Vector3(x,Math.max(top,at.y-2),0.3),c[2],9,0.5); AUDIO.playElectric(); },i*55);
+    else if(el==='holy'){ P.pillar(new THREE.Vector3(at.x,top,0.2),0xffd27a,16,1.3,34); P.flames(at,el,40,{speed:0.16,spread:0.6,size:0.3}); P.slash(at,0xfff0b0,7,0.5,16); P.slash(at,0xffc24a,7,-0.5,16); }
+    else if(el==='crimson'){ P.flames(at,el,50,{speed:0.2,spread:0.4,size:0.32,up:1}); P.ring(at,c[1],5,24,0.2); }
+    else if(el==='shadow'){ P.slash(at,0xffffff,9,0.7,26); P.slash(at,c[0],10,-0.7,26); P.slash(at,c[1],11,0.7,30); P.element(at,el,40,f.facing); }
+    else if(el==='wind'){ for(let i=0;i<14;i++) P.spawn(new THREE.Vector3(at.x+rand(-2.5,2.5),at.y+9,0.3),1,{additive:true,color:[c[0],c[1]],size:0.07,life:26,grav:0,drag:1,vel:{x:rand(-0.05,0.05),y:-0.42,z:0}}); P.slash(at,c[1],6,0.2,14); }
+    else if(el==='bone'){ for(let i=0;i<40;i++) P.spawn(new THREE.Vector3(at.x+rand(-3,3),at.y+rand(6,11),0.3),1,{color:[c[0],c[1],c[2]],size:0.13,life:40,grav:0.012,drag:0.99,vel:{x:rand(-0.03,0.03),y:-0.1,z:0}}); }
+    else if(FIRE_ELEMS.has(el)) P.flames(at,el,45,{speed:0.2,spread:0.5,size:0.3});
+  }
+  _ultRelease(f){ // the ultimate's hitbox comes out: the big element blast around (aoe) or ahead of (lunge) the fighter
+    const P=this.particles, el=ELEMENT[f.cd.id], c=ELEM_COL[el]||ELEM_COL.fire, s=f.cd.size, top=this.stage.main.y+this.stage.main.h/2;
+    const o=new THREE.Vector3(f.pos.x,f.pos.y+0.9*s,0.3), R=f.moveset.ultimate.aoe?5.5:0;
+    if(R){
+      for(let i=0;i<28;i++){ const a=i/28*Math.PI*2, r=R*rand(0.35,1); P.flames(new THREE.Vector3(o.x+Math.cos(a)*r,o.y+Math.sin(a)*r*0.6,0.3),el,3,{speed:0.08,size:0.3,life:30,embers:0}); }
+      P.ring(o,c[1],R*1.1,30,0.22); P.ring(o,c[0],R*0.7,22,0.12);
+      if(el==='magma') for(let k=-3;k<=3;k++){ const x=o.x+k*2; setTimeout(()=>{ if(!this.scene) return; const g=new THREE.Vector3(x,top,0.3); P.pillar(g,c[1],4+rand(0,2),0.6,18); P.flames(g,el,22,{speed:0.16,spread:0.35,size:0.34,up:4});
+        P.spawn(g,8,{color:[0x6b6459,0x4a3a2e],speed:0.3,life:34,grav:0.02,size:0.14,upBias:2}); AUDIO.playStone(); },Math.abs(k)*70); }
+      if(el==='fire') for(let k=0;k<3;k++) P.pillar(new THREE.Vector3(o.x+(k-1)*3.4,top,0.2),c[1],9,1.1,30);
+      if(el==='soul') for(let i=0;i<40;i++){ const a=i*0.5, r=0.4+i*0.13; P.flames(new THREE.Vector3(o.x+Math.cos(a)*r,o.y+Math.sin(a)*r*0.7,0.3),el,1,{speed:0.02,size:0.26,life:34,embers:0}); }
+    } else {
+      const ahead=new THREE.Vector3(o.x+f.facing*1.2*s,o.y,0.3);
+      if(FIRE_ELEMS.has(el)){ P.flames(ahead,el,30,{speed:0.12,spread:0.35,size:0.3}); P.slash(ahead,c[0],4.5,f.facing*0.35,14); }
+      else if(el==='volt'){ for(let i=0;i<5;i++) P.bolt(o,new THREE.Vector3(ahead.x+f.facing*rand(0.5,2.5),ahead.y+rand(-1.2,1.2),0.3),c[2],8,0.3); }
+      else P.slash(ahead,c[1],5,f.facing*0.4,14);
+    }
+    this.flash=Math.max(this.flash,0.3); this.flashColor=c[1]; this.bloomPulse=Math.max(this.bloomPulse,1.8);
   }
   _counterHit(kael,attacker,move,opts){
     kael.counterActive=false; kael._countered=true;
@@ -4394,6 +4478,25 @@ class Game{
         if(on||f.swing.pts.length){ f.group.updateMatrixWorld(true);
           const base=new THREE.Vector3(), tip=f.tipLocal.clone(); f.trailSource.getWorldPosition(base); f.trailSource.localToWorld(tip);
           f.swing.push(base,tip,(m&&m.color)||f.cd.accent,on); }
+      }
+      const el=ELEMENT[f.cd.id], P=this.particles;
+      if(el && P && !f.isClone && f.trailSource && f._fxTick!==P.tick){ f._fxTick=P.tick; // once per sim tick: element on the weapon, ultimate aura and release
+        const m=f.action&&f.action.move, ph=f.state==='attack'?f.actionPhase:null, hot=m&&!m.noHitbox&&!m.projectile&&!m.counter;
+        const charging=ph==='startup'&&m&&m.chargeable&&f.chargeFrames>0;
+        if(hot && (ph==='active'||charging)){ f.group.updateMatrixWorld(true); const tip=f.tipLocal.clone(); f.trailSource.localToWorld(tip); tip.z=0.3;
+          P.weapon(tip,el,!!(m.special||m.ultimate||m.chargeable||m.dmg>=10)); }
+        if(m&&m.ultimate){
+          const s=f.cd.size, c=ELEM_COL[el];
+          if(ph==='startup'){ const feet=new THREE.Vector3(f.pos.x+rand(-0.6,0.6)*s,f.pos.y+0.1,0.3), body=new THREE.Vector3(f.pos.x,f.pos.y+s,0.3);
+            if(FIRE_ELEMS.has(el)) P.flames(feet,el,3,{speed:0.03,size:0.26,life:24,spread:0.3,up:3,embers:1});
+            else if(el==='volt'){ P.spawn(body,2,{additive:true,color:[c[0],c[1]],speed:0.2,size:0.05,life:8,grav:0}); if(P.tick%3===0){ const a=rand(0,6.28); P.bolt(body,new THREE.Vector3(body.x+Math.cos(a)*1.3*s,body.y+Math.sin(a)*1.3*s,0.3),c[2],4,0.2); } }
+            else if(el==='shadow') P.spawn(feet,2,{color:[0x1a0a26,0x2a1040],speed:0.03,size:0.32,life:30,grav:-0.004,drag:0.95,upBias:3});
+            else if(el==='wind'){ const a=P.tick*0.5; P.spawn(new THREE.Vector3(f.pos.x+Math.cos(a)*1.1*s,f.pos.y+0.3+(P.tick%20)*0.08,0.3+Math.sin(a)*0.5),1,{additive:true,color:[c[0],c[1]],size:0.06,life:14,grav:0,speed:0}); }
+            else P.spawn(feet,2,{color:[c[0],c[1]],speed:0.08,size:0.08,life:24,grav:-0.004,upBias:3});
+          }
+          if(ph==='active'&&f._fxPh!=='active') this._ultRelease(f);
+        }
+        f._fxPh=ph;
       }
       if(f.rimU && !f.isClone){
         const inv=f.respawnInvuln>0, hit=f._hitFlash>0;
