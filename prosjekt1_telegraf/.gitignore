@@ -1,0 +1,8 @@
+# LaTeX-hjelpefiler
+rapport/*.aux
+rapport/*.log
+rapport/*.toc
+rapport/*.out
+rapport/*.fls
+rapport/*.fdb_latexmk
+rapport/*.synctex.gz
