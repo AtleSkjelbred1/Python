@@ -3384,6 +3384,20 @@ class Game{
     else if(el==='bone'){ for(let i=0;i<40;i++) P.spawn(new THREE.Vector3(at.x+rand(-3,3),at.y+rand(6,11),0.3),1,{color:[c[0],c[1],c[2]],size:0.13,life:40,grav:0.012,drag:0.99,vel:{x:rand(-0.03,0.03),y:-0.1,z:0}}); }
     else if(FIRE_ELEMS.has(el)) P.flames(at,el,45,{speed:0.2,spread:0.5,size:0.3});
   }
+  _projTrail(p){
+    const P=this.particles, el=p.owner&&p.owner.cd&&ELEMENT[p.owner.cd.id], vis=p.move.pvis||'fire', at=new THREE.Vector3(p.pos.x,p.pos.y,0.3);
+    if(vis==='item'&&!p.move.itemShoot) return;
+    if(p.kind==='hazard'){ if(P.tick%2===0) P.flames(new THREE.Vector3(p.pos.x+rand(-0.25,0.25),p.pos.y+0.1,0.3),el||'fire',2,{speed:0.03,size:0.32,life:22,up:4,embers:0}); return; }
+    if(p.kind==='trap'){ if(p.armed<=0&&P.tick%9===0){ const a=rand(0,6.28); P.bolt(at,new THREE.Vector3(at.x+Math.cos(a)*0.7,at.y+0.3+Math.abs(Math.sin(a))*0.6,0.3),ELEM_COL.volt[2],4,0.12); } return; }
+    if(p.move.itemShoot){ P.spawn(at,1,{additive:true,color:[0xb48cff,0xffffff],speed:0.01,size:0.12,life:12,grav:0}); return; }
+    if(!el) return;
+    if(FIRE_ELEMS.has(el)){ const big=vis==='boulder'||vis==='orb'||vis==='fire'; P.flames(at,el,big?2:1,{speed:0.012,size:big?0.34:0.24,life:big?20:14,spread:big?0.18:0.1,embers:P.tick%3===0?1:0});
+      if(vis==='boulder'&&P.tick%2===0) P.spawn(at,1,{color:[0x3a3028,0x2a2420],speed:0.01,size:0.3,life:30,grav:-0.002,drag:0.96}); }
+    else if(el==='volt') P.spawn(at,2,{additive:true,color:[0xffffff,ELEM_COL.volt[1]],speed:0.06,size:0.05,life:8,grav:0});
+    else if(el==='wind') P.spawn(new THREE.Vector3(at.x-Math.sign(p.vel.x||1)*0.3,at.y,0.3),2,{additive:true,color:[ELEM_COL.wind[0],ELEM_COL.wind[1]],speed:0.01,size:0.05,life:12,grav:0});
+    else if(el==='shadow') P.spawn(at,1,{color:[0x1a0a26,0x2a1040],speed:0.01,size:0.26,life:24,grav:-0.001,drag:0.95});
+    else if(el==='bone'&&P.tick%2===0) P.spawn(at,1,{color:[ELEM_COL.bone[1],ELEM_COL.bone[2]],speed:0.02,size:0.05,life:14,grav:0.004});
+  }
   _ultRelease(f){ // the ultimate's hitbox comes out: the big element blast around (aoe) or ahead of (lunge) the fighter
     const P=this.particles, el=ELEMENT[f.cd.id], c=ELEM_COL[el]||ELEM_COL.fire, s=f.cd.size, top=this.stage.main.y+this.stage.main.h/2;
     const o=new THREE.Vector3(f.pos.x,f.pos.y+0.9*s,0.3), R=f.moveset.ultimate.aoe?5.5:0;
@@ -4463,6 +4477,9 @@ class Game{
     if(this.menuScene && this.state!=='charselect' && this.state!=='stageselect') this._disposeMenuScene();
     if(!this.scene||!['battle','paused','gameend','results'].includes(this.state)) return;
     if(this.replaying) dt/=3;
+    if(this.particles && this._projFxTick!==this.particles.tick){ this._projFxTick=this.particles.tick; // element trails behind projectiles (host and guest copies)
+      for(const p of this.projectiles) if(!p.dead) this._projTrail(p);
+      if(this.netProj) for(const p of this.netProj.values()) if(!p.dead) this._projTrail(p); }
     const all=this.fighters.concat(this.clones);
     for(const f of all){
       animateFighter(f,dt);
