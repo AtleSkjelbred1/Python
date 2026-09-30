@@ -1058,12 +1058,14 @@ class ParticleSystem{
     for(let i=0;i<pts.length;i+=2) this.spawn(pts[i],1,{additive:true,color,speed:0.04,size:0.06,life:10,grav:0});
   }
   slash(pos,color,len,angle,life){ // a flat glowing blade streak (crescent-free, reads well at any angle)
-    const c=document.createElement('canvas'); c.width=256; c.height=32; const x=c.getContext('2d'), g=x.createLinearGradient(0,0,256,0);
-    g.addColorStop(0,'rgba(255,255,255,0)'); g.addColorStop(0.5,'rgba(255,255,255,1)'); g.addColorStop(1,'rgba(255,255,255,0)'); x.fillStyle=g;
-    x.beginPath(); x.moveTo(0,16); x.quadraticCurveTo(128,0,256,16); x.quadraticCurveTo(128,32,0,16); x.fill();
-    const tex=new THREE.CanvasTexture(c), mat=new THREE.MeshBasicMaterial({map:tex,color,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide});
+    if(!ParticleSystem._slashTex){ // drawn once, shared by every slash
+      const c=document.createElement('canvas'); c.width=256; c.height=32; const x=c.getContext('2d'), g=x.createLinearGradient(0,0,256,0);
+      g.addColorStop(0,'rgba(255,255,255,0)'); g.addColorStop(0.5,'rgba(255,255,255,1)'); g.addColorStop(1,'rgba(255,255,255,0)'); x.fillStyle=g;
+      x.beginPath(); x.moveTo(0,16); x.quadraticCurveTo(128,0,256,16); x.quadraticCurveTo(128,32,0,16); x.fill();
+      ParticleSystem._slashTex=new THREE.CanvasTexture(c); }
+    const tex=ParticleSystem._slashTex, mat=new THREE.MeshBasicMaterial({map:tex,color,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide});
     const m=new THREE.Mesh(new THREE.PlaneGeometry(len,len*0.16),mat); m.position.copy(pos); m.rotation.z=angle; this.scene.add(m);
-    this.custom(m,life||14,(o,k)=>{ o.scale.set(0.3+easeOutCubic(Math.min(1,k*2.5))*0.9,1-k*0.7,1); mat.opacity=k<0.3?1:1-(k-0.3)/0.7; },()=>{ tex.dispose(); mat.dispose(); });
+    this.custom(m,life||14,(o,k)=>{ o.scale.set(0.3+easeOutCubic(Math.min(1,k*2.5))*0.9,1-k*0.7,1); mat.opacity=k<0.3?1:1-(k-0.3)/0.7; },()=>mat.dispose());
   }
   koBeam(at,center,color){ // Smash-style KO blast: a wide beam fired from the blast line back across the stage
     const dir=new THREE.Vector3(center.x-at.x,center.y-at.y,0).normalize(), len=30, g=new THREE.Group();
