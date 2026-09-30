@@ -2218,9 +2218,13 @@ class PostFX{
          c+=(texture2D(tDiffuse,vUv+dir*3.2307692308).rgb+texture2D(tDiffuse,vUv-dir*3.2307692308).rgb)*0.0702702703;
          gl_FragColor=vec4(c,1.0); }`);
     this.compMat=mk({tScene:{value:null},tB1:{value:null},tB2:{value:null},strength:{value:0.5},flash:{value:0},
-        flashColor:{value:new THREE.Color(1,1,1)},vignette:{value:0.35}},
-      `uniform sampler2D tScene,tB1,tB2; uniform float strength,flash,vignette; uniform vec3 flashColor; varying vec2 vUv;
+        flashColor:{value:new THREE.Color(1,1,1)},vignette:{value:0.35},impact:{value:0},center:{value:new THREE.Vector2(0.5,0.5)}},
+      `uniform sampler2D tScene,tB1,tB2; uniform float strength,flash,vignette,impact; uniform vec3 flashColor; uniform vec2 center; varying vec2 vUv;
        void main(){ vec3 c=texture2D(tScene,vUv).rgb;
+         if(impact>0.01){ // heavy hit: radial smear and colour split pushing out from the impact point
+           vec2 dv=vUv-center; float a=impact*0.03; vec3 s=vec3(0.0);
+           for(int i=0;i<5;i++){ float t=float(i)/4.0*a; s.r+=texture2D(tScene,vUv-dv*(t+impact*0.012)).r; s.g+=texture2D(tScene,vUv-dv*t).g; s.b+=texture2D(tScene,vUv-dv*(t-impact*0.012)).b; }
+           c=mix(c,s/5.0,clamp(impact*1.4,0.0,1.0)); }
          c+=(texture2D(tB1,vUv).rgb+texture2D(tB2,vUv).rgb*1.4)*strength;
          float d=distance(vUv,vec2(0.5)); c*=1.0-vignette*d*d*1.6;
          c=mix(c,flashColor,clamp(flash,0.0,1.0)); gl_FragColor=vec4(c,1.0); }`);
@@ -2251,6 +2255,7 @@ class PostFX{
     const u=this.compMat.uniforms;
     u.tScene.value=this.rtScene.texture; u.tB1.value=this.rtA.texture; u.tB2.value=this.rtD.texture;
     u.strength.value=fx.strength; u.flash.value=fx.flash; u.flashColor.value.setHex(fx.flashColor); u.vignette.value=fx.vignette;
+    u.impact.value=LOW_GFX.on?0:(fx.impact||0); if(fx.center) u.center.value.copy(fx.center);
     this._pass(this.compMat,null,null);
   }
 }
@@ -3396,6 +3401,7 @@ class Game{
     if(kb>80 && !defender.cd.armorAll) fighterVoice(defender,'hurt');
     rumble(defender,clamp(0.25+dmg*0.03,0.25,1),clamp(60+dmg*6,60,240)); if(this.fighters.includes(attacker)) rumble(attacker,0.2,50);
     if(kb>95) this.cameraRig.punch=Math.max(this.cameraRig.punch,clamp((kb-95)/90,0.3,1));
+    if(kb>90||move.ultimate) this._impactAt(at,move.ultimate?1:(kb-80)/110);
     if(defender===this.f2) this._lastHit={name:move.name||move.id,dmg,kb:Math.round(kb),hitstun:defender.hitstun,speed:+(kb*KB_TO_VEL).toFixed(1)};
     if(move.ultimate){
       this._ultImpact(attacker,defender,at);
@@ -3405,6 +3411,8 @@ class Game{
       AUDIO.playKO();
     }
   }
+  _impactAt(at,k){ // screen-space smear from a world point, strength 0..1
+    const v=at.clone().project(this.camera); this._impactUV=new THREE.Vector2(v.x*0.5+0.5,v.y*0.5+0.5); this.impact=Math.max(this.impact||0,clamp(k,0,1)); }
   _ultImpact(f,d,at){
     const P=this.particles, el=ELEMENT[f.cd.id], c=ELEM_COL[el]||ELEM_COL.fire, top=this.stage.main.y+this.stage.main.h/2;
     if(el==='volt') for(let i=0;i<6;i++) setTimeout(()=>{ if(!this.scene) return; const x=at.x+rand(-3,3); P.bolt(new THREE.Vector3(x+rand(-1,1),at.y+14,0.3),new THREE.Vector3(x,Math.max(top,at.y-2),0.3),c[2],9,0.5); AUDIO.playElectric(); },i*55);
@@ -3735,7 +3743,7 @@ class Game{
     this.particles.ring(at,f.cd.accent,7,30,0.18); this.particles.ring(at,0xffffff,4,20,0.1);
     if(!hpOut){ this.particles.koBeam(at,new THREE.Vector3(this.stage.main.x,this.stage.main.y+4,0),f.lastHitBy?f.lastHitBy.cd.accent:f.cd.accent);
       const el=f.lastHitBy&&ELEMENT[f.lastHitBy.cd.id]; if(el) this.particles.element(at,el,30,Math.sign(f.pos.x)||1); }
-    this.flash=0.3; this.flashColor=f.cd.accent; this.bloomPulse=2; this.cameraRig.kick(1.4);
+    this.flash=0.3; this.flashColor=f.cd.accent; this.bloomPulse=2; this.cameraRig.kick(1.4); if(!hpOut) this._impactAt(new THREE.Vector3(clamp(f.pos.x,b.l+6,b.r-6),clamp(f.pos.y,b.b+5,b.t-5),0),0.8);
     AUDIO.playKO(); AUDIO.playCrowd(); fighterVoice(f,'ko'); rumble(f,1,450);
     if(this._frameHits) this._frameHits.push({ko:true,at:at.clone(),col:f.cd.accent});
     if(this.online && NET.role==='host') (this._netHits=this._netHits||[]).push([+at.x.toFixed(2),+at.y.toFixed(2),f.cd.accent,0,1,0]);
@@ -4396,9 +4404,9 @@ class Game{
       if(f.state==='respawn'){ f.group.visible=true; }
     });
     for(const h of s.hits){ const at=new THREE.Vector3(h[0],h[1],0.4);
-      if(h[4]){ this.particles.koBeam(at,new THREE.Vector3(this.stage.main.x,this.stage.main.y+4,0),h[2]); this.particles.spawn(at,70,{color:[h[2],0xffffff,0xffee88],speed:0.55,life:40,grav:0.004,additive:true,size:0.11}); this.particles.ring(at,h[2],7,30,0.18); this.flash=0.3; this.flashColor=h[2]; this.bloomPulse=2; this.cameraRig.kick(1.2); AUDIO.playKO(); }
+      if(h[4]){ this._impactAt(at,0.8); this.particles.koBeam(at,new THREE.Vector3(this.stage.main.x,this.stage.main.y+4,0),h[2]); this.particles.spawn(at,70,{color:[h[2],0xffffff,0xffee88],speed:0.55,life:40,grav:0.004,additive:true,size:0.11}); this.particles.ring(at,h[2],7,30,0.18); this.flash=0.3; this.flashColor=h[2]; this.bloomPulse=2; this.cameraRig.kick(1.2); AUDIO.playKO(); }
       else { this.particles.spawn(at,Math.round(6+h[3]),{color:[0xffffff,0xfff0b0,h[2]],speed:0.14+h[5]*0.0025,life:20,additive:true,size:0.07}); this.particles.spark(at,0xffffff,0.7+h[3]*0.05);
-        this.bloomPulse=Math.max(this.bloomPulse,clamp(h[3]/18,0.12,1.1)); AUDIO.playHit(h[3]); if(h[5]>85) this.cameraRig.kick(0.6); }
+        this.bloomPulse=Math.max(this.bloomPulse,clamp(h[3]/18,0.12,1.1)); AUDIO.playHit(h[3]); if(h[5]>85) this.cameraRig.kick(0.6); if(h[5]>90) this._impactAt(at,(h[5]-80)/110); }
     }
     // projectiles: create, move and remove to mirror the host
     const seen=new Set();
@@ -4598,7 +4606,8 @@ class Game{
     const bl=this.stageData.bloom||{threshold:0.8,strength:0.45};
     this.postfx.brightMat.uniforms.threshold.value=bl.threshold;
     this.postfx.render(this.scene,this.camera,{strength:bl.strength+Math.min(2.5,this.bloomPulse)*(bl.strength/0.45),flash:this.flash,flashColor:this.flashColor,
-      vignette:this.cinematic?0.9:0.35});
+      vignette:this.cinematic?0.9:0.35,impact:this.impact||0,center:this._impactUV});
+    this.impact=(this.impact||0)*0.86;
   }
 }
 
