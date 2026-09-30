@@ -12,8 +12,8 @@
     font-family:'Segoe UI',Arial,sans-serif; color:#eee; user-select:none; }
   #game-canvas{ position:fixed; inset:0; width:100%; height:100%; display:block; }
   .screen{ position:fixed; inset:0; display:flex; flex-direction:column; align-items:center;
-    justify-content:center; background:radial-gradient(ellipse at center,#161a24 0%,#05060a 100%);
-    z-index:20; }
+    justify-content:center; justify-content:safe center; overflow-y:auto; background:radial-gradient(ellipse at center,#161a24 0%,#05060a 100%);
+    z-index:20; } /* safe center: tall screens scroll from the top instead of clipping both ends */
   .hidden{ display:none !important; }
   #screen-mainmenu, #screen-records, #screen-controls{ background:radial-gradient(ellipse at center,rgba(10,12,18,.35) 0%,rgba(5,6,10,.82) 100%); }
   h1.title{ font-size:64px; letter-spacing:6px; margin:0 0 6px 0; font-weight:900;
@@ -209,6 +209,8 @@
     .menu-btn{ padding:9px 30px; min-width:200px; font-size:14px; margin:4px; } .panel{ padding:10px 16px; }
   }
   #winner-banner{ font-size:30px; font-weight:900; color:var(--accent); text-shadow:0 4px 16px rgba(255,179,71,.4); }
+  /* laptop heights: tighter menu buttons so the settings panel stays in view (after the base rules so it wins) */
+  @media (max-height:820px) and (min-height:521px){ .menu-btn{ padding:9px 34px; margin:5px; font-size:15px; } h1.title{ font-size:50px; } }
 </style>
 </head>
 <body>
