@@ -2749,12 +2749,12 @@ class Game{
     $('btn-back-cs').onclick=()=>this._toCharSelect();
     $('btn-start-match').onclick=()=>this._startMatch();
     $('btn-resume').onclick=()=>this._resume();
-    $('btn-restart').onclick=()=>{ if(this.online){ if(!this.netGuest&&NET.open) this._netStartMatch(); return; } this._startMatch(true); };
+    $('btn-restart').onclick=()=>{ if(this.online){ if(!this.netGuest&&NET.open) this._netStartMatch(); return; } if(this.settings.mode==='tourney'&&this.tourney) return this._tourneyGo(); this._startMatch(true); };
     $('btn-arcade').onclick=()=>{ this.settings.mode='arcade'; this._toCharSelect(); };
     $('btn-homerun').onclick=()=>{ this.settings.mode='homerun'; this._toCharSelect(); };
     $('btn-targets').onclick=()=>{ this.settings.mode='targets'; this._toCharSelect(); };
     $('btn-endless').onclick=()=>{ this.settings.mode='endless'; this._toCharSelect(); };
-    $('btn-tourney').onclick=()=>this._toTourney(true);
+    $('btn-tourney').onclick=()=>this._toTourney(!this.tourney||this.tourney.results.length>=3); // an unfinished bracket resumes
     $('btn-tour-back').onclick=()=>{ this.tourney=null; this._toMainMenu(); };
     $('btn-tour-go').onclick=()=>this._tourneyGo();
     $('btn-ffa').onclick=()=>{ this.settings.mode='ffa'; this._toCharSelect(); };
@@ -2764,7 +2764,7 @@ class Game{
     this._chipRow($('ffa-p2'),[{label:'P2: CPU',value:'bot'},{label:'P2: HUMAN',value:'p2'}],'bot',v=>{ this.ffaP2=v; AUDIO.playClick(); this._toCharSelect(); });
     $('btn-quit').onclick=()=>this._toMainMenu();
     $('btn-rematch').onclick=()=>this._rematch();
-    $('btn-mainmenu').onclick=()=>this._toMainMenu();
+    $('btn-mainmenu').onclick=()=>{ this._tourneyRecord(); this._toMainMenu(); };
     $('btn-rechar').onclick=()=>{ this._teardownScene(); AUDIO.stopMusic(); this._toCharSelect(); };
     $('cs1-left').onclick=()=>this._cycleChar('p1',-1);
     $('cs1-right').onclick=()=>this._cycleChar('p1',1);
@@ -2816,7 +2816,7 @@ class Game{
       if(code==='KeyD'||code==='ArrowRight') this._selectStage((this.selection.stageIdx+1)%(n+1));
       if(code==='Enter') this._startMatch(); if(code==='Escape') this._toCharSelect();
     } else if(st==='results'){
-      if(code==='Enter') this._rematch(); if(code==='Escape') this._toMainMenu();
+      if(code==='Enter') this._rematch(); if(code==='Escape'){ if(this.settings.mode==='tourney'&&this.tourney) return this._rematch(); this._toMainMenu(); }
     }
   }
   _pollMenuPads(){
@@ -3126,6 +3126,9 @@ class Game{
     if(AUDIO.ctx && (!AUDIO.music||AUDIO.music.theme!=='menu')) AUDIO.startMusic('menu');
   }
   _tourneyMatches(){ const T=this.tourney, r=T.results; return [[0,1],[2,3],[r[0],r[1]]]; }
+  _tourneyRecord(){ // log the finished match's winner once, however the results screen is left
+    const T=this.tourney; if(this.settings.mode!=='tourney'||!T||this.state!=='results'||this._tourneyLogged===this._tourneyMatchId||!this.winner||T.results.length>=3) return;
+    this._tourneyLogged=this._tourneyMatchId; T.results.push(this._tourneyPair[this.fighters.indexOf(this.winner)]); }
   _renderTourney(){
     const T=this.tourney, $=id=>document.getElementById(id), E=T.entries, esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
     const box=$('tour-entries'); box.innerHTML='';
@@ -3154,7 +3157,7 @@ class Game{
     T.started=true; const [a,b]=this._tourneyMatches()[T.results.length], A=T.entries[a], B=T.entries[b];
     this.settings.mode='tourney'; this.p1char=CHAR_DATA[A.char]; this.p2char=CHAR_DATA[B.char]; this.extraChars=[]; this.stageData=choice(STAGES);
     this._rosterCtl=[A.cpu?'bot':'p1',B.cpu?'bot':(A.cpu?'p1':'p2')]; // humans take the P1 / P2 controls in order
-    this._tourneyPair=[a,b]; this._startMatch(true); this._rosterCtl=null;
+    this._tourneyPair=[a,b]; this._tourneyMatchId=(this._tourneyMatchId||0)+1; this._startMatch(true); this._rosterCtl=null;
     const lbl=document.getElementById('stage-label'); lbl.textContent=['SEMIFINAL 1','SEMIFINAL 2','FINAL'][T.results.length]+'  ·  '+A.name+' vs '+B.name+'  ·  '+lbl.textContent;
   }
   _startEndless(){ // one stock against three CPUs at a time that keep coming back, a little tougher every few KOs
@@ -3190,7 +3193,7 @@ class Game{
   _rematch(){
     if(this.online){ if(!this.netGuest && NET.open) this._netStartMatch(); return; }
     if(this.settings.mode==='tourney' && this.tourney){
-      const T=this.tourney; if(this.winner && T.results.length<3){ T.results.push(this._tourneyPair[this.fighters.indexOf(this.winner)]); }
+      const T=this.tourney; this._tourneyRecord();
       if(T.results.length>=3){ AUDIO.playFanfare(); ANNOUNCER.say(T.entries[T.results[2]].name+' is the champion!'); }
       return this._toTourney(false);
     }
