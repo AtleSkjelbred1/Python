@@ -3765,7 +3765,9 @@ class Game{
     if(this.isEndless){
       if(f===this.f1){ f.interrupt(); f.eliminated=true; f.group.visible=false; this._endlessDone(); return; }
       this.endless.kos++; if(f.lastHitBy===this.f1||!f.lastHitBy) this.f1.statKOs++; f.lastHitBy=null;
-      f.ai=new AIController(f,this._endlessLevel()); this._floatText(this.f1,this.endless.kos+' KO'+(this.endless.kos>1?'s':''));
+      const lv=this._endlessLevel(); // a new level applies to every CPU in the arena, not just the one that fell
+      for(const b of this.fighters) if(b!==this.f1 && (b===f||b.ai.level!==lv))b.ai=new AIController(b,lv);
+      this._floatText(this.f1,this.endless.kos+' KO'+(this.endless.kos>1?'s':''));
       const spots=[-3,3,0,-6]; f.respawn(spots[this.endless.kos%4],this.stage.respawnY); return;
     }
     // the KO goes to whoever hit them last (in 1v1, always the opponent)
