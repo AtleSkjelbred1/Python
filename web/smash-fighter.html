@@ -45,6 +45,7 @@
   .cs-stats{ width:230px; font-size:12px; opacity:.85; line-height:1.5; }
   .cs-stats .bar-bg{ background:#1a1e28; border-radius:4px; height:6px; overflow:hidden; margin-bottom:5px;}
   .cs-stats .bar-fg{ height:100%; background:linear-gradient(90deg,#ffb347,#ff6b35); }
+  @media (max-height:780px) and (min-height:521px){ .cs-preview{ height:196px; } .cs-stats{ line-height:1.35; } } /* laptop screens: keep the fighter info above the fold */
   .cs-moves{ width:260px; font-size:10.5px; opacity:.75; line-height:1.45; }
   .cs-moves b{ color:#ffb347; font-weight:600; }
   .cs-mode-select{ display:flex; gap:8px; margin:6px 0 14px 0; }
@@ -2879,7 +2880,7 @@ class Game{
     $('cs'+n+'-stats').innerHTML=
       this._statBar('Power',{giant:0.95,power:0.85,grappler:0.65,zoner:0.45,assassin:0.4,speed:0.35,ranger:0.45,brawler:0.4}[cd.archetype])+
       this._statBar('Speed',cd.runSpeed/7)+this._statBar('Weight',cd.weight/165)+this._statBar('Jump',cd.jumpVel/17)+
-      `<div style="margin-top:6px;">${cd.desc}</div><div style="margin-top:4px;color:#ffb347;">${cd.traits}</div>`;
+      `<div style="margin-top:6px;">${cd.desc}</div><div style="margin-top:4px;color:#ffb347;">${this._elemBadge(cd)}${cd.traits}</div>`;
     const sp=SPECIALS[cd.id];
     $('cs'+n+'-moves').innerHTML=
       `<b>Specials</b> N: ${sp.n.name} · Side: ${sp.side.name} · Up: ${sp.up.name} · Down: ${sp.down.name}<br>`+
@@ -3021,6 +3022,10 @@ class Game{
     h+='</table><div style="font-size:11px;opacity:.55;">Records are saved in this browser only. Training matches are not recorded.</div>';
     document.getElementById('records-body').innerHTML=h;
   }
+  _elemBadge(cd){ // the element behind the fighter's hit effects and ultimate, as a small coloured tag
+    const el=ELEMENT[cd.id]; if(!el) return ''; const c=ELEM_COL[el], hx=n=>'#'+n.toString(16).padStart(6,'0');
+    const name={holy:'HOLY FIRE',fire:'FIRE',magma:'MAGMA',crimson:'CRIMSON FIRE',soul:'SOUL FIRE',volt:'LIGHTNING',shadow:'SHADOW',wind:'WIND',bone:'BONE'}[el];
+    return `<span style="display:inline-block;margin-right:6px;vertical-align:1px;padding:1px 8px;border-radius:10px;font-size:9px;font-weight:800;letter-spacing:1.5px;color:#111;background:linear-gradient(90deg,${hx(c[0])},${hx(c[1])});box-shadow:0 0 10px ${hx(c[1])}88;">${name}</span>`; }
   _statBar(label,pct){ pct=clamp(pct,0.05,1); return `<div>${label}</div><div class="bar-bg"><div class="bar-fg" style="width:${pct*100}%"></div></div>`; }
   _buildCharSelectPreviews(){
     this._previewRigs={};
