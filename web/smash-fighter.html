@@ -4397,8 +4397,12 @@ class Game{
     else if((this._netSince=(this._netSince||0)+1)<=6){
       // no fresh state this frame: carry fighters and projectiles along their last velocity so motion stays smooth
       for(const f of this.fighters){ if(f.eliminated||f.hitstop>0||f.state==='respawn'||f.state==='ledge'||f.grabbedBy) continue;
-        f.pos.x+=f.vel.x*dt; f.pos.y+=f.vel.y*dt; }
-      for(const p of this.netProj.values()){ p.pos.x+=p.vel.x*dt; p.pos.y+=p.vel.y*dt; p.mesh.position.copy(p.pos); }
+        const px=f.pos.x, py=f.pos.y; let nx=px+f.vel.x*dt, ny=py+f.vel.y*dt;
+        for(const q of this.stage.platforms){ const top=q.y+q.h/2, L=q.x-q.w/2, R=q.x+q.w/2; // stay on tops, out of solid bodies
+          if(nx>L-0.15&&nx<R+0.15&&f.vel.y<=0&&py>=top-0.06&&ny<top){ ny=top; }
+          else if(q.solid&&nx>L&&nx<R&&ny<top-0.06&&ny>q.y-q.h/2-1.8*f.cd.size){ nx=px; ny=py; } }
+        f.pos.x=nx; f.pos.y=ny; }
+      if(this._netSince<=2) for(const p of this.netProj.values()){ p.pos.x+=p.vel.x*dt; p.pos.y+=p.vel.y*dt; p.mesh.position.copy(p.pos); } // short: the host may have already destroyed it
     }
     for(const f of this.fighters) f.walkCycle+=dt;
     this.cameraRig.update(this.fighters,dt); this._updateHUD();
