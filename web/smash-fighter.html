@@ -4258,7 +4258,8 @@ class Game{
       f.pos.set(m.x+x,top,0); f.vel.set(0,0,0); f.grounded=true; f.facing=facing; f.pose=pose; f.state=pose; f.walkCycle=0;
     };
     this.winners.forEach((f,i)=>place(f,[-1.4,-3.2][i],1,'victory'));
-    [...this.losers].sort((a,b)=>a.placed-b.placed).forEach((f,i)=>place(f,[1.8,3.6,-4.8][i],i===2?1:-1,'defeat'));
+    if(!this.isTargets) // a target run's out-of-play sandbag stays hidden
+      [...this.losers].sort((a,b)=>a.placed-b.placed).forEach((f,i)=>place(f,[1.8,3.6,-4.8][i],i===2?1:-1,'defeat'));
     this.particles.spawn(new THREE.Vector3(m.x-1.4,top+3,0.5),60,{color:[this.winner.cd.accent,0xffffff,0xffd166],speed:0.25,life:60,grav:0.004,additive:true});
     AUDIO.playFanfare(); setTimeout(()=>fighterVoice(this.winner,'win'),500);
     this._hideBigText();
