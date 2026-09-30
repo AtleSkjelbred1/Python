@@ -214,6 +214,7 @@
   <div class="row"><div id="btn-1v1" class="menu-btn" style="min-width:230px;">VERSUS (2 PLAYERS)</div><div id="btn-ffa" class="menu-btn" style="min-width:230px;">FREE-FOR-ALL (4)</div></div>
   <div class="row"><div id="btn-cpu" class="menu-btn" style="min-width:230px;">VS BOT</div><div id="btn-arcade" class="menu-btn" style="min-width:230px;">ARCADE</div></div>
   <div class="row"><div id="btn-homerun" class="menu-btn" style="min-width:230px;">HOME-RUN CONTEST</div><div id="btn-targets" class="menu-btn" style="min-width:230px;">BREAK THE TARGETS</div></div>
+  <div class="row"><div id="btn-endless" class="menu-btn" style="min-width:230px;">ENDLESS BRAWL</div></div>
   <div class="row"><div id="btn-training" class="menu-btn" style="min-width:150px;">TRAINING</div><div id="btn-records" class="menu-btn" style="min-width:150px;">RECORDS</div><div id="btn-controls" class="menu-btn" style="min-width:150px;">CONTROLS</div></div>
   <div class="row"><div id="btn-online" class="menu-btn" style="min-width:230px;">ONLINE (BETA)</div></div>
   <div class="panel settings-grid" style="margin-top:14px;">
@@ -2713,6 +2714,7 @@ class Game{
     $('btn-arcade').onclick=()=>{ this.settings.mode='arcade'; this._toCharSelect(); };
     $('btn-homerun').onclick=()=>{ this.settings.mode='homerun'; this._toCharSelect(); };
     $('btn-targets').onclick=()=>{ this.settings.mode='targets'; this._toCharSelect(); };
+    $('btn-endless').onclick=()=>{ this.settings.mode='endless'; this._toCharSelect(); };
     $('btn-ffa').onclick=()=>{ this.settings.mode='ffa'; this._toCharSelect(); };
     this.ffaP2='bot'; this.ffaTeams=false; this.p1cpu=false;
     this._chipRow($('p1-ctrl'),[{label:'P1: HUMAN',value:false},{label:'P1: CPU (WATCH)',value:true}],false,v=>{ this.p1cpu=v; AUDIO.playClick(); });
@@ -2836,7 +2838,7 @@ class Game{
     this.state='charselect'; this._showScreen('charselect');
     const mode=this.settings.mode;
     document.getElementById('p2-label').textContent=mode==='cpu'?'CPU LEVEL '+this.settings.botDifficulty:(mode==='training'?'TRAINING DUMMY':(mode==='arcade'?'ARCADE: 5 RIVALS + A FINAL BOSS':
-      (mode==='homerun'?'SANDBAG — 10 SECONDS, THEN SEND IT FLYING':mode==='targets'?'BREAK ALL 10 TARGETS AS FAST AS YOU CAN':mode==='ffa'?(this.ffaP2==='bot'?'CPU LV '+this.settings.botDifficulty+' + 2 RANDOM CPUs':'PLAYER 2 + 2 RANDOM CPUs'):'PLAYER 2')));
+      (mode==='homerun'?'SANDBAG — 10 SECONDS, THEN SEND IT FLYING':mode==='targets'?'BREAK ALL 10 TARGETS AS FAST AS YOU CAN':mode==='endless'?'ONE LIFE VS ENDLESS CPUs — HOW MANY KOs?':mode==='ffa'?(this.ffaP2==='bot'?'CPU LV '+this.settings.botDifficulty+' + 2 RANDOM CPUs':'PLAYER 2 + 2 RANDOM CPUs'):'PLAYER 2')));
     document.getElementById('ffa-p2').classList.toggle('hidden',mode!=='ffa');
     document.getElementById('ffa-teams').classList.toggle('hidden',mode!=='ffa');
     document.getElementById('p1-ctrl').classList.toggle('hidden',!(mode==='cpu'||mode==='ffa'));
@@ -2993,6 +2995,7 @@ class Game{
       `<tr><td>Most damage in one match</td><td class="num">${d.mostDamage}%</td></tr>`+
       `<tr><td>Arcade</td><td class="num">${d.arcadeClears||0} clears · best ${d.arcadeBest||0} / 6 rounds</td></tr>`+
       `<tr><td>Home-Run best</td><td class="num">${(()=>{ const hr=d.homerun||{}, k=Object.keys(hr).sort((a,b)=>hr[b]-hr[a])[0]; return k?hr[k].toFixed(1)+' m · '+CHAR_DATA.find(c=>c.id===k).name:'—'; })()}</td></tr>`+
+      `<tr><td>Endless Brawl best</td><td class="num">${(()=>{ const e=d.endless||{}, k=Object.keys(e).sort((a,b)=>e[b]-e[a])[0]; return k?e[k]+' KOs · '+CHAR_DATA.find(c=>c.id===k).name:'—'; })()}</td></tr>`+
       `<tr><td>Targets best</td><td class="num">${(()=>{ const tt=d.targets||{}, k=Object.keys(tt).sort((a,b)=>tt[a]-tt[b])[0]; return k?tt[k].toFixed(2)+' s · '+CHAR_DATA.find(c=>c.id===k).name:'—'; })()}</td></tr></table>`;
     h+='<div class="rec-h">FIGHTERS</div><table class="rec-table"><tr><th>Fighter</th><th>Played</th><th>Wins</th><th>Win rate</th><th>Home-Run</th><th>Targets</th></tr>';
     CHAR_DATA.forEach(cd=>{ const c=d.chars[cd.id]||{played:0,wins:0}, hr=(d.homerun||{})[cd.id];
@@ -3050,7 +3053,7 @@ class Game{
     rig.setChar(this._previewCd(who),this._isRandom(who)?0x161616:this._tintOf(who));
     return url;
   }
-  _toStageSelect(){ if(this.settings.mode==='arcade') return this._startArcade(); if(this.settings.mode==='homerun') return this._startHomerun(); if(this.settings.mode==='targets') return this._startTargets(); this.state='stageselect'; this._showScreen('stageselect'); AUDIO.playClick(); this._stageThumbs(); }
+  _toStageSelect(){ if(this.settings.mode==='arcade') return this._startArcade(); if(this.settings.mode==='homerun') return this._startHomerun(); if(this.settings.mode==='targets') return this._startTargets(); if(this.settings.mode==='endless') return this._startEndless(); this.state='stageselect'; this._showScreen('stageselect'); AUDIO.playClick(); this._stageThumbs(); }
   // renders each stage once into its card the first time stage select opens
   _stageThumbs(){
     if(this._thumbsDone) return; this._thumbsDone=true;
@@ -3068,6 +3071,16 @@ class Game{
   _startTargets(){
     this.p1char=CHAR_DATA[this.selection.p1]||choice(CHAR_DATA); this.p2char=SANDBAG_CD; this.stageData=TARGET_STAGE; this.extraChars=[];
     this._startMatch(true);
+  }
+  _startEndless(){ // one stock against three CPUs at a time that keep coming back, a little tougher every few KOs
+    this.p1char=CHAR_DATA[this.selection.p1]||choice(CHAR_DATA); this.p2char=choice(CHAR_DATA); this.extraChars=[choice(CHAR_DATA),choice(CHAR_DATA)];
+    this.stageData=choice(STAGES); this._startMatch(true);
+  }
+  _endlessLevel(){ return Math.min(9,2+Math.floor(this.endless.kos/4)); }
+  _endlessDone(){
+    const E=this.endless, d=PROFILE.data; d.endless=d.endless||{};
+    const prev=d.endless[this.p1char.id]||0; E.record=E.kos>prev; if(E.record){ d.endless[this.p1char.id]=E.kos; PROFILE.save(); }
+    this._endMatch(this.f1,'endless');
   }
   _startHomerun(){
     this.p1char=CHAR_DATA[this.selection.p1]||choice(CHAR_DATA); this.p2char=SANDBAG_CD; this.stageData=HOMERUN_STAGE; this.extraChars=[];
@@ -3132,16 +3145,16 @@ class Game{
     this.scene=new THREE.Scene();
     this.stage=new StageObj(this.scene,this.stageData);
     this.particles=new ParticleSystem(this.scene);
-    this.isTraining=this.settings.mode==='training'; this.isHomerun=this.settings.mode==='homerun'; this.isTargets=this.settings.mode==='targets';
+    this.isTraining=this.settings.mode==='training'; this.isHomerun=this.settings.mode==='homerun'; this.isTargets=this.settings.mode==='targets'; this.isEndless=this.settings.mode==='endless'; this.endless=this.isEndless?{kos:0}:null;
     this.hr=this.isHomerun?{t:HR_TIME,phase:'hit',fly:0,dist:0}:null;
     this._batPending=this.isHomerun;
     // who is in the match and who controls them: 'p1'/'p2' keyboard+pad, 'bot', or the training 'dummy'
     const arc=mode==='arcade'&&this.arcade;
-    const botDiff=arc?this.arcade.diffs[this.arcade.round]:this.settings.botDifficulty;
+    const botDiff=arc?this.arcade.diffs[this.arcade.round]:mode==='endless'?2:this.settings.botDifficulty;
     const p1bot=this.p1cpu&&(mode==='cpu'||mode==='ffa');
     this.online=mode==='online'||mode==='online-guest'; this.netGuest=mode==='online-guest';
     const roster=[{cd:this.p1char,tint:this.online?null:this._tintOf('p1'),control:this.netGuest?'net':(p1bot?'bot':'p1')},
-      {cd:this.p2char,tint:mode==='homerun'?0xd8b98a:this._tintOf('p2'),control:this.netGuest?'net':mode==='online'?'remote':(this.isTraining||mode==='homerun'||mode==='targets')?'dummy':(mode==='cpu'||arc||(ffa&&this.ffaP2==='bot'))?'bot':'p2'}];
+      {cd:this.p2char,tint:mode==='homerun'?0xd8b98a:this._tintOf('p2'),control:this.netGuest?'net':mode==='online'?'remote':(this.isTraining||mode==='homerun'||mode==='targets')?'dummy':(mode==='cpu'||mode==='endless'||arc||(ffa&&this.ffaP2==='bot'))?'bot':'p2'}];
     this.extraChars.forEach(cd=>roster.push({cd,tint:null,control:'bot'}));
     const spare=[0x9ec2ff,0xff9a9a,0x9ef0b4,0xffd98a,0x6a6a78];
     roster.forEach((r,i)=>{ // repeated fighters get distinct colours so everyone stays readable
@@ -3151,14 +3164,14 @@ class Game{
     const n=roster.length, xs=n===2?[-4,4]:[-6,-2,2,6];
     this.fighters=roster.map((r,i)=>{
       const f=new Fighter(this.scene,r.cd,xs[i]<0?-1:1,'p'+(i+1),r.tint);
-      f.idx=i; f.control=r.control; f.stocks=(this.isTraining||this.isHomerun||this.isTargets)?Infinity:(arc?2:(this.netGuest?this._netStocks:this.settings.stocks));
+      f.idx=i; f.control=r.control; f.stocks=(this.isTraining||this.isHomerun||this.isTargets||(this.isEndless&&i>0))?Infinity:this.isEndless?1:(arc?2:(this.netGuest?this._netStocks:this.settings.stocks));
       if(r.control==='remote' && this.netGuestTap!=null) f.tapJumpOverride=this.netGuestTap;
       f.ai=r.control==='bot'?new AIController(f,botDiff):null;
-      f.team=ffa&&this.ffaTeams?(i<2?0:1):null;
+      f.team=mode==='endless'?(i===0?0:1):ffa&&this.ffaTeams?(i<2?0:1):null; // endless: the CPUs are all on one side
       return f;
     });
     this.f1=this.fighters[0]; this.f2=this.fighters[1];
-    this.fighters.forEach(f=>{ if(f.team==null) return; // coloured ring at the feet marks each team
+    this.fighters.forEach(f=>{ if(f.team==null||this.isEndless) return; // coloured ring at the feet marks each team
       const ring=new THREE.Mesh(new THREE.TorusGeometry(0.55*f.cd.size,0.05,6,32),new THREE.MeshBasicMaterial({color:TEAM_COLORS[f.team],transparent:true,opacity:0.85,depthWrite:false}));
       ring.rotation.x=Math.PI/2; ring.position.y=0.04; f.group.add(ring); });
     if(this._gfxChanged){ this._gfxChanged=false; this.scene.traverse(o=>{ if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.needsUpdate=true); }); }
@@ -3722,6 +3735,12 @@ class Game{
     this._dropHeld(f,true);
     if(this.isHomerun && f===this.f2){ if(this.hr.phase==='fly') this._homerunDone(); else f.respawn(0,this.stage.respawnY); return; }
     if(this.isTraining||this.isHomerun||this.isTargets){ f.respawn(0,this.stage.respawnY); return; }
+    if(this.isEndless){
+      if(f===this.f1){ f.interrupt(); f.eliminated=true; f.group.visible=false; this._endlessDone(); return; }
+      this.endless.kos++; if(f.lastHitBy===this.f1||!f.lastHitBy) this.f1.statKOs++; f.lastHitBy=null;
+      f.ai=new AIController(f,this._endlessLevel()); this._floatText(this.f1,this.endless.kos+' KO'+(this.endless.kos>1?'s':''));
+      const spots=[-3,3,0,-6]; f.respawn(spots[this.endless.kos%4],this.stage.respawnY); return;
+    }
     // the KO goes to whoever hit them last (in 1v1, always the opponent)
     const others=this.fighters.filter(o=>o!==f), credit=(f.lastHitBy&&this.frame-f.lastHitAt<600)?f.lastHitBy:(others.length===1?others[0]:null);
     f.lastHitBy=null;
@@ -3820,15 +3839,15 @@ class Game{
     this.cinematic=null;
     if(reason==='ko' && this.replayBuf.length>40) this.replayFrames=this.replayBuf.slice(-120);
     this._recordProfile(winner);
-    this._bigText(reason==='targets'?'COMPLETE!':reason==='time'?'TIME!':'GAME!'); AUDIO.stopMusic();
+    this._bigText(reason==='targets'?'COMPLETE!':reason==='endless'?this.endless.kos+' KOs!':reason==='time'?'TIME!':'GAME!'); AUDIO.stopMusic();
     if(!this.isTraining){ ANNOUNCER.say(reason==='targets'?'Complete!':reason==='time'?'Time!':'Game!',{rate:1,pitch:0.6});
-      if(!this.isHomerun&&!this.isTargets) ANNOUNCER.say(winner.team!=null&&this.fighters.length>2?(winner.team===0?'Red':'Blue')+' team wins!':winner.cd.name.split(' ')[0]+' wins!',{queue:true,rate:0.95,pitch:0.6}); }
+      if(!this.isHomerun&&!this.isTargets&&!this.isEndless) ANNOUNCER.say(winner.team!=null&&this.fighters.length>2?(winner.team===0?'Red':'Blue')+' team wins!':winner.cd.name.split(' ')[0]+' wins!',{queue:true,rate:0.95,pitch:0.6}); }
     AUDIO.tone(220,0.9,'sawtooth',0.35,55); setTimeout(()=>AUDIO.playCrowd(),300);
     this.bloomPulse=1.2;
   }
   _recordProfile(winner){
     if(this.online){ document.getElementById('unlock-note').textContent=''; return; }
-    if(this.isHomerun||this.isTargets){ document.getElementById('unlock-note').textContent=''; return; }
+    if(this.isHomerun||this.isTargets||this.isEndless){ document.getElementById('unlock-note').textContent=''; return; }
     const d=PROFILE.data, before=COLOR_UNLOCKS.filter(c=>PROFILE.unlocked(c)).map(c=>c.id);
     const humans=this.fighters.filter(f=>f.control==='p1'||f.control==='p2');
     if(!humans.length){ document.getElementById('unlock-note').textContent=''; return; } // bots-only matches are not recorded
@@ -4222,6 +4241,11 @@ class Game{
       $('winner-banner').textContent=H.final.toFixed(1)+' m'+(H.record?'  —  NEW RECORD!':'');
       $('win-quote').textContent=this.p1char.name+' · best '+best.toFixed(1)+' m';
     }
+    if(this.isEndless){
+      const E=this.endless, best=(PROFILE.data.endless||{})[this.p1char.id]||0;
+      $('winner-banner').textContent=E.kos+' KO'+(E.kos===1?'':'s')+(E.record?'  —  NEW RECORD!':'');
+      $('win-quote').textContent=this.p1char.name+' · best '+best+' KOs · reached CPU level '+this._endlessLevel();
+    }
     if(this.isTargets){
       const T=this.tg, best=(PROFILE.data.targets||{})[this.p1char.id];
       $('winner-banner').textContent=T.final.toFixed(2)+' s'+(T.record?'  —  NEW RECORD!':'');
@@ -4231,7 +4255,7 @@ class Game{
     $('btn-rematch').textContent=A?(A.cleared?'FINISH':(A.won?'NEXT ROUND':'RETRY ROUND')):'REMATCH';
     if(A) $('winner-banner').textContent=A.cleared?'ARCADE CLEAR!':(A.won?'ROUND '+(A.round+1)+' CLEAR!':(A.round===5?'THE COLOSSUS STANDS — TRY AGAIN':'DEFEAT — ROUND '+(A.round+1)+' / 6'));
     const F=this.fighters, ord=n=>['1st','2nd','3rd','4th'][n-1], cell=fn=>F.map(f=>`<td>${fn(f)}</td>`).join('');
-    if(this.isHomerun||this.isTargets){ $('results-table').innerHTML=''; $('btn-rematch').textContent='TRY AGAIN'; return; }
+    if(this.isHomerun||this.isTargets||this.isEndless){ $('results-table').innerHTML=''; $('btn-rematch').textContent='TRY AGAIN'; return; }
     if(this.online) $('btn-rematch').textContent=this.netGuest?'WAITING FOR HOST…':'REMATCH';
     $('results-table').innerHTML=`<tr><th></th>${F.map(f=>`<th style="color:${hex6(f.cd.accent)}">${f.cd.name}${f.control==='bot'?' (CPU)':''}</th>`).join('')}</tr>`+
       (F.length>2?`<tr><td style="opacity:.6;">Place</td>${cell(f=>ord(f.placed||F.length))}</tr>`:'')+
@@ -4307,7 +4331,7 @@ class Game{
     for(const f of this.fighters) if(!this.matchOver) this._checkKO(f);
     if(!this.isTraining){ this.replayBuf.push(this._snapshot()); if(this.replayBuf.length>150) this.replayBuf.shift(); }
     else this._frameHits.length=0;
-    if(this.settings.timeLimit>0 && !this.matchOver && !this.suddenDeath && !this.isTraining && !this.isHomerun && !this.isTargets){
+    if(this.settings.timeLimit>0 && !this.matchOver && !this.suddenDeath && !this.isTraining && !this.isHomerun && !this.isTargets && !this.isEndless){
       this.timeLeft-=dt;
       if(this.timeLeft<=0){
         const alive=this.fighters.filter(f=>!f.eliminated), best=Math.max(...alive.map(f=>f.stocks)), top=alive.filter(f=>f.stocks===best);
@@ -4438,6 +4462,7 @@ class Game{
       $('hudultlabel-'+n).style.opacity=f.ultMeter>=100?1:0;
     });
     if(this.hr){ const H=this.hr; $('hud-timer').textContent=H.phase==='hit'?(Math.max(0,H.t)/60).toFixed(1)+' s':(H.phase==='done'?H.final:H.dist).toFixed(1)+' m'; $('hud-timer').style.display=''; }
+    else if(this.endless){ $('hud-timer').textContent=this.endless.kos+' KOs  ·  CPU LV '+this._endlessLevel(); $('hud-timer').style.display=''; }
     else if(this.tg){ const T=this.tg; $('hud-timer').textContent=(T.final!=null?T.final:T.t/60).toFixed(2)+' s  ·  '+T.left+' left'; $('hud-timer').style.display=''; }
     else if(this.suddenDeath){ $('hud-timer').textContent='SUDDEN DEATH'; $('hud-timer').style.display=''; }
     else if(this.settings.timeLimit>0){
