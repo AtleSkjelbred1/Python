@@ -635,7 +635,7 @@ class AudioManager{
   startMusic(theme){
     this.stopMusic(); if(!this.musicOn) return; this.ensure();
     const menu=theme==='menu';
-    const T={menu:{root:57,scale:[0,2,4,7,9],bpm:92},fortress:{root:57,scale:[0,3,5,7,10],bpm:124},volcano:{root:50,scale:[0,1,5,7,8],bpm:136},storm:{root:52,scale:[0,2,3,7,10],bpm:128},meadow:{root:60,scale:[0,2,4,7,9],bpm:118},crypt:{root:50,scale:[0,3,5,6,10],bpm:112},rift:{root:53,scale:[0,2,3,7,8],bpm:134},frost:{root:62,scale:[0,2,3,7,9],bpm:120}}[theme]||{root:57,scale:[0,3,5,7,10],bpm:124};
+    const T={menu:{root:57,scale:[0,2,4,7,9],bpm:92},fortress:{root:57,scale:[0,3,5,7,10],bpm:124},volcano:{root:50,scale:[0,1,5,7,8],bpm:136},storm:{root:52,scale:[0,2,3,7,10],bpm:128},meadow:{root:60,scale:[0,2,4,7,9],bpm:118},crypt:{root:50,scale:[0,3,5,6,10],bpm:112},rift:{root:53,scale:[0,2,3,7,8],bpm:134},frost:{root:62,scale:[0,2,3,7,9],bpm:120},tidal:{root:57,scale:[0,2,4,7,9],bpm:112}}[theme]||{root:57,scale:[0,3,5,7,10],bpm:124};
     const m={T,step:0,next:this.now+0.1,spb:60/T.bpm/4,timer:null};
     const hz=n=>440*Math.pow(2,(n-69)/12), deg=d=>T.root+T.scale[((d%5)+5)%5]+12*Math.floor(d/5);
     const bassline=[0,0,3,0,0,4,3,2], arp=[0,2,4,7,4,2,5,3];
@@ -1010,6 +1010,11 @@ const STAGES = [
   { id:'frost', name:'Frozen Peak', desc:'Slippery ice in a snowstorm; icicles break loose from above.', theme:'frost',
     platforms:[{x:0,y:-1,w:17,h:3,solid:true,ice:true},{x:-5.2,y:4.4,w:4.4,h:0.5,solid:false,ice:true},{x:5.2,y:4.4,w:4.4,h:0.5,solid:false,ice:true}],
     blast:{l:-26,r:26,t:22,b:-18}, sky:0x9db4cf, fog:0xb4c6da, bloom:{threshold:0.95,strength:0.16} },
+  { id:'tidal', name:'Tidal Isles', desc:'A sandbar at sunset; two islets bob on the swell and a great wave sweeps through.', theme:'tidal',
+    platforms:[{x:0,y:-1,w:17,h:3,solid:true}],
+    movers:[{axis:'y',x:-6.4,w:4,h:0.6,from:3.2,to:4.6,speed:0.9,pause:0.2,glow:0x6fd8ff,body:0x8a6a42},
+            {axis:'y',x:6.4,w:4,h:0.6,from:3.2,to:4.6,speed:0.9,pause:0.2,start:1.4,startDir:-1,glow:0x6fd8ff,body:0x8a6a42}],
+    blast:{l:-26,r:26,t:22,b:-18}, sky:0xf2a46c, fog:0xe89a6e, bloom:{threshold:0.96,strength:0.22} },
 ];
 
 // Home-Run Contest: a small arena fenced by barriers that drop when the 10 s timer ends, then a 1 km runway.
@@ -2035,11 +2040,13 @@ class StageObj{
       if(this.data.tod==='night'){ this.stars=this._points(400,0xffffff,0.35,[-160,160],[10,90],[-150,-110]); }
     }
     const frost=th==='frost';
+    const tidal=th==='tidal';
+    if(tidal){ hemi.color.setHex(0xffe2c4); hemi.groundColor.setHex(0x3a5a7a); hemi.intensity=0.75; sun.color.setHex(0xffc890); sun.intensity=1.25; sun.position.set(-22,10,10); rim.color.setHex(0xff8a5a); rim.intensity=0.9; }
     if(frost){ hemi.color.setHex(0xeaf3ff); hemi.groundColor.setHex(0x55657a); hemi.intensity=0.85; sun.color.setHex(0xfff4e6); sun.intensity=1.1; rim.color.setHex(0xaad8ff); }
     const std=o=>new THREE.MeshStandardMaterial(o);
     const add=(name,x,y,z,sc,ry)=>{ const o=MODELS.prop(name); o.position.set(x,y,z); if(Array.isArray(sc)) o.scale.set(sc[0],sc[1],sc[2]); else o.scale.setScalar(sc||1); o.rotation.y=ry||0; o.userData.batch=true; scene.add(o); return o; };
-    const bodyCol={fortress:0x6f7584,volcano:0x4d3a2e,storm:0x59606b,meadow:0x7a5f42,crypt:0x3a4150,homerun:0x7a5f42,frost:0x5f6f84}[th];
-    const topTile={fortress:'floor_tile_large',volcano:'floor_dirt_large_rocky',storm:'floor_dirt_large_rocky',meadow:null,crypt:'floor_tile_large',homerun:null,frost:null}[th];
+    const bodyCol={fortress:0x6f7584,volcano:0x4d3a2e,storm:0x59606b,meadow:0x7a5f42,crypt:0x3a4150,homerun:0x7a5f42,frost:0x5f6f84,tidal:0x9a7a52}[th];
+    const topTile={fortress:'floor_tile_large',volcano:'floor_dirt_large_rocky',storm:'floor_dirt_large_rocky',meadow:null,crypt:'floor_tile_large',homerun:null,frost:null,tidal:null}[th];
     for(const p of this.platforms){
       const top=p.y+p.h/2;
       if(th==='rift'){ // dark metal slab with glowing edge strips and a glowing core underneath
@@ -2062,9 +2069,9 @@ class StageObj{
       body.position.set(p.x,p.y-0.02,0); body.receiveShadow=body.castShadow=true; scene.add(body);
       const n=Math.max(1,Math.round(p.w/4)), tw=p.w/n;
       if((p.solid||frost) && !topTile){ // grass cap with a darker lip (snow and glassy ice on Frozen Peak)
-        const grass=new THREE.Mesh(new THREE.BoxGeometry(p.w+0.12,frost&&!p.solid?0.14:0.32,3.55),frost?std({color:0xf2f7fc,roughness:0.9}):std({color:0x4f8a32,roughness:1}));
+        const grass=new THREE.Mesh(new THREE.BoxGeometry(p.w+0.12,frost&&!p.solid?0.14:0.32,3.55),frost?std({color:0xf2f7fc,roughness:0.9}):tidal?std({color:0xe8cc92,roughness:1}):std({color:0x4f8a32,roughness:1}));
         grass.position.set(p.x,top-(frost&&!p.solid?0.05:0.12),0); grass.receiveShadow=true; scene.add(grass);
-        if(p.solid){ const lip=new THREE.Mesh(new THREE.BoxGeometry(p.w+0.2,0.12,3.62),frost?std({color:0xa8d8f0,emissive:0x2a6a8a,emissiveIntensity:0.2,roughness:0.15}):std({color:0x3a6a26,roughness:1})); lip.position.set(p.x,top-0.3,0); scene.add(lip); }
+        if(p.solid){ const lip=new THREE.Mesh(new THREE.BoxGeometry(p.w+0.2,0.12,3.62),frost?std({color:0xa8d8f0,emissive:0x2a6a8a,emissiveIntensity:0.2,roughness:0.15}):tidal?std({color:0xc9a46a,roughness:1}):std({color:0x3a6a26,roughness:1})); lip.position.set(p.x,top-0.3,0); scene.add(lip); }
         if(frost) for(let i=0;i<Math.round(p.w*1.2);i++){ // icicles hanging from the underside
           const len=rand(0.4,p.solid?1.6:0.8), ic=new THREE.Mesh(new THREE.ConeGeometry(rand(0.08,0.18),len,5),std({color:0xcdeeff,emissive:0x3a8ab0,emissiveIntensity:0.3,roughness:0.15,transparent:true,opacity:0.85}));
           ic.rotation.x=Math.PI; ic.position.set(p.x-p.w/2+0.2+Math.random()*(p.w-0.4),p.y-p.h/2-len/2,rand(1,1.6)); scene.add(ic); }
@@ -2167,6 +2174,19 @@ class StageObj{
       this.clouds=[];
       for(let i=0;i<12;i++){ const c=add(i%2?'cloud_small':'cloud_big',rand(-90,90),rand(14,34),rand(-110,-60),rand(3,5)); this.clouds.push(c); }
       this.pollen=this._points(160,0xfff2b0,0.1,[-30,30],[-4,20],[-12,6]);
+    } else if(tidal){
+      // rolling low-poly sea (vertices moved on the CPU; flat shading needs no normal updates), distant isles, a lighthouse
+      const sea=new THREE.Mesh(new THREE.PlaneGeometry(240,150,70,44),std({color:0x2a7aa4,roughness:0.92,metalness:0,flatShading:true,emissive:0x0a2a40,emissiveIntensity:0.35}));
+      sea.rotation.x=-Math.PI/2; sea.position.y=-5.5; scene.add(sea); this.sea=sea; this.seaBase=Float32Array.from(sea.geometry.attributes.position.array);
+      add('hills_B_trees',-34,-6,-60,11); add('building_home_B_yellow',-33,3.6,-61,4.5,0.6); add('hills_C_trees',38,-6,-72,12,1.2); add('building_tavern_yellow',37,4.4,-72,5);
+      add('mountain_C_grass',-70,-6,-140,26); add('mountain_A_grass_trees',64,-6,-150,30,1.3);
+      add('rock_single_A',34,-6,-58,12); add('building_tower_A_blue',34,3.4,-58,6);
+      const beam=new THREE.Mesh(new THREE.ConeGeometry(3,30,24,1,true),new THREE.MeshBasicMaterial({color:0xfff2c0,transparent:true,opacity:0.1,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
+      beam.geometry.translate(0,-13,0); beam.rotation.z=Math.PI/2; const piv=new THREE.Group(); piv.position.set(34,16.8,-58); piv.add(beam); scene.add(piv); this.beam=piv;
+      add('trees_A_medium',L+1.6,top,-2.2,2.6); add('trees_A_large',R-1.6,top,-2.4,2.2,1); add('tent',L+5.4,top,-2.3,3,0.5); add('barrel_large',R-4.2,top,-1.3,0.5); add('sack',R-5,top,-0.9,3.5);
+      add('flag_yellow',m.x+2.4,top,-1.4,7); add('fence_wood_straight',L+8.4,top,-1.6,[1.4,1.4,1.4]); add('rock_single_C',L+0.6,top,-0.9,3.5); add('crates_stacked',R-2.6,top,-1.5,0.45,0.3);
+      this.clouds=[]; for(let i=0;i<9;i++){ const c=add(i%2?'cloud_small':'cloud_big',rand(-90,90),rand(14,32),rand(-110,-60),rand(3,5)); this.clouds.push(c); }
+      this.sparkle=this._points(140,0xfff0c8,0.12,[-40,40],[-5.4,-5],[-30,6]);
     } else if(frost){
       // snowfield, white-capped mountains and pines, falling snow
       const field=new THREE.Mesh(new THREE.PlaneGeometry(260,160),std({color:0xdfe9f3,roughness:0.95})); field.rotation.x=-Math.PI/2; field.position.y=-14; scene.add(field);
@@ -2238,6 +2258,13 @@ class StageObj{
       for(let i=0;i<a.length;i+=3){ a[i+1]+=dt*rand(1,3); a[i]+=Math.sin(this.time+i)*0.01; if(a[i+1]>20) a[i+1]=-7; }
       this.embers.geometry.attributes.position.needsUpdate=true;
       this.lavaLight.intensity=1.3+Math.sin(this.time*3)*0.2+Math.sin(this.time*7.3)*0.1;
+    }
+    if(this.sea){
+      const a=this.sea.geometry.attributes.position.array, b=this.seaBase, t=this.time;
+      for(let i=0;i<a.length;i+=3){ const x=b[i], y=b[i+1]; a[i+2]=Math.sin(x*0.18+t*1.1)*0.35+Math.sin(y*0.23-t*0.8)*0.3+Math.sin((x+y)*0.4+t*1.7)*0.12; }
+      this.sea.geometry.attributes.position.needsUpdate=true;
+      this.beam.rotation.y=t*0.7;
+      this.sparkle.material.opacity=0.45+0.35*Math.sin(t*3);
     }
     if(this.snow){
       const a=this.snow.geometry.attributes.position.array;
@@ -2634,6 +2661,7 @@ const HAZARDS={
   storm:{kind:'lightning',name:'Lightning Strike',warn:60,active:10,r:1.2,h:30,color:0xbfe0ff,
     move:new Move('lightning',{name:'Lightning Strike',dmg:12,bkb:26,kbg:1.3,angle:75,stun:20,color:0xbfe0ff,special:true})},
   meadow:{kind:'wind',name:'Gust',warn:90,active:200},
+  tidal:{kind:'wave',name:'Great Wave',warn:110,active:90},
   crypt:{kind:'spikes',name:'Spike Trap',warn:70,active:14,r:1.2,h:2.2,color:0x7fe0ff,
     move:new Move('spiketrap',{name:'Spike Trap',dmg:10,bkb:30,kbg:1.3,angle:82,color:0x9fe8ff,special:true})},
   frost:{kind:'icicle',name:'Falling Icicle',warn:80,active:6,r:1.2,h:2.6,color:0xbfeaff,
@@ -2837,7 +2865,7 @@ class Game{
     const grid=$('stage-grid');
     STAGES.forEach((s,i)=>{
       const c=document.createElement('div'); c.className='stage-card'+(i===0?' sel':'');
-      c.style.background=s.theme==='frost'?'linear-gradient(180deg,#9db4cf,#e8f1fa 140%)':s.theme==='rift'?'radial-gradient(circle at 50% 30%,#4a2a80,#0a0618 70%)':s.theme==='crypt'?'linear-gradient(180deg,#0c1016,#1e3848 160%)':s.theme==='volcano'?'linear-gradient(180deg,#3a1810,#ff5500 160%)':(s.theme==='storm'?'linear-gradient(180deg,#232b3c,#0c1018)':(s.theme==='meadow'?'linear-gradient(180deg,#5aa7df,#3f7d2e 130%)':'linear-gradient(180deg,#2b3550,#0d1420)'));
+      c.style.background=s.theme==='tidal'?'linear-gradient(180deg,#f2a46c,#2f7fa8 140%)':s.theme==='frost'?'linear-gradient(180deg,#9db4cf,#e8f1fa 140%)':s.theme==='rift'?'radial-gradient(circle at 50% 30%,#4a2a80,#0a0618 70%)':s.theme==='crypt'?'linear-gradient(180deg,#0c1016,#1e3848 160%)':s.theme==='volcano'?'linear-gradient(180deg,#3a1810,#ff5500 160%)':(s.theme==='storm'?'linear-gradient(180deg,#232b3c,#0c1018)':(s.theme==='meadow'?'linear-gradient(180deg,#5aa7df,#3f7d2e 130%)':'linear-gradient(180deg,#2b3550,#0d1420)'));
       c.innerHTML=`<div class="nm">${s.name}</div><div class="desc">${s.desc}</div>`;
       c.onclick=()=>this._selectStage(i);
       grid.appendChild(c);
@@ -4090,7 +4118,16 @@ class Game{
       const live=this.fighters.filter(f=>!f.eliminated&&f.state!=='respawn'), target=live.length?choice(live):null;
       const x=clamp((target?target.pos.x:m.x)+rand(-2.5,2.5),L,R);
       const h={cfg,x,top,t:0,hit:new Set(),objs:[]};
-      if(cfg.kind==='wind'){ h.dir=Math.random()<0.5?-1:1; this.hazards.push(h); AUDIO.noiseHit(3.6,0.18,300,{type:'lowpass',sweepTo:900,wet:0.4}); this._bigText(h.dir>0?'GUST  →':'←  GUST',true); this._countT.push(setTimeout(()=>this._hideBigText(),900)); }
+      if(cfg.kind==='wave'){ h.dir=Math.random()<0.5?-1:1; this.hazards.push(h); AUDIO.noiseHit(2.2,0.22,240,{type:'lowpass',sweepTo:700,wet:0.6});
+        this._bigText(h.dir>0?'WAVE  →':'←  WAVE',true); this._countT.push(setTimeout(()=>this._hideBigText(),900));
+        // a wall of water leaning into its direction of travel, with a foam crest curling over the front
+        const wm=new THREE.Group(), wg=new THREE.BoxGeometry(1.6,3.4,6.4); wg.translate(0,1.7,0);
+        const pa=wg.attributes.position; for(let i=0;i<pa.count;i++){ const y=pa.getY(i); pa.setX(i,pa.getX(i)+y*0.28*h.dir); } // lean forward
+        wm.add(new THREE.Mesh(wg,new THREE.MeshStandardMaterial({color:0x3aa6d0,emissive:0x0d4a66,emissiveIntensity:0.5,transparent:true,opacity:0.8,roughness:0.4,depthWrite:false})));
+        const crest=new THREE.Mesh(new THREE.CylinderGeometry(0.75,0.75,6.6,16,1,false),new THREE.MeshStandardMaterial({color:0xf2fbff,emissive:0x8fc8e0,emissiveIntensity:0.4,roughness:0.6}));
+        crest.rotation.x=Math.PI/2; crest.position.set(h.dir*1.15,3.3,0); wm.add(crest);
+        wm.position.set(-h.dir*30,top-0.2,0); this.scene.add(wm); h.wave=wm; h.objs.push(wm); }
+      else if(cfg.kind==='wind'){ h.dir=Math.random()<0.5?-1:1; this.hazards.push(h); AUDIO.noiseHit(3.6,0.18,300,{type:'lowpass',sweepTo:900,wet:0.4}); this._bigText(h.dir>0?'GUST  →':'←  GUST',true); this._countT.push(setTimeout(()=>this._hideBigText(),900)); }
       else {
       const ring=new THREE.Mesh(new THREE.RingGeometry(cfg.r*0.55,cfg.r,36),new THREE.MeshBasicMaterial({color:cfg.color,transparent:true,opacity:0.8,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending}));
       ring.rotation.x=-Math.PI/2; ring.position.set(x,top+0.07,0.2); this.scene.add(ring); h.ring=ring; h.objs.push(ring);
@@ -4105,6 +4142,18 @@ class Game{
     this.stage.wind=0;
     for(const h of this.hazards){
       const c=h.cfg; h.t++;
+      if(c.kind==='wave'){ // a breaking wave sweeps across: shoves everyone it passes, no damage
+        const wk=h.t<=c.warn?0:(h.t-c.warn)/c.active, wx=-h.dir*30+h.dir*60*wk;
+        if(h.t<=c.warn){ if(h.t%5===0) this.particles.spawn(new THREE.Vector3(-h.dir*21,h.top+rand(-1,0.5),rand(-1,1)),3,{color:[0xffffff,0xbfe8ff],speed:0.12,upBias:2,grav:0.008,life:26,size:0.12}); }
+        else { h.wave.position.x=wx; h.wave.scale.y=1+0.12*Math.sin(h.t*0.3);
+          if(h.t%2===0) this.particles.spawn(new THREE.Vector3(wx+h.dir*1.2,h.top+rand(1.4,3),0.6),4,{color:[0xffffff,0xd8f4ff],speed:0.14,upBias:1.5,grav:0.01,life:24,size:0.13});
+          for(const f of this.fighters){ if(h.hit.has(f)||f.eliminated||f.state==='respawn'||f.state==='ledge'||f.grabbedBy) continue;
+            if(Math.abs(f.pos.x-wx)<1.6 && f.pos.y<h.top+3.2){ h.hit.add(f);
+              const sh=f.state==='shield'?0.45:1; f.vel.x=h.dir*10*sh; if(sh===1){ f.vel.y=Math.max(f.vel.y,6); f.grounded=false; f.onPlatform=null; if(f.state!=='attack') f.state='fall'; }
+              this.particles.spawn(new THREE.Vector3(f.pos.x,f.pos.y+1,0.5),14,{color:[0xffffff,0xbfe8ff,0x6fd8ff],speed:0.22,life:24,grav:0.01,size:0.1}); AUDIO.noiseHit(0.4,0.25,900); } } }
+        if(h.t>c.warn+c.active+4){ h.done=true; h.objs.forEach(o=>{ this.scene.remove(o); o.traverse(q=>{ if(q.geometry) q.geometry.dispose(); if(q.material) q.material.dispose(); }); }); }
+        continue;
+      }
       if(c.kind==='wind'){ // pushes everyone sideways; stronger in the air, and shields hold their ground
         const k=h.t<c.warn?h.t/c.warn*0.15:Math.min(1,(c.warn+c.active-h.t)/30);
         this.stage.wind=h.dir*k;
@@ -4162,7 +4211,7 @@ class Game{
       if(h.t>c.warn+c.active+12){ h.done=true; h.objs.forEach(o=>{ this.scene.remove(o); if(o.userData.shared) return; if(o.userData.keepMat){ o.geometry.dispose(); return; } if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }); }
     }
     this.hazards=this.hazards.filter(h=>!h.done);
-    this.stage.hazardZones=this.hazards.filter(h=>h.cfg.kind!=='wind').map(h=>({x:h.x,r:h.cfg.r+0.9}));
+    this.stage.hazardZones=this.hazards.filter(h=>h.cfg.kind!=='wind'&&h.cfg.kind!=='wave').map(h=>({x:h.x,r:h.cfg.r+0.9}));
   }
   // ---------- items ----------
   _settle(o,dt){ // simple gravity + landing on platform tops for crates and loose items
@@ -4717,7 +4766,9 @@ class Game{
       animateFighter(f,dt);
       f.group.position.copy(f.pos);
       if(f.hitstop>0 && f.state==='hitstun' && f._shakeAmt) f.group.position.x+=Math.sin(performance.now()*0.09)*f._shakeAmt*Math.min(1,f.hitstop/4);
-      f.group.rotation.y=f.facing>0?FACE_ANGLE:-FACE_ANGLE;
+      { const tgt=f.facing>0?FACE_ANGLE:-FACE_ANGLE; // turn around over a few frames, through the camera, instead of snapping
+        if(f._rotY==null||f.state==='respawn'||f.state==='attack') f._rotY=tgt; else f._rotY+=(tgt-f._rotY)*(1-Math.pow(0.5,dt*60));
+        f.group.rotation.y=f._rotY; }
       const stretch=f.grounded?1:1+Math.min(0.1,Math.abs(f.vel.y)/220);
       const sy=f.squash*stretch, sx=1/Math.sqrt(sy);
       f.group.scale.set(sx,sy,sx);
@@ -4938,11 +4989,8 @@ function animateFighter(f,dt){
     case 'defeat': name=set.defeat; break;
     default: name=set.idle;
   }
-  // double jump: light fighters do a front flip, heavier ones a tuck; it finishes even if the state changes to jump/fall
-  if(f.state==='doublejump'&&f._djState!=='doublejump') f._flipK=0; f._djState=f.state;
-  if(f._flipK!=null){ f._flipK+=dt*3;
-    if(f._flipK>=1||!['doublejump','jump','fall'].includes(f.state)) f._flipK=null;
-    else { const k=f._flipK, e=1-Math.pow(1-k,3); f.pivot.rotation.x=f.cd.weight<110?Math.PI*2*e:0.6*Math.sin(Math.PI*k); } }
+  // idle: a slow, subtle breath so standing fighters don't look frozen
+  const br=f.state==='idle'&&f.grounded?Math.sin(t*2.4+f.cd.size*3)*0.012:0; f._breath=lerp(f._breath||0,br,0.2); f.pivot.scale.set(1-f._breath*0.5,1+f._breath,1-f._breath*0.5);
   // lean into the run and tilt with air drift (pivot x-rotation tips the body toward where it faces)
   const lean=f.state==='run'?0.14:(!f.grounded&&f.state!=='hitstun'&&f.state!=='attack'?clamp(f.vel.x*f.facing*0.025,-0.12,0.14):0);
   f._lean=lerp(f._lean||0,lean,0.2); f.pivot.rotation.x+=f._lean;
