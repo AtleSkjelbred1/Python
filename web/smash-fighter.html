@@ -286,6 +286,24 @@
   #screen-results.rc-in .row .menu-btn{ animation:rcBtnIn .45s cubic-bezier(.2,1,.3,1) .75s both; }
   @keyframes rcSlam{ 0%{ opacity:0; transform:scale(2.4) skewX(-8deg); letter-spacing:14px; } 60%{ opacity:1; transform:scale(.94) skewX(-8deg); } 100%{ transform:scale(1); } }
   @keyframes rcUp{ from{ opacity:0; transform:translateY(14px); } to{ opacity:1; transform:none; } }
+
+  /* versus splash */
+  #vs-splash{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:4vw; pointer-events:none; z-index:6;
+    background:linear-gradient(90deg,rgba(0,0,0,.55),rgba(0,0,0,.15) 40%,rgba(0,0,0,.15) 60%,rgba(0,0,0,.55)); }
+  #vs-splash .vs-side{ display:flex; flex-direction:column; align-items:center; gap:6px; }
+  #vs-splash img{ width:min(22vh,190px); height:min(22vh,190px); border-radius:50%; border:4px solid var(--c); background:#0d1018;
+    box-shadow:0 0 0 3px rgba(0,0,0,.6),0 0 40px var(--c); }
+  #vs-splash span{ font-family:var(--display); font-weight:700; font-size:min(7vh,58px); letter-spacing:4px; line-height:1; color:#fff;
+    text-shadow:0 3px 0 rgba(0,0,0,.8),0 0 18px var(--c); font-style:italic; }
+  #vs-splash .vs-mid{ font-family:var(--display); font-weight:700; font-style:italic; font-size:min(16vh,140px); line-height:1;
+    background:linear-gradient(180deg,#fff 25%,#ffd27a 60%,#ff6a24); -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter:drop-shadow(0 4px 0 rgba(30,10,0,.85)) drop-shadow(0 0 26px rgba(255,120,40,.6)); }
+  #vs-splash.vs-in .vs-l{ animation:vsL .5s cubic-bezier(.2,1.3,.4,1) both; } #vs-splash.vs-in .vs-r{ animation:vsR .5s cubic-bezier(.2,1.3,.4,1) both; }
+  #vs-splash.vs-in .vs-mid{ animation:rcSlam .5s cubic-bezier(.2,1.6,.4,1) .2s both; }
+  #vs-splash.vs-out{ animation:vsOut .45s ease-in both; }
+  @keyframes vsL{ from{ opacity:0; transform:translateX(-60vw) skewX(-12deg); } to{ opacity:1; transform:none; } }
+  @keyframes vsR{ from{ opacity:0; transform:translateX(60vw) skewX(-12deg); } to{ opacity:1; transform:none; } }
+  @keyframes vsOut{ to{ opacity:0; transform:scale(1.08); } }
 </style>
 </head>
 <body>
@@ -376,6 +394,7 @@
   <div id="cutin"><div class="cut-band"><img id="cut-img" alt=""><div><div id="cut-name"></div><div id="cut-move"></div></div></div></div>
   <div id="hud-combo"><div class="cc" id="combo-count"></div><div class="cd" id="combo-dmg"></div></div>
   <div id="big-text"></div>
+  <div id="vs-splash" class="hidden"><div class="vs-side vs-l"><img alt=""><span></span></div><div class="vs-mid">VS</div><div class="vs-side vs-r"><img alt=""><span></span></div></div>
   <div id="stage-label"></div>
   <div id="lb-top" class="letterbox"></div><div id="lb-bot" class="letterbox"></div><div id="replay-badge">REPLAY</div>
   <div id="training-panel" class="hidden">
@@ -3507,12 +3526,24 @@ class Game{
     const seq=[['3',650],['2',650],['1',650],['GO!',550]];
     this._matchRunning=false; this._countT=[];
     this._intro=this.online||this.replaying?null:{t:0,dur:1.85,side:Math.random()<0.5?-1:1};
+    this._vsSplash();
     let t=0;
     seq.forEach(([txt,d],i)=>{
       this._countT.push(setTimeout(()=>{ this._bigText(txt); AUDIO.playCount(i===3?0:3-i); ANNOUNCER.say(['Three','Two','One','Go!'][i],i===3?{rate:1.15,pitch:0.7}:null); if(i===3){ this._matchRunning=true; AUDIO.playCrowd(); AUDIO.startMusic(this.stageData.theme); } },t));
       t+=d;
     });
     this._countT.push(setTimeout(()=>this._hideBigText(),t));
+  }
+  // versus splash over the countdown for 1v1 matches: portraits slide in from each side around a VS
+  _vsSplash(){
+    const el=document.getElementById('vs-splash'); clearTimeout(this._vsT);
+    if(this.fighters.length!==2||this.isTargets||this.isHomerun||this.isTraining||this.f2.eliminated){ el.classList.add('hidden'); document.getElementById('big-text').style.visibility=''; return; }
+    [this.f1,this.f2].forEach((f,i)=>{ const s=el.children[i*2], img=document.getElementById('hudport-'+(i+1));
+      s.querySelector('img').src=img?img.src:''; s.querySelector('span').textContent=f.cd.name.split(' ')[0].toUpperCase();
+      s.style.setProperty('--c',hex6(f.cd.accent)); });
+    el.classList.remove('hidden','vs-out'); void el.offsetWidth; el.classList.add('vs-in');
+    const bt=document.getElementById('big-text'); bt.style.visibility='hidden'; // the 3-2 count waits behind the splash
+    this._vsT=setTimeout(()=>{ el.classList.add('vs-out'); bt.style.visibility=''; this._vsT=setTimeout(()=>el.classList.add('hidden'),450); },1150);
   }
   _pause(){ if(!this._matchRunning||this.matchOver) return; this.state='paused'; this._showScreen('pause'); AUDIO.duckMusic(true); this._renderMoveList(); }
   _renderMoveList(){
