@@ -526,6 +526,7 @@ function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
 function lerp(a,b,t){ return a+(b-a)*t; }
 function easeOutCubic(t){ return 1-Math.pow(1-t,3); }
 function easeInOutQuad(t){ return t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2; }
+function easeInOutCubic(t){ return t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2; }
 function easeOutBack(t){ const c1=1.70158,c3=c1+1; return 1+c3*Math.pow(t-1,3)+c1*Math.pow(t-1,2); }
 function rand(a,b){ return a+Math.random()*(b-a); }
 function choice(arr){ return arr[(Math.random()*arr.length)|0]; }
@@ -3473,6 +3474,7 @@ class Game{
   _runCountdown(){
     const seq=[['3',650],['2',650],['1',650],['GO!',550]];
     this._matchRunning=false; this._countT=[];
+    this._intro=this.online||this.replaying?null:{t:0,dur:1.85,side:Math.random()<0.5?-1:1};
     let t=0;
     seq.forEach(([txt,d],i)=>{
       this._countT.push(setTimeout(()=>{ this._bigText(txt); AUDIO.playCount(i===3?0:3-i); ANNOUNCER.say(['Three','Two','One','Go!'][i],i===3?{rate:1.15,pitch:0.7}:null); if(i===3){ this._matchRunning=true; AUDIO.playCrowd(); AUDIO.startMusic(this.stageData.theme); } },t));
@@ -4548,7 +4550,13 @@ class Game{
     this.bloomPulse*=0.9; this.flash*=0.85;
     if(this.stage.flashRequest){ this.flash=Math.max(this.flash,this.stage.flashRequest); this.flashColor=0xdfe8ff; this.stage.flashRequest=0; }
     this.stage.update(dt); this.particles.update();
-    if(!this._matchRunning){ this.cameraRig.update(this.fighters,dt); return; }
+    if(!this._matchRunning){
+      if(this._intro && this._intro.t<this._intro.dur){ // countdown fly-in: a sweeping arc down onto the stage
+        const I=this._intro; I.t+=dt; const k=easeInOutCubic(Math.min(1,I.t/I.dur)), m=this.stage.main, top=m.y+m.h/2;
+        const a=lerp(I.side*0.95,0,k), R=lerp(40,22,k), y=top+lerp(14,4.5,k), look=new THREE.Vector3(m.x*0.6,top+lerp(1,2.6,k),0);
+        this.camera.position.set(m.x*0.6+Math.sin(a)*R,y,Math.cos(a)*R); this.cameraRig.look.copy(look); this.camera.lookAt(look);
+      } else this.cameraRig.update(this.fighters,dt);
+      return; }
     if(this.cinematic){
       const f=this.cinematic.f;
       if(this.frame%3===0) this.particles.spawn(new THREE.Vector3(f.pos.x+rand(-2,2),f.pos.y+rand(0,3),0.3),3,{color:f.cd.accent,speed:0.05,life:20,additive:true,grav:-0.004});
