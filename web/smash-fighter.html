@@ -4177,7 +4177,7 @@ class Game{
         else { h.wave.position.x=wx; h.wave.scale.y=1+0.12*Math.sin(h.t*0.3);
           if(h.t%2===0) this.particles.spawn(new THREE.Vector3(wx+h.dir*1.2,h.top+rand(1.4,3),0.6),4,{color:[0xffffff,0xd8f4ff],speed:0.14,upBias:1.5,grav:0.01,life:24,size:0.13});
           for(const f of this.fighters){ if(h.hit.has(f)||f.eliminated||f.state==='respawn'||f.state==='ledge'||f.grabbedBy) continue;
-            if(Math.abs(f.pos.x-wx)<1.6 && f.pos.y<h.top+3.2){ h.hit.add(f);
+            if(Math.abs(f.pos.x-wx)<1.6 && f.pos.y<h.top+3.2 && f.pos.y>h.top-1){ // only what the wave visibly reaches, not fighters recovering below h.hit.add(f);
               const sh=f.state==='shield'?0.45:1; f.vel.x=h.dir*10*sh; if(sh===1){ f.vel.y=Math.max(f.vel.y,6); f.grounded=false; f.onPlatform=null; if(f.state!=='attack') f.state='fall'; }
               this.particles.spawn(new THREE.Vector3(f.pos.x,f.pos.y+1,0.5),14,{color:[0xffffff,0xbfe8ff,0x6fd8ff],speed:0.22,life:24,grav:0.01,size:0.1}); AUDIO.noiseHit(0.4,0.25,900); } } }
         if(h.t>c.warn+c.active+4){ h.done=true; h.objs.forEach(o=>{ this.scene.remove(o); o.traverse(q=>{ if(q.geometry) q.geometry.dispose(); if(q.material) q.material.dispose(); }); }); }
