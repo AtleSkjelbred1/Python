@@ -4991,9 +4991,11 @@ function animateFighter(f,dt){
     opt={at:attackTime(f,name),fade:0.05};
     if(key==='aerialB') f.pivot.rotation.y=Math.PI;
     // weight shift: lean back on the wind-up, step into the strike, settle in recovery
+    f._atkLean=0; f._atkStep=0; // set fresh for every move, so a cancelled attack's shift never carries over
     if(!m.projectile&&!m.counter&&!m.noHitbox&&key!=='grab'){ const su=Math.max(1,m.startup), fr=f.actionFrame, big=m.chargeable||m.special||m.ultimate||m.dmg>=10?1:0.55, s=f.cd.size;
       const back=fr<=su?-easeOutCubic(Math.min(1,fr/su/0.7))*0.09*big:0, fwd=fr>su?Math.max(0,1-(fr-su)/(m.active+m.recovery*0.6))*big:0;
-      f._atkLean=back+fwd*0.12; f._atkStep=fwd*0.22*s; }
+      const sg=key==='aerialB'?-1:1; // the back aerial is turned around: shift toward its real target
+      f._atkLean=(back+fwd*0.12)*sg; f._atkStep=fwd*0.22*s*sg; }
   } else switch(f.state){
     case 'walk': name=set.walk; opt={speed:clamp(Math.abs(f.vel.x)/f.cd.walkSpeed,0.5,1.6)}; break;
     case 'run': name=set.run; opt={speed:clamp(Math.abs(f.vel.x)/f.cd.runSpeed*1.15,0.6,1.6)}; break;
