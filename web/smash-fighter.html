@@ -1521,7 +1521,7 @@ class Fighter{
       if(this._tryCancel(cmd)){ this._physics(dt,world); return; }
       this._updateAction(dt,cmd,world); this._physics(dt,world); return;
     }
-    if(this.state==='land'){ this.landTimer--; this.vel.x*=this._onIce()?0.97:0.75; this._physics(dt,world); if(this.landTimer<=0) this.state='idle'; return; }
+    if(this.state==='land'){ this.landTimer--; this.vel.x*=this._onIce()?0.97:(this._slide?0.94:0.75); if(this.landTimer<=0) this._slide=false; this._physics(dt,world); if(this.landTimer<=0) this.state='idle'; return; }
     if(this.state==='jumpsquat'){
       if(cmd.up && (cmd.attackP||cmd.specialP)){ this.state='idle'; if(this.chooseAction(cmd)){ this._physics(dt,world); return; } this.state='jumpsquat'; }
       // jump + attack together (within the jumpsquat) = short-hop aerial, like pressing both at once in Ultimate
@@ -1695,7 +1695,8 @@ class Fighter{
       else if(m.recoveryMove||m.teleport){ this.action=null; this.state='land'; this.landTimer=8; }
       return;
     }
-    if(this.state==='airdodge'){ this.state='land'; this.landTimer=8; return; }
+    if(this.state==='airdodge'){ // air dash into the ground: keep the sideways momentum and slide (wavedash)
+      this.state='land'; this.landTimer=8; this._slide=true; this.vel.x=clamp(this.vel.x,-12,12); if(Math.abs(this.vel.x)>3) this.events.push({type:'dust',dir:Math.sign(this.vel.x),skid:true}); return; }
     if(this.state==='jump'||this.state==='fall'||this.state==='doublejump'){ this.state='land'; this.landTimer=3; }
   }
   _physics(dt,world){
