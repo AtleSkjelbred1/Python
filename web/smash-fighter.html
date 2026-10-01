@@ -1216,6 +1216,9 @@ class ParticleSystem{
 const GRAVITY_ACCEL = 32;   // units/s^2
 const KB_TO_VEL = 0.09;     // knockback score -> launch speed (units/s)
 const KB_DECAY = 0.35;      // launch speed lost per frame while in hitstun (units/s)
+const AIR_DASH_SPEED = 21;  // air dodge travel speed (units/s) ...
+const AIR_DASH_FRAMES = 9;  // ... held this many frames before it eases off (about 2.5 units in all)
+const DOUBLE_JUMP_MULT = 1.16; // double jumps launch a bit higher than each fighter's base value
 const COYOTE_FRAMES = 5;     // grace frames to still ground-jump after walking off an edge
 const JUMP_HOLD_FRAMES = 14; // how long a held jump button keeps reducing gravity
 const JUMP_HOLD_GRAVITY = 0.4;
@@ -1611,7 +1614,7 @@ class Fighter{
           this.wallJumpUsed=true; this.fastFalling=false; this.state='jump'; this.events.push({type:'walljump'});
         } else if(this.jumpsLeft>0){
           this._consume('jumpP');
-          this.vel.y=this.cd.doubleJumpVel; this.jumpsLeft--; this.fastFalling=false; this.jumpHold=JUMP_HOLD_FRAMES;
+          this.vel.y=this.cd.doubleJumpVel*DOUBLE_JUMP_MULT; this.jumpsLeft--; this.fastFalling=false; this.jumpHold=JUMP_HOLD_FRAMES;
           this.state='doublejump'; this.stateTimer=0; this.events.push({type:'jump2'});
         }
       }
@@ -1631,16 +1634,23 @@ class Fighter{
   _startJumpSquat(cmd){ this._consume('jumpP'); this.state='jumpsquat'; this.jumpSquat=3; this._shMacro=!!(cmd&&cmd.attackP&&!cmd.up); }
   _startRoll(dir){ this.state='roll'; this.stateTimer=0; this.invuln=Math.max(this.invuln,14); this.faceLock=26; this._rollDir=dir; }
   _startSpotDodge(){ this.state='spotdodge'; this.stateTimer=0; this.invuln=Math.max(this.invuln,14); }
+  // air dodge = a short air dash in the held direction (forward when neutral), briefly ignoring gravity
   _startAirDodge(cmd){
-    this.state='airdodge'; this.stateTimer=0; this.invuln=Math.max(this.invuln,20); this.airDodged=true; this.fastFalling=false;
+    this.state='airdodge'; this.stateTimer=0; this.invuln=Math.max(this.invuln,16); this.airDodged=true; this.fastFalling=false;
     const dx=cmd.axisX||0, dy=-(cmd.axisY||0), mag=Math.hypot(dx,dy);
-    this.vel.set(mag>0.1?dx/mag*9:0, mag>0.1?dy/mag*9:1.5, 0);
+    this._adDir=mag>0.1?{x:dx/mag,y:dy/mag}:{x:this.facing,y:0};
+    if(Math.abs(this._adDir.x)>0.3) this.facing=Math.sign(this._adDir.x);
+    this.vel.set(this._adDir.x*AIR_DASH_SPEED,this._adDir.y*AIR_DASH_SPEED,0);
+    this.events.push({type:'airdash'});
   }
   _updateDodge(dt,world){
     this.stateTimer++;
     if(this.state==='roll'){ this.vel.x=this._rollDir*8*(1-this.stateTimer/26); if(this.stateTimer>26){ this.state='idle'; this.facing=-this._rollDir; } }
     if(this.state==='spotdodge'){ this.vel.x=0; if(this.stateTimer>22) this.state='idle'; }
-    if(this.state==='airdodge'){ this.vel.multiplyScalar(0.9); if(this.stateTimer>26) this.state=this.grounded?'idle':'fall'; }
+    if(this.state==='airdodge'){ const d=this._adDir||{x:0,y:0};
+      if(this.stateTimer<=AIR_DASH_FRAMES){ const k=1-this.stateTimer/(AIR_DASH_FRAMES*1.8); this.vel.set(d.x*AIR_DASH_SPEED*k,d.y*AIR_DASH_SPEED*k+GRAVITY_ACCEL*dt,0); } // + one frame of gravity, cancelled by physics
+      else this.vel.multiplyScalar(0.85);
+      if(this.stateTimer>22) this.state=this.grounded?'idle':'fall'; }
     this._physics(dt,world);
   }
   _updateRespawn(cmd){
@@ -3862,6 +3872,8 @@ class Game{
         case 'jump': AUDIO.playJump(); if(Math.random()<0.35) fighterVoice(f,'jump'); P.spawn(new THREE.Vector3(f.pos.x,f.pos.y+0.05,0.2),5,{color:0x9a8f80,speed:0.07,upBias:0.3,life:16}); break;
         case 'jump2': AUDIO.playJump(); P.ring(new THREE.Vector3(f.pos.x,f.pos.y+0.2,0),f.cd.accent,0.9,12,0.05); break;
         case 'walljump': AUDIO.playJump(); P.spawn(new THREE.Vector3(f.pos.x,f.pos.y+0.8,0.2),10,{color:f.cd.accent,speed:0.12,life:16,additive:true}); this._floatText(f,'WALL JUMP'); break;
+        case 'airdash': AUDIO.playWhoosh(0.7); P.spawn(new THREE.Vector3(f.pos.x,f.pos.y+0.9*s,0.3),10,{additive:true,color:[0xffffff,f.cd.accent],speed:0.12,life:12,grav:0,size:0.07});
+          P.ring(new THREE.Vector3(f.pos.x,f.pos.y+0.9*s,0.2),f.cd.accent,1.4,10,0.05); break;
         case 'teleport':
           [e.from,e.to].forEach(v=>P.spawn(new THREE.Vector3(v.x,v.y+s,0.3),18,{color:[f.cd.accent,0xffffff],speed:0.18,life:16,additive:true,size:0.06}));
           if(f.cd.id==='nyx') AUDIO.playElectric(); else AUDIO.tone(300,0.15,'sine',0.2,900);
