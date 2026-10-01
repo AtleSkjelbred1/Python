@@ -3665,6 +3665,14 @@ class Game{
     if(dj){ const r=new THREE.Mesh(new THREE.RingGeometry(0.4,0.52,32),new THREE.MeshBasicMaterial({color:f.cd.accent,transparent:true,opacity:0.7,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending}));
       r.rotation.x=-Math.PI/2; r.position.set(f.pos.x,f.pos.y,0.2); this.scene.add(r); P.custom(r,14,(o,k)=>{ o.scale.setScalar(1+k*1.6); o.material.opacity=0.7*(1-k); },()=>r.material.dispose()); }
   }
+  _ambientFx(){ // stage ambience: lava bubbles, crypt wisps, drifting leaves
+    const P=this.particles, th=this.stageData.theme, m=this.stage.main;
+    if(th==='volcano' && P.tick%6===0){ const x=rand(-24,24), z=rand(-14,3); if(Math.abs(x)<m.w/2+1&&z>-3) return; const at=new THREE.Vector3(x,-6.7,z);
+      P.flames(at,'magma',6,{speed:0.07,size:0.42,life:24,spread:0.35,up:3}); P.spawn(at,3,{color:[0x2a1206,0x4a1e08],speed:0.12,upBias:3,grav:0.012,life:30,size:0.12}); }
+    if(th==='crypt' && P.tick%10===0) P.spawn(new THREE.Vector3(rand(-16,16),rand(-3,6),rand(-4,1)),1,{additive:true,color:[0x7fe0ff,0xb8f4ff],vel:{x:rand(-0.01,0.01),y:rand(0.006,0.014),z:0},size:0.24,life:140,grav:0,drag:1});
+    if(th==='meadow' && P.tick%11===0){ const w=this.stage.wind||0, d=w?Math.sign(w):1;
+      P.spawn(new THREE.Vector3(-d*24,rand(1,12),rand(-3,2)),1,{color:[0x6f9a3a,0x9bbf4a,0xc9a24b],vel:{x:d*rand(0.05,0.09)*(1+Math.abs(w)*8),y:rand(-0.015,0.0),z:0},size:0.1,life:420,grav:0.0002,drag:1}); }
+  }
   _projTrail(p){
     const P=this.particles, el=p.owner&&p.owner.cd&&ELEMENT[p.owner.cd.id], vis=p.move.pvis||'fire', at=new THREE.Vector3(p.pos.x,p.pos.y,0.3);
     if(vis==='item'&&!p.move.itemShoot) return;
@@ -4839,7 +4847,8 @@ class Game{
     if(this.replaying) dt/=3;
     if(this.particles && this._projFxTick!==this.particles.tick){ this._projFxTick=this.particles.tick; // element trails behind projectiles (host and guest copies)
       for(const p of this.projectiles) if(!p.dead) this._projTrail(p);
-      if(this.netProj) for(const p of this.netProj.values()) if(!p.dead) this._projTrail(p); }
+      if(this.netProj) for(const p of this.netProj.values()) if(!p.dead) this._projTrail(p);
+      this._ambientFx(); }
     const all=this.fighters.concat(this.clones);
     for(const f of all){
       animateFighter(f,dt);
