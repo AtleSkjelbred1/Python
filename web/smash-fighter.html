@@ -1709,7 +1709,7 @@ class Fighter{
       if(this.jumpHold>0){ if(this._jumpHeld && this.vel.y>0 && this.hitstun<=0){ g*=JUMP_HOLD_GRAVITY; this.jumpHold--; } else this.jumpHold=0; }
       this.vel.y-=g*dt;
       if(this.fastFalling) this.vel.y=Math.min(this.vel.y,-this.cd.fastFallSpeed);
-      else this.vel.y=Math.max(this.vel.y,-(this.hitstun>0?this.cd.fastFallSpeed*1.5:this.cd.fallSpeed));
+      else if(!(this.state==='airdodge'&&this.stateTimer<=AIR_DASH_FRAMES)) this.vel.y=Math.max(this.vel.y,-(this.hitstun>0?this.cd.fastFallSpeed*1.5:this.cd.fallSpeed)); // a downward air dash isn't capped by fall speed
     }
     this.pos.addScaledVector(this.vel,dt);
     if(this.grounded && this.onPlatform && this.state==='attack' && this.action && this.action.move.dash){
@@ -5007,7 +5007,7 @@ function animateFighter(f,dt){
     case 'shield': name=set.shield; opt={fade:0.06}; break;
     case 'roll': name=f._rollDir===f.facing?set.roll:set.rollBack; opt={at:f.stateTimer/27,fade:0.05}; break;
     case 'spotdodge': name=set.spotdodge; opt={at:f.stateTimer/23,fade:0.05}; break;
-    case 'airdodge': name=set.airdodge; opt={at:f.stateTimer/27,fade:0.05}; break;
+    case 'airdodge': name=set.airdodge; opt={at:f.stateTimer/22,fade:0.05}; break;
     case 'hitstun':
       name=f.tumble?set.tumble:set.hit; opt={at:f.tumble?0.3:(f._hsMax?0.1+0.55*clamp(1-f.hitstun/f._hsMax,0,1):0.35),fade:0.04}; // the flinch plays out over the hitstun
       if(f.tumble) f.pivot.rotation.z=-f.facing*t*12;
