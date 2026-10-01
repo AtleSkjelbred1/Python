@@ -3517,7 +3517,8 @@ class Game{
       const stop=Math.round(3+move.dmg*0.3);
       defender.hitstop=stop; if(!opts.remote) attacker.hitstop=stop;
       defender.vel.x=dir*Math.min(6,1.5+move.dmg*0.3);
-      this.particles.spawn(at,8,{color:0x8fd4ff,speed:0.14,life:14,additive:true});
+      this.particles.spawn(at,8+Math.round(move.dmg),{color:[0x8fd4ff,0xffffff],speed:0.16,life:14,additive:true,size:0.06});
+      this.particles.ring(at,0x8fd4ff,1+move.dmg*0.06,10,0.05); defender._shieldFlash=7;
       this.cameraRig.kick(0.12);
       if(defender.shieldHP<=0) defender._shieldBreak();
       return false;
@@ -3549,6 +3550,10 @@ class Game{
     if(move.spike){ if(defender.grounded){ ax=0.3*dir; ay=0.8; } else { ax=0.15*dir; ay=-1; } }
     const sp=kb*KB_TO_VEL;
     defender.vel.set(ax*sp,ay*sp,0);
+    if(dmg>=5){ // impact streaks along the launch direction: one long, one crossing; bigger for harder hits
+      const ang=Math.atan2(ay,ax), L=clamp(1.2+kb*0.022,1.2,4.2), c=move.color||attacker.cd.accent;
+      this.particles.slash(at,0xffffff,L,ang,9); if(kb>45) this.particles.slash(at,c,L*0.7,ang+Math.PI/2+rand(-0.3,0.3),8);
+      for(let i=0;i<Math.min(10,3+kb/14);i++){ const v=rand(0.25,0.5); this.particles.spawn(at,1,{additive:true,color:[0xffffff,c],size:0.045,life:12,grav:0,drag:0.9,vel:{x:Math.cos(ang+rand(-0.25,0.25))*v,y:Math.sin(ang+rand(-0.25,0.25))*v,z:0}}); } }
     // game-deciding blow: rough travel estimate (speed decays KB_DECAY per frame) past a blast line
     if(!this.isTraining && !this.isHomerun && defender.stocks===1 && this.fighters.filter(f=>!f.eliminated).length===2 && !this.slowmo){
       const d=sp*sp/(2*KB_DECAY*60), b=this.stage.blast, x=defender.pos.x+ax*d, y=defender.pos.y+1+Math.max(0,ay)*d;
@@ -4831,8 +4836,10 @@ class Game{
         f.group.visible=!f.eliminated && f.vanished<=0;
         f.shieldMesh.visible=f.state==='shield';
         if(f.shieldMesh.visible){
-          const k=f.shieldHP/100; f.shieldMesh.scale.setScalar(0.45+0.55*k);
+          const k=f.shieldHP/100, fl=f._shieldFlash>0?(f._shieldFlash--)/7:0; // a hit makes the bubble flash and wobble
+          f.shieldMesh.scale.setScalar((0.45+0.55*k)*(1+fl*0.12*Math.sin(fl*14)));
           f.shieldMesh.material.emissive.setRGB(lerp(0.9,0.13,k),lerp(0.2,0.53,k),lerp(0.1,1,k));
+          if(fl>0) f.shieldMesh.material.emissive.lerp(_pc.setHex(0xffffff),fl*0.7);
         }
         if(f.counterActive) f.glow.intensity=2.5;
         else if(!(f.state==='attack'&&f.action&&f.action.move.chargeable)) f.glow.intensity*=0.85;
