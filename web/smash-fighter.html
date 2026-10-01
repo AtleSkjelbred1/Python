@@ -5,6 +5,8 @@
 <meta charset="UTF-8">
 <title>Rift Clash</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Teko:wght@500;600;700&family=Barlow:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{ --accent:#ffb347; --bg:#0a0c12; }
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -211,6 +213,68 @@
   #winner-banner{ font-size:30px; font-weight:900; color:var(--accent); text-shadow:0 4px 16px rgba(255,179,71,.4); }
   /* laptop heights: tighter menu buttons so the settings panel stays in view (after the base rules so it wins) */
   @media (max-height:820px) and (min-height:521px){ .menu-btn{ padding:9px 34px; margin:5px; font-size:15px; } h1.title{ font-size:50px; } }
+
+  /* ================= DESIGN LAYER: "arcane arena" =================
+     Condensed display type (Teko) for titles, buttons and numbers; Barlow for reading text.
+     Slanted, clipped buttons with an ember edge; glassy panels with a hairline of light on top. */
+  :root{ --display:'Teko','Impact','Arial Narrow',sans-serif; --ui:'Barlow','Segoe UI',Arial,sans-serif;
+    --ember:#ff7a2a; --gold:#ffcf7a; --edge:rgba(255,190,110,.28); --glass:rgba(16,18,27,.78); }
+  html,body{ font-family:var(--ui); }
+  h1.title{ font-family:var(--display); font-weight:700; font-size:104px; letter-spacing:12px; line-height:.86; margin:0 0 2px;
+    background:linear-gradient(180deg,#fff8e6 0%,#ffd88a 34%,#ff8a32 66%,#b8380c 100%); background-size:100% 220%;
+    -webkit-background-clip:text; background-clip:text; color:transparent; text-shadow:none; transform:skewX(-7deg);
+    filter:drop-shadow(0 3px 0 rgba(40,10,0,.85)) drop-shadow(0 0 28px rgba(255,110,30,.4)); animation:rcTitleIn .8s cubic-bezier(.2,1.3,.3,1) both, rcEmber 5s ease-in-out 1s infinite; }
+  @keyframes rcTitleIn{ from{ opacity:0; transform:skewX(-7deg) translateY(-18px) scale(1.08); letter-spacing:30px; } to{ opacity:1; transform:skewX(-7deg); letter-spacing:12px; } }
+  @keyframes rcEmber{ 0%,100%{ background-position:0 0; } 50%{ background-position:0 30%; } }
+  .subtitle{ font-family:var(--display); font-weight:500; font-size:20px; letter-spacing:9px; color:var(--gold); opacity:.62; margin-bottom:26px; }
+  .subtitle::before,.subtitle::after{ content:''; display:inline-block; width:46px; height:1px; vertical-align:middle; margin:0 14px; background:linear-gradient(90deg,transparent,var(--gold)); }
+  .subtitle::after{ background:linear-gradient(90deg,var(--gold),transparent); }
+  .menu-btn{ font-family:var(--display); font-weight:600; font-size:25px; letter-spacing:3px; line-height:1; padding:11px 44px 7px; margin:6px 4px; border:none; border-radius:0;
+    clip-path:polygon(16px 0,100% 0,calc(100% - 16px) 100%,0 100%); position:relative;
+    background:linear-gradient(0deg,rgba(255,122,42,.85) 0 2px,transparent 2px),linear-gradient(180deg,#262c3c,#141822); color:#eef0f6;
+    transition:transform .14s, background .14s, color .14s, filter .14s; }
+  .menu-btn:hover,.menu-btn.focus{ background:linear-gradient(100deg,#ffb347,#ff6a24); color:#170a02; transform:translateX(5px); box-shadow:none;
+    filter:drop-shadow(0 0 12px rgba(255,120,40,.55)); }
+  .menu-btn:active{ transform:translateX(5px) scale(.98); }
+  #screen-mainmenu .row .menu-btn{ animation:rcBtnIn .45s cubic-bezier(.2,1,.3,1) both; }
+  #screen-mainmenu .row:nth-of-type(2) .menu-btn{ animation-delay:.06s } #screen-mainmenu .row:nth-of-type(3) .menu-btn{ animation-delay:.12s }
+  #screen-mainmenu .row:nth-of-type(4) .menu-btn{ animation-delay:.18s } #screen-mainmenu .row:nth-of-type(5) .menu-btn{ animation-delay:.24s }
+  #screen-mainmenu .row:nth-of-type(6) .menu-btn{ animation-delay:.3s } #screen-mainmenu .row:nth-of-type(7) .menu-btn{ animation-delay:.36s }
+  @keyframes rcBtnIn{ from{ opacity:0; transform:translateX(-26px); } to{ opacity:1; transform:none; } }
+  .panel{ background:linear-gradient(180deg,rgba(28,31,44,.84),var(--glass)); border:1px solid rgba(255,255,255,.06); border-top:1px solid var(--edge);
+    border-radius:6px; box-shadow:0 24px 70px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.04); }
+  .chip{ font-family:var(--ui); font-weight:700; letter-spacing:.5px; border-radius:2px; clip-path:polygon(6px 0,100% 0,calc(100% - 6px) 100%,0 100%); padding:6px 16px;
+    background:#161a25; border-color:#2e3546; transition:background .12s,border-color .12s; }
+  .chip:hover{ border-color:var(--edge); background:#1e2331; }
+  .chip.active{ background:linear-gradient(100deg,#ffc061,#ff8a32); border-color:#ffd08a; color:#160a02; }
+  .settings-grid .sl{ font-family:var(--display); font-size:17px; letter-spacing:2.5px; opacity:.7; }
+  h2,.cs-col h2{ font-family:var(--display); font-weight:600; letter-spacing:4px; }
+  .cs-col h2{ font-size:30px; line-height:1; }
+  #screen-charselect > h1, #screen-stageselect h1, #screen-charselect h1{ font-family:var(--display); font-weight:600; letter-spacing:8px; }
+  .cs-preview{ border-radius:4px; border:1px solid #2c3346; background:radial-gradient(ellipse at 50% 85%,#262c3d 0%,#0c0f16 70%); box-shadow:inset 0 0 40px rgba(0,0,0,.6); }
+  .rtile{ border-radius:4px; }
+  .stage-card{ border-radius:4px; }
+  .stage-card .nm{ font-family:var(--display); font-weight:600; font-size:21px; letter-spacing:1px; line-height:1; white-space:nowrap; }
+  #btn-to-stage{ background:linear-gradient(100deg,#ffc061,#ff6a24); color:#170a02; }
+  /* HUD: big condensed damage numbers with a dark outline so they read over any stage */
+  .portrait-hud{ background:linear-gradient(180deg,rgba(14,16,24,.72),rgba(8,9,14,.6)); border:1px solid rgba(255,255,255,.07); border-radius:4px; }
+  .hud-name{ font-family:var(--display); font-weight:600; font-size:19px; letter-spacing:1.5px; line-height:1; }
+  .hud-pct{ font-family:var(--display); font-weight:700; font-size:56px; line-height:.82; letter-spacing:1px;
+    text-shadow:0 0 1px #000,2px 2px 0 rgba(0,0,0,.75),-1px -1px 0 rgba(0,0,0,.6),0 4px 14px rgba(0,0,0,.55); }
+  #hud-timer{ font-family:var(--display); font-weight:600; font-size:34px; letter-spacing:2px; }
+  #big-text{ font-family:var(--display); font-weight:700; letter-spacing:6px; font-style:italic;
+    background:linear-gradient(180deg,#fff 30%,#ffd27a 70%,#ff8a32); -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter:drop-shadow(0 4px 0 rgba(30,10,0,.8)) drop-shadow(0 0 24px rgba(255,130,40,.45)); text-shadow:none; }
+  #stage-label{ font-family:var(--display); font-size:16px; letter-spacing:5px; }
+  #cut-name{ font-family:var(--display); font-size:24px; letter-spacing:6px; } #cut-move{ font-family:var(--display); font-size:66px; letter-spacing:3px; line-height:.9; }
+  #winner-banner{ font-family:var(--display); font-weight:700; font-size:64px; letter-spacing:4px; line-height:.95; font-style:italic;
+    background:linear-gradient(180deg,#fff 20%,#ffd27a 60%,#ff8a32); -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter:drop-shadow(0 3px 0 rgba(30,10,0,.8)) drop-shadow(0 0 20px rgba(255,130,40,.35)); text-shadow:none; }
+  #win-quote{ font-family:var(--ui); }
+  .results-table th{ font-family:var(--display); font-size:17px; letter-spacing:2px; font-weight:500; }
+  .tb-m{ border-radius:4px; } .tb-champ{ font-family:var(--display); font-size:34px; line-height:1; }
+  @media (max-height:820px) and (min-height:521px){ h1.title{ font-size:78px; } .menu-btn{ font-size:21px; padding:9px 36px 5px; margin:4px; } .subtitle{ margin-bottom:14px; } }
+  @media (max-height:520px){ h1.title{ font-size:50px; letter-spacing:8px; } .menu-btn{ font-size:18px; padding:7px 28px 4px; margin:3px; min-width:190px; } .hud-pct{ font-size:38px; } .hud-name{ font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:130px; } }
 </style>
 </head>
 <body>
