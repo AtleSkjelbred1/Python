@@ -1336,7 +1336,7 @@ class Fighter{
   startAction(key,move){
     this._actSerial=(this._actSerial||0)+1;
     this.action={key,move}; this.actionFrame=0; this.actionPhase='startup'; this.state='attack';
-    this.chargeFrames=0; this._multiIdx=-1; this._hitTargets=new Set(); this._landedHit=false; this._countered=false;
+    this.chargeFrames=0; this._multiIdx=-1; this._hitTargets=new Set(); this._landedHit=false; this._countered=false; this._clanked=false;
     this._projSpawned=false; this._cloneSpawned=false; this.armorActive=false; this.counterActive=false;
   }
   interrupt(){
@@ -1830,7 +1830,7 @@ class Fighter{
     else this.state=this.grounded?'idle':'fall';
   }
   currentHitbox(){
-    if(this.state!=='attack'||this.actionPhase!=='active') return null;
+    if(this.state!=='attack'||this.actionPhase!=='active'||this._clanked) return null; // a clanked attack is spent, even during its hitstop
     let m=this.action.move;
     if(m.noHitbox||m.counter||m.vanish||m.projectile||m.trap||m.clone) return null;
     if(m.multihit && m.finisher && this._multiIdx>=m.multihit-1){
@@ -3738,15 +3738,18 @@ class Game{
     const ha=a.currentHitbox(), hb=b.currentHitbox(); if(!ha||!hb||a._hitTargets.has(b)||b._hitTargets.has(a)) return;
     if(ha.move.ultimate||hb.move.ultimate||ha.move.aoe||hb.move.aoe) return;
     if(Math.hypot(ha.x-hb.x,ha.y-hb.y)>ha.radius+hb.radius) return;
-    const da=ha.move.dmg||0, db=hb.move.dmg||0; if(Math.abs(da-db)>=9) return; // a much stronger hit trades through
-    for(const [f,o] of [[a,b],[b,a]]){ f._hitTargets.add(o); f.hitstop=Math.max(f.hitstop,7);
+    const da=(ha.move.dmg||0)*(1+a.chargeFrames/60), db=(hb.move.dmg||0)*(1+b.chargeFrames/60); if(Math.abs(da-db)>=9) return; // a much stronger (or charged) hit trades through
+    for(const [f,o] of [[a,b],[b,a]]){ f._hitTargets.add(o); f._clanked=true; f.hitstop=Math.max(f.hitstop,7);
       const m=f.action.move; f.actionFrame=Math.max(f.actionFrame,m.startup+m.active); // skip the rest of the active frames into recovery
       f.vel.x=-Math.sign(o.pos.x-f.pos.x||f.facing)*3.5; }
     const at=new THREE.Vector3((ha.x+hb.x)/2,(ha.y+hb.y)/2,0.4);
+    if(this.online && NET.role==='host') (this._netHits=this._netHits||[]).push([+at.x.toFixed(2),+at.y.toFixed(2),0xffffff,0,2,0]); // guests replay the clank
+    this._clankFx(at); this._floatText(a.pos.x<b.pos.x?a:b,'CLANK!');
+  }
+  _clankFx(at){
     this.particles.spawn(at,22,{additive:true,color:[0xffffff,0xffe08a,0xbfe0ff],speed:0.3,life:14,grav:0.004,size:0.06});
     this.particles.spark(at,0xffffff,1.6); this.particles.ring(at,0xffffff,1.6,10,0.05);
     AUDIO.tone(1800,0.12,'square',0.12,1400); AUDIO.tone(2600,0.18,'triangle',0.1,2400,{delay:0.02,wet:0.5}); this.cameraRig.kick(0.25);
-    this._floatText(a.pos.x<b.pos.x?a:b,'CLANK!');
   }
   _resolveGrab(attacker,defender){
     if(attacker.action && attacker.action.key==='grab' && attacker.actionPhase==='active' && !attacker.grabbing && !defender.grabbedBy
@@ -4697,6 +4700,7 @@ class Game{
       if(f.state==='respawn'){ f.group.visible=true; }
     });
     for(const h of s.hits){ const at=new THREE.Vector3(h[0],h[1],0.4);
+      if(h[4]===2){ this._clankFx(at); continue; }
       if(h[4]){ this._impactAt(at,0.8); this.particles.koBeam(at,new THREE.Vector3(this.stage.main.x,this.stage.main.y+4,0),h[2]); this.particles.spawn(at,70,{color:[h[2],0xffffff,0xffee88],speed:0.55,life:40,grav:0.004,additive:true,size:0.11}); this.particles.ring(at,h[2],7,30,0.18); this.flash=0.3; this.flashColor=h[2]; this.bloomPulse=2; this.cameraRig.kick(1.2); AUDIO.playKO(); }
       else { this.particles.spawn(at,Math.round(6+h[3]),{color:[0xffffff,0xfff0b0,h[2]],speed:0.14+h[5]*0.0025,life:20,additive:true,size:0.07}); this.particles.spark(at,0xffffff,0.7+h[3]*0.05);
         this.bloomPulse=Math.max(this.bloomPulse,clamp(h[3]/18,0.12,1.1)); AUDIO.playHit(h[3]); if(h[5]>85) this.cameraRig.kick(0.6); if(h[5]>90) this._impactAt(at,(h[5]-80)/110); }
