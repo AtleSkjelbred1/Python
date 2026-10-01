@@ -2246,14 +2246,26 @@ class StageObj{
     pts.userData.yr=yr; this.scene.add(pts); return pts;
   }
   _bolt(){
-    if(this.boltMesh){ this.scene.remove(this.boltMesh); this.boltMesh.geometry.dispose(); }
+    if(this.boltMesh){ this.scene.remove(this.boltMesh); this.boltMesh.geometry.dispose(); this.boltMesh.material.dispose(); }
     const pts=[]; let x=rand(-35,35), y=38;
     while(y>-10){ pts.push(new THREE.Vector3(x,y,-40)); x+=rand(-3,3); y-=rand(2,5); }
     this.boltMesh=new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:0xeef4ff}));
     this.scene.add(this.boltMesh); this.boltLife=7;
   }
+  _riftArc(){ // a crackle of rift energy jumping across the void behind the stage
+    const pts=[], z=rand(-75,-50), y0=Math.random()<0.6?rand(12,26):rand(-18,-8), x0=rand(-60,20), len=rand(16,36); // above or below the fighters, never at their height let y=y0;
+    for(let x=x0;x<x0+len;x+=rand(0.8,2)){ y+=rand(-1.4,1.4); pts.push(new THREE.Vector3(x,y,z)); }
+    const g=new THREE.BufferGeometry().setFromPoints(pts), col=Math.random()<0.5?0xc89aff:0x6fe8ff;
+    const mk=c=>new THREE.Line(g,new THREE.LineBasicMaterial({color:c,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));
+    const a=mk(0xffffff), b=mk(col); b.position.y=0.15; this.scene.add(a,b); this.arcs.push({a,b,g,life:12});
+  }
   update(dt){
     this.time+=dt;
+    if(this.nebula){ this.arcs=this.arcs||[]; this.arcT=(this.arcT==null?2:this.arcT)-dt;
+      if(this.arcT<=0){ this._riftArc(); if(Math.random()<0.4) this._riftArc(); this.arcT=rand(1.2,3.5); }
+      for(const r of this.arcs){ r.life--; const o=Math.max(0,r.life/12)*(0.6+0.4*Math.random()); r.a.material.opacity=o; r.b.material.opacity=o;
+        if(r.life<=0){ this.scene.remove(r.a,r.b); r.g.dispose(); r.a.material.dispose(); r.b.material.dispose(); } }
+      this.arcs=this.arcs.filter(r=>r.life>0); }
     for(const mv of this.movers){
       const span=mv.to-mv.from;
       if(mv.wait>0) mv.wait-=dt; else mv.offset+=mv.dir*mv.speed*dt;
@@ -2314,7 +2326,7 @@ class StageObj{
         this._bolt(); this.lightningTimer=rand(170,420); this.flashRequest=0.25;
         setTimeout(()=>AUDIO.playThunder(),rand(150,700));
       } else this.lightning.intensity=Math.max(0,this.lightning.intensity-0.22);
-      if(this.boltMesh && --this.boltLife<=0){ this.scene.remove(this.boltMesh); this.boltMesh.geometry.dispose(); this.boltMesh=null; }
+      if(this.boltMesh && --this.boltLife<=0){ this.scene.remove(this.boltMesh); this.boltMesh.geometry.dispose(); this.boltMesh.material.dispose(); this.boltMesh=null; }
     }
   }
 }
