@@ -2149,7 +2149,11 @@ class StageObj{
       this.clouds=[];
       for(let i=0;i<10;i++){ const c=add(i%2?'cloud_small':'cloud_big',rand(-80,80),rand(-18,-6)+(i%3)*12,rand(-95,-60),rand(2.5,4)); this.clouds.push(c); }
     } else if(th==='volcano'){
-      const lava=new THREE.Mesh(new THREE.PlaneGeometry(200,120),std({color:0xff4500,emissive:0xff2200,emissiveIntensity:1.0,roughness:1}));
+      const lg=new THREE.PlaneGeometry(200,120,60,36), lp=lg.attributes.position, lc=new Float32Array(lp.count*3), hot=new THREE.Color(0xffb040), crust=new THREE.Color(0x3a1206), cc=new THREE.Color();
+      for(let i=0;i<lp.count;i++){ const x=lp.getX(i), y=lp.getY(i), n=Math.sin(x*0.35)*Math.sin(y*0.42)+Math.sin(x*0.9+y*0.6)*0.5; // dark crust plates with glowing seams
+        cc.copy(crust).lerp(hot,clamp(1-Math.abs(n)*1.4,0,1)); lc[i*3]=cc.r; lc[i*3+1]=cc.g; lc[i*3+2]=cc.b; }
+      lg.setAttribute('color',new THREE.BufferAttribute(lc,3));
+      const lava=new THREE.Mesh(lg,std({color:0xffffff,vertexColors:true,emissive:0xff3a08,emissiveIntensity:0.55,roughness:0.9,flatShading:true})); this._wavy(lava,0.45,0.5,0.14);
       lava.rotation.x=-Math.PI/2; lava.position.y=-7; scene.add(lava); this.lava=lava;
       add('mountain_A',-60,-7,-130,34); add('mountain_C',-6,-7,-150,40); add('mountain_A',58,-7,-135,32,1.2);
       const crater=new THREE.PointLight(0xff5a1a,2.5,120); crater.position.set(-6,45,-140); scene.add(crater);
@@ -2161,8 +2165,8 @@ class StageObj{
       this.lavaLight=new THREE.PointLight(0xff5522,1.4,45); this.lavaLight.position.set(0,-3,5); scene.add(this.lavaLight);
       this.embers=this._points(260,0xffa040,0.14,[-30,30],[-7,20],[-15,6]);
     } else if(meadow){
-      const lake=new THREE.Mesh(new THREE.PlaneGeometry(260,160),std({color:this.data.tod==='night'?0x13284a:(this.data.tod==='sunset'?0x6a6a8a:0x3d8fc9),roughness:0.75,metalness:0}));
-      lake.rotation.x=-Math.PI/2; lake.position.y=-14; scene.add(lake);
+      const lake=new THREE.Mesh(new THREE.PlaneGeometry(260,160,60,36),std({flatShading:true,color:this.data.tod==='night'?0x13284a:(this.data.tod==='sunset'?0x6a6a8a:0x3d8fc9),roughness:0.75,metalness:0}));
+      lake.rotation.x=-Math.PI/2; lake.position.y=-14; scene.add(lake); this._wavy(lake,0.3,0.9,0.2);
       add('mountain_A_grass_trees',-62,-14,-135,30); add('mountain_C_grass',58,-14,-128,30,0.8); add('mountain_A_grass_trees',8,-14,-160,36,2);
       add('hills_B_trees',-26,-14,-48,12); add('building_windmill_green',-25,1.2,-50,9);
       add('hills_C_trees',28,-14,-55,12,1.4); add('building_tavern_yellow',27,1.4,-56,6);
@@ -2200,7 +2204,7 @@ class StageObj{
       for(let i=0;i<8;i++){ const c=add(i%2?'cloud_small':'cloud_big',rand(-90,90),rand(16,34),rand(-110,-60),rand(3,5)); this.clouds.push(c); }
       this.snow=this._points(460,0xffffff,0.15,[-30,30],[-8,30],[-12,10]); this.snow.material.blending=THREE.NormalBlending; this.snow.material.opacity=0.9;
     } else {
-      const sea=new THREE.Mesh(new THREE.PlaneGeometry(220,140),std({color:0x0b121c,roughness:0.85,metalness:0.1}));
+      const sea=new THREE.Mesh(new THREE.PlaneGeometry(220,140,60,36),std({color:0x14202e,roughness:0.85,metalness:0.1,flatShading:true})); this._wavy(sea,0.9,1.6,0.16);
       sea.rotation.x=-Math.PI/2; sea.position.y=-14; scene.add(sea);
       add('mountain_C',-60,-14,-130,30); add('mountain_A',55,-14,-125,28,0.8); add('mountain_C',4,-14,-155,38,2);
       add('hills_A_trees',-20,-14,-40,10); add('building_windmill_blue',-20,0.3,-40,7);
@@ -2213,6 +2217,7 @@ class StageObj{
       this.lightningTimer=rand(120,300);
     }
   }
+  _wavy(mesh,amp,speed,freq){ (this.wavies=this.wavies||[]).push({mesh,amp,speed,freq,base:Float32Array.from(mesh.geometry.attributes.position.array)}); }
   _points(n,color,size,xr,yr,zr){
     const geo=new THREE.BufferGeometry(), pos=new Float32Array(n*3);
     for(let i=0;i<n;i++){ pos[i*3]=rand(xr[0],xr[1]); pos[i*3+1]=rand(yr[0],yr[1]); pos[i*3+2]=rand(zr[0],zr[1]); }
@@ -2259,6 +2264,11 @@ class StageObj{
       this.embers.geometry.attributes.position.needsUpdate=true;
       this.lavaLight.intensity=1.3+Math.sin(this.time*3)*0.2+Math.sin(this.time*7.3)*0.1;
     }
+    if(this.wavies) for(const w of this.wavies){ // rolling surfaces: lava, lake, storm sea (flat shaded, so normals need no update)
+      const a=w.mesh.geometry.attributes.position.array, b=w.base, t=this.time*w.speed, f=w.freq;
+      for(let i=0;i<a.length;i+=3){ const x=b[i], y=b[i+1]; a[i+2]=w.amp*(Math.sin(x*f+t)*0.6+Math.sin(y*f*1.3-t*0.8)*0.5+Math.sin((x-y)*f*2.1+t*1.6)*0.2); }
+      w.mesh.geometry.attributes.position.needsUpdate=true; }
+    if(this.lava) this.lava.material.emissiveIntensity=0.5+0.12*Math.sin(this.time*1.3)+0.05*Math.sin(this.time*4.1);
     if(this.sea){
       const a=this.sea.geometry.attributes.position.array, b=this.seaBase, t=this.time;
       for(let i=0;i<a.length;i+=3){ const x=b[i], y=b[i+1]; a[i+2]=Math.sin(x*0.18+t*1.1)*0.35+Math.sin(y*0.23-t*0.8)*0.3+Math.sin((x+y)*0.4+t*1.7)*0.12; }
@@ -3533,7 +3543,7 @@ class Game{
       if(x<b.l||x>b.r||y>b.t||(this.stamina&&defender.percent>=STAMINA_HP)){ this.slowmo={t:50,f:defender}; this.flash=Math.max(this.flash,0.35); this.flashColor=0xffffff; AUDIO.playUltimate(); }
     }
     defender.grounded=false; defender.onPlatform=null; defender.coyote=0;
-    defender.hitstun=Math.round(clamp(kb*0.34,6,80))+(move.stun||0); defender.hitstunStart=(defender.hitstunStart||0)+1;
+    defender.hitstun=Math.round(clamp(kb*0.34,6,80))+(move.stun||0); defender._hsMax=defender.hitstun; defender.hitstunStart=(defender.hitstunStart||0)+1;
     defender.state='hitstun'; defender.tumble=kb>75;
     defender.squash=kb>60?0.78:0.9;
     const hs=Math.round(clamp(dmg*0.45+2,2,move.ultimate?22:10));
@@ -4973,7 +4983,7 @@ function animateFighter(f,dt){
     case 'spotdodge': name=set.spotdodge; opt={at:f.stateTimer/23,fade:0.05}; break;
     case 'airdodge': name=set.airdodge; opt={at:f.stateTimer/27,fade:0.05}; break;
     case 'hitstun':
-      name=f.tumble?set.tumble:set.hit; opt={at:f.tumble?0.3:0.35,fade:0.04};
+      name=f.tumble?set.tumble:set.hit; opt={at:f.tumble?0.3:(f._hsMax?0.1+0.55*clamp(1-f.hitstun/f._hsMax,0,1):0.35),fade:0.04}; // the flinch plays out over the hitstun
       if(f.tumble) f.pivot.rotation.z=-f.facing*t*12;
       break;
     case 'stunned': name=set.stunned; opt={speed:0.35}; f.pivot.rotation.z=Math.sin(t*5)*0.12; break;
