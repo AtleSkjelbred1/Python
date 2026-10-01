@@ -2253,7 +2253,7 @@ class StageObj{
     this.scene.add(this.boltMesh); this.boltLife=7;
   }
   _riftArc(){ // a crackle of rift energy jumping across the void behind the stage
-    const pts=[], z=rand(-75,-50), y0=Math.random()<0.6?rand(12,26):rand(-18,-8), x0=rand(-60,20), len=rand(16,36); let y=y0; // above or below the fighters, never at their height
+    const pts=[], z=rand(-75,-50), y0=rand(15,28), x0=rand(-60,20), len=rand(16,36); let y=y0; // high above the fighters, so it never reads as an attack
     for(let x=x0;x<x0+len;x+=rand(0.8,2)){ y+=rand(-1.4,1.4); pts.push(new THREE.Vector3(x,y,z)); }
     const g=new THREE.BufferGeometry().setFromPoints(pts), col=Math.random()<0.5?0xc89aff:0x6fe8ff;
     const mk=c=>new THREE.Line(g,new THREE.LineBasicMaterial({color:c,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));
