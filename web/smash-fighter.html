@@ -1845,7 +1845,7 @@ class Fighter{
 // A ribbon between the hand and the weapon tip over the last few rendered frames, fading with age.
 class SwingTrail{
   constructor(scene){
-    this.N=14; this.pts=[]; this.scene=scene;
+    this.N=16; this.pts=[]; this.scene=scene;
     this.geo=new THREE.BufferGeometry();
     this.pos=new Float32Array(this.N*2*3); this.col=new Float32Array(this.N*2*3);
     this.geo.setAttribute('position',new THREE.BufferAttribute(this.pos,3)); this.geo.setAttribute('color',new THREE.BufferAttribute(this.col,3));
@@ -1861,7 +1861,9 @@ class SwingTrail{
     for(let i=0;i<this.N;i++){
       const p=this.pts[Math.min(i,this.pts.length-1)], k=i<this.pts.length?Math.pow(1-i/this.N,1.6):0;
       this.pos.set([p[0].x,p[0].y,p[0].z],i*6); this.pos.set([p[1].x,p[1].y,p[1].z],i*6+3);
-      this.col.set([this.color.r*k*0.25,this.color.g*k*0.25,this.color.b*k*0.25],i*6); this.col.set([this.color.r*k,this.color.g*k,this.color.b*k],i*6+3);
+      const w=Math.max(0,1-i/4)*0.6; // newest segments burn white at the tip
+      this.col.set([this.color.r*k*0.2,this.color.g*k*0.2,this.color.b*k*0.2],i*6);
+      this.col.set([Math.min(1,(this.color.r+w)*k*1.15),Math.min(1,(this.color.g+w)*k*1.15),Math.min(1,(this.color.b+w)*k*1.15)],i*6+3);
     }
     this.geo.attributes.position.needsUpdate=true; this.geo.attributes.color.needsUpdate=true;
   }
@@ -4952,11 +4954,12 @@ function attackTime(f,clip){
   const m=f.action.move, hit=MODELS.hitT[clip]!=null?MODELS.hitT[clip]:0.4;
   const su=Math.max(1,m.startup), ac=Math.max(1,m.active), re=Math.max(1,m.recovery), fr=f.actionFrame;
   if(fr<=su){
-    if(m.chargeable && f.chargeFrames>0) return hit*0.8+Math.sin(f.chargeFrames*1.3)*0.01;
-    return hit*easeInOutQuad(fr/su);
+    if(m.chargeable && f.chargeFrames>0) return hit*0.72+Math.sin(f.chargeFrames*1.3)*0.012;
+    const k=fr/su; // ease into the wind-up pose over 70% of startup, then whip through to the strike
+    return k<0.7?hit*0.72*easeOutCubic(k/0.7):hit*(0.72+0.28*Math.pow((k-0.7)/0.3,2));
   }
-  if(fr<=su+ac) return hit+(1-hit)*0.2*((fr-su)/ac);
-  return hit+(1-hit)*(0.2+0.75*easeOutCubic((fr-su-ac)/re));
+  if(fr<=su+ac) return hit+(1-hit)*0.22*easeOutCubic((fr-su)/ac); // follow-through
+  return hit+(1-hit)*(0.22+0.73*easeOutCubic((fr-su-ac)/re));
 }
 function animateFighter(f,dt){
   if(!f.anim) return;
@@ -4968,6 +4971,10 @@ function animateFighter(f,dt){
     name=(m.counter && f._countered && f.actionPhase==='recovery')?set.counterStrike:(set[key]||set.jab1);
     opt={at:attackTime(f,name),fade:0.05};
     if(key==='aerialB') f.pivot.rotation.y=Math.PI;
+    // weight shift: lean back on the wind-up, step into the strike, settle in recovery
+    if(!m.projectile&&!m.counter&&!m.noHitbox&&key!=='grab'){ const su=Math.max(1,m.startup), fr=f.actionFrame, big=m.chargeable||m.special||m.ultimate||m.dmg>=10?1:0.55, s=f.cd.size;
+      const back=fr<=su?-easeOutCubic(Math.min(1,fr/su/0.7))*0.09*big:0, fwd=fr>su?Math.max(0,1-(fr-su)/(m.active+m.recovery*0.6))*big:0;
+      f._atkLean=back+fwd*0.12; f._atkStep=fwd*0.22*s; }
   } else switch(f.state){
     case 'walk': name=set.walk; opt={speed:clamp(Math.abs(f.vel.x)/f.cd.walkSpeed,0.5,1.6)}; break;
     case 'run': name=set.run; opt={speed:clamp(Math.abs(f.vel.x)/f.cd.runSpeed*1.15,0.6,1.6)}; break;
@@ -5004,6 +5011,8 @@ function animateFighter(f,dt){
   // lean into the run and tilt with air drift (pivot x-rotation tips the body toward where it faces)
   const lean=f.state==='run'?0.14:(!f.grounded&&f.state!=='hitstun'&&f.state!=='attack'?clamp(f.vel.x*f.facing*0.025,-0.12,0.14):0);
   f._lean=lerp(f._lean||0,lean,0.2); f.pivot.rotation.x+=f._lean;
+  const atk=f.state==='attack'; f._atkL=lerp(f._atkL||0,atk?(f._atkLean||0):0,0.45); f._atkS=lerp(f._atkS||0,atk?(f._atkStep||0):0,0.45);
+  f.pivot.rotation.x+=f._atkL; f.pivot.position.z=f._atkS; if(!atk){ f._atkLean=0; f._atkStep=0; }
   f.anim.show(name,opt);
   f.anim.update(f.hitstop>0?0:dt);
 }
