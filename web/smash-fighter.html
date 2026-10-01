@@ -1661,9 +1661,9 @@ class Fighter{
     this.ledge=null; this.ledgeCooldown=20; this.state='idle'; this.grounded=true;
   }
   _onLand(){
-    this.squash=this.state==='hitstun'?0.8:(this.fastFalling?0.64:0.75);
+    this.squash=this.state==='hitstun'?0.8:(this.fastFalling?0.64:0.75); const ff=this.fastFalling;
     this.airDodged=false; this.jumpsLeft=1; this.upSpecialUsed=false; this.wallJumpUsed=false; this.fastFalling=false; this.coyote=0;
-    this.events.push({type:'land',heavy:this.cd.weight>=140});
+    this.events.push({type:'land',heavy:this.cd.weight>=140,ff,vy:this.vel.y});
     if(this.hitstun>0){
       if(this.tumble && this._techBuf>0){ // tech: recover on the spot or roll toward the held direction
         const dir=this._lastL?-1:this._lastR?1:0;
@@ -3574,6 +3574,18 @@ class Game{
     else if(el==='wind'){ const a=P.tick*0.5; P.spawn(new THREE.Vector3(f.pos.x+Math.cos(a)*1.1*s,f.pos.y+0.3+(P.tick%20)*0.08,0.3+Math.sin(a)*0.5),1,{additive:true,color:[c[0],c[1]],size:0.06,life:14,grav:0,speed:0}); }
     else P.spawn(feet,2,{color:[c[0],c[1]],speed:0.08,size:0.08,life:24,grav:-0.004,upBias:3});
   }
+  _moveFx(f){ // motion effects: launch smoke, running dust, dodge streaks, double-jump ring
+    const P=this.particles, s=f.cd.size, sp=Math.hypot(f.vel.x,f.vel.y), body=new THREE.Vector3(f.pos.x,f.pos.y+0.9*s,0.25);
+    if(f.state==='hitstun' && sp>9 && f.hitstop<=0){ // launched: a smoke trail, with sparkles when it's a killing speed
+      P.spawn(body,1,{color:[0xe8e4dc,0xcfc8bc,0xffffff],speed:0.01,size:0.18+Math.min(0.2,sp*0.008),life:26,grav:-0.001,drag:0.94});
+      if(sp>15&&P.tick%2===0) P.spawn(body,1,{additive:true,color:[0xffffff,(f.lastHitBy||f).cd.accent],speed:0.05,size:0.06,life:14,grav:0}); }
+    if(f.state==='run' && f.grounded && P.tick%7===0) P.spawn(new THREE.Vector3(f.pos.x-f.facing*0.25,f.pos.y+0.06,0.3),2,{color:[0xbdb4a4,0x9a8f80],speed:0.04,upBias:0.4,grav:0.001,life:16,size:0.08,dirX:-f.facing});
+    if((f.state==='roll'||f.state==='airdodge'||(f.state==='attack'&&f.action&&f.action.move.dash&&f.actionPhase==='active')) && P.tick%2===0)
+      P.spawn(body,2,{additive:true,color:[f.cd.accent,0xffffff],speed:0.01,size:0.12*s,life:10,grav:0,spread:0.3});
+    const dj=f.state==='doublejump'&&f._fxPrevState!=='doublejump'; f._fxPrevState=f.state;
+    if(dj){ const r=new THREE.Mesh(new THREE.RingGeometry(0.4,0.52,32),new THREE.MeshBasicMaterial({color:f.cd.accent,transparent:true,opacity:0.7,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending}));
+      r.rotation.x=-Math.PI/2; r.position.set(f.pos.x,f.pos.y,0.2); this.scene.add(r); P.custom(r,14,(o,k)=>{ o.scale.setScalar(1+k*1.6); o.material.opacity=0.7*(1-k); },()=>r.material.dispose()); }
+  }
   _projTrail(p){
     const P=this.particles, el=p.owner&&p.owner.cd&&ELEMENT[p.owner.cd.id], vis=p.move.pvis||'fire', at=new THREE.Vector3(p.pos.x,p.pos.y,0.3);
     if(vis==='item'&&!p.move.itemShoot) return;
@@ -3802,6 +3814,10 @@ class Game{
           P.spawn(new THREE.Vector3(f.pos.x,f.pos.y+0.05,0.2),e.heavy?16:7,{color:0x9a8f80,speed:e.heavy?0.14:0.08,upBias:0.35,grav:0.003,life:22,size:0.08});
           if(e.heavy){ P.spawn(new THREE.Vector3(f.pos.x,f.pos.y+0.1,0.2),8,{color:[0x6b6459,0x8a7e6e],speed:0.16,grav:0.02,life:24,size:0.1}); this.cameraRig.kick(0.18); AUDIO.playStone(); }
           else AUDIO.playLand();
+          if(e.ff||e.heavy){ // shockwave ring flat on the ground
+            const ring=new THREE.Mesh(new THREE.RingGeometry(0.55,0.75,40),new THREE.MeshBasicMaterial({color:0xfff1d0,transparent:true,opacity:0.6,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending}));
+            ring.rotation.x=-Math.PI/2; ring.position.set(f.pos.x,f.pos.y+0.04,0.2); this.scene.add(ring);
+            P.custom(ring,16,(o,k)=>{ o.scale.setScalar(1+easeOutCubic(k)*(e.heavy?3.2:2.2)); o.material.opacity=0.6*(1-k); },()=>ring.material.dispose()); }
           break;
         case 'jump': AUDIO.playJump(); if(Math.random()<0.35) fighterVoice(f,'jump'); P.spawn(new THREE.Vector3(f.pos.x,f.pos.y+0.05,0.2),5,{color:0x9a8f80,speed:0.07,upBias:0.3,life:16}); break;
         case 'jump2': AUDIO.playJump(); P.ring(new THREE.Vector3(f.pos.x,f.pos.y+0.2,0),f.cd.accent,0.9,12,0.05); break;
@@ -4724,6 +4740,7 @@ class Game{
         }
         f._fxPh=ph;
         if(this.state==='results' && this.winner===f && !f.cd.sandbag) this._aura(f,0.55);
+        this._moveFx(f);
       }
       if(f.rimU && !f.isClone){
         const inv=f.respawnInvuln>0, hit=f._hitFlash>0;
@@ -4921,6 +4938,11 @@ function animateFighter(f,dt){
     case 'defeat': name=set.defeat; break;
     default: name=set.idle;
   }
+  // double jump: light fighters do a front flip, heavier ones a tuck; it finishes even if the state changes to jump/fall
+  if(f.state==='doublejump'&&f._djState!=='doublejump') f._flipK=0; f._djState=f.state;
+  if(f._flipK!=null){ f._flipK+=dt*3;
+    if(f._flipK>=1||!['doublejump','jump','fall'].includes(f.state)) f._flipK=null;
+    else { const k=f._flipK, e=1-Math.pow(1-k,3); f.pivot.rotation.x=f.cd.weight<110?Math.PI*2*e:0.6*Math.sin(Math.PI*k); } }
   // lean into the run and tilt with air drift (pivot x-rotation tips the body toward where it faces)
   const lean=f.state==='run'?0.14:(!f.grounded&&f.state!=='hitstun'&&f.state!=='attack'?clamp(f.vel.x*f.facing*0.025,-0.12,0.14):0);
   f._lean=lerp(f._lean||0,lean,0.2); f.pivot.rotation.x+=f._lean;
