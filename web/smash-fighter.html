@@ -3721,6 +3721,21 @@ class Game{
       }
     }
   }
+  // two attacks of similar strength meeting head-on cancel each other: both rebound, nobody is hit
+  _clank(a,b){
+    const ha=a.currentHitbox(), hb=b.currentHitbox(); if(!ha||!hb||a._hitTargets.has(b)||b._hitTargets.has(a)) return;
+    if(ha.move.ultimate||hb.move.ultimate||ha.move.aoe||hb.move.aoe) return;
+    if(Math.hypot(ha.x-hb.x,ha.y-hb.y)>ha.radius+hb.radius) return;
+    const da=ha.move.dmg||0, db=hb.move.dmg||0; if(Math.abs(da-db)>=9) return; // a much stronger hit trades through
+    for(const [f,o] of [[a,b],[b,a]]){ f._hitTargets.add(o); f.hitstop=Math.max(f.hitstop,7);
+      const m=f.action.move; f.actionFrame=Math.max(f.actionFrame,m.startup+m.active); // skip the rest of the active frames into recovery
+      f.vel.x=-Math.sign(o.pos.x-f.pos.x||f.facing)*3.5; }
+    const at=new THREE.Vector3((ha.x+hb.x)/2,(ha.y+hb.y)/2,0.4);
+    this.particles.spawn(at,22,{additive:true,color:[0xffffff,0xffe08a,0xbfe0ff],speed:0.3,life:14,grav:0.004,size:0.06});
+    this.particles.spark(at,0xffffff,1.6); this.particles.ring(at,0xffffff,1.6,10,0.05);
+    AUDIO.tone(1800,0.12,'square',0.12,1400); AUDIO.tone(2600,0.18,'triangle',0.1,2400,{delay:0.02,wet:0.5}); this.cameraRig.kick(0.25);
+    this._floatText(a.pos.x<b.pos.x?a:b,'CLANK!');
+  }
   _resolveGrab(attacker,defender){
     if(attacker.action && attacker.action.key==='grab' && attacker.actionPhase==='active' && !attacker.grabbing && !defender.grabbedBy
        && defender.invuln<=0 && !defender.pose && defender.state!=='respawn' && !defender.eliminated){
@@ -4579,6 +4594,7 @@ class Game{
     const ledges=this.fighters.map(f=>f.ledge).filter(x=>x!==null);
     for(const f of live) f.update(dt,cmds.get(f),{platforms:this.stage.platforms,opp:this._targetFor(f),items:this.items,occupiedLedges:ledges});
     for(const f of live) this._updateGrab(f,cmds.get(f));
+    for(let i=0;i<live.length;i++) for(let j=i+1;j<live.length;j++) if(this._foes(live[i],live[j])) this._clank(live[i],live[j]);
     for(const a of live) for(const b of live) if(this._foes(a,b)) this._resolveHitbox(a,b);
     for(const a of live) for(const b of live) if(this._foes(a,b)) this._resolveGrab(a,b);
     for(const f of live) this._spawnFromActions(f);
