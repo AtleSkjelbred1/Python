@@ -304,6 +304,24 @@
   @keyframes vsL{ from{ opacity:0; transform:translateX(-60vw) skewX(-12deg); } to{ opacity:1; transform:none; } }
   @keyframes vsR{ from{ opacity:0; transform:translateX(60vw) skewX(-12deg); } to{ opacity:1; transform:none; } }
   @keyframes vsOut{ to{ opacity:0; transform:scale(1.08); } }
+
+  /* main menu: one big quick-match button, tabbed mode groups, collapsible settings with a value summary */
+  .quick-btn{ min-width:420px; font-size:38px; padding:12px 60px 8px; display:flex; flex-direction:column; align-items:center; line-height:.95;
+    background:linear-gradient(100deg,#ffc061,#ff6a24); color:#170a02; filter:drop-shadow(0 0 16px rgba(255,120,40,.45)); }
+  .quick-btn small{ font-family:var(--ui); font-size:13px; font-weight:700; letter-spacing:1.5px; opacity:.8; margin-top:2px; }
+  .quick-btn:hover,.quick-btn.focus{ background:linear-gradient(100deg,#ffd27a,#ff7a2a); filter:drop-shadow(0 0 24px rgba(255,140,50,.7)); }
+  .menu-tabs{ display:flex; gap:8px; margin:14px 0 4px; }
+  .menu-tabs .chip{ font-family:var(--display); font-weight:600; font-size:19px; letter-spacing:2.5px; padding:6px 20px 3px; }
+  .menu-group{ display:none; flex-direction:column; align-items:center; animation:rcUp .3s ease-out both; }
+  .menu-group.on{ display:flex; }
+  .menu-group .menu-btn{ min-width:250px; }
+  .settings-sum{ pointer-events:auto; cursor:pointer; display:flex; align-items:center; gap:14px; margin-top:14px; padding:8px 18px; border-radius:4px;
+    background:rgba(16,18,27,.7); border:1px solid rgba(255,255,255,.07); font-size:13px; }
+  .settings-sum:hover,.settings-sum.focus{ border-color:var(--edge); }
+  .settings-sum #settings-summary{ color:var(--gold); font-weight:700; letter-spacing:.5px; }
+  .settings-sum .caret{ opacity:.6; transition:transform .2s; } .settings-sum.open .caret{ transform:rotate(180deg); }
+  @media (max-height:820px) and (min-height:521px){ .quick-btn{ font-size:32px; padding:9px 50px 6px; } .menu-tabs{ margin:8px 0 2px; } }
+  @media (max-height:520px){ .quick-btn{ min-width:300px; font-size:26px; } .menu-tabs .chip{ font-size:15px; padding:4px 12px 2px; } }
 </style>
 </head>
 <body>
@@ -316,13 +334,23 @@
   <h1 class="title">RIFT CLASH</h1>
   <div class="subtitle">AN ORIGINAL PLATFORM FIGHTER</div>
   <div id="loading-note" style="font-size:12px;letter-spacing:3px;color:#ffb347;margin-bottom:12px;">LOADING FIGHTERS…</div>
-  <div class="row"><div id="btn-1v1" class="menu-btn" style="min-width:230px;">VERSUS (2 PLAYERS)</div><div id="btn-ffa" class="menu-btn" style="min-width:230px;">FREE-FOR-ALL (4)</div></div>
-  <div class="row"><div id="btn-cpu" class="menu-btn" style="min-width:230px;">VS BOT</div><div id="btn-arcade" class="menu-btn" style="min-width:230px;">ARCADE</div></div>
-  <div class="row"><div id="btn-homerun" class="menu-btn" style="min-width:230px;">HOME-RUN CONTEST</div><div id="btn-targets" class="menu-btn" style="min-width:230px;">BREAK THE TARGETS</div></div>
-  <div class="row"><div id="btn-endless" class="menu-btn" style="min-width:230px;">ENDLESS BRAWL</div><div id="btn-tourney" class="menu-btn" style="min-width:230px;">TOURNAMENT (4)</div></div>
-  <div class="row"><div id="btn-training" class="menu-btn" style="min-width:150px;">TRAINING</div><div id="btn-records" class="menu-btn" style="min-width:150px;">RECORDS</div><div id="btn-controls" class="menu-btn" style="min-width:150px;">CONTROLS</div></div>
-  <div class="row"><div id="btn-online" class="menu-btn" style="min-width:230px;">ONLINE (BETA)</div></div>
-  <div class="panel settings-grid" style="margin-top:14px;">
+  <div class="row"><div id="btn-quick" class="menu-btn quick-btn">QUICK MATCH<small id="quick-sub">vs CPU</small></div></div>
+  <div class="menu-tabs" id="menu-tabs"><div class="chip mtab" data-tab="play">PLAY</div><div class="chip mtab" data-tab="mini">MINIGAMES</div><div class="chip mtab" data-tab="more">TRAINING &amp; MORE</div></div>
+  <div class="menu-group" data-group="play">
+    <div class="row"><div id="btn-cpu" class="menu-btn">VS BOT</div><div id="btn-1v1" class="menu-btn">VERSUS (2 PLAYERS)</div></div>
+    <div class="row"><div id="btn-ffa" class="menu-btn">FREE-FOR-ALL (4)</div><div id="btn-tourney" class="menu-btn">TOURNAMENT (4)</div></div>
+    <div class="row"><div id="btn-arcade" class="menu-btn">ARCADE</div><div id="btn-online" class="menu-btn">ONLINE (BETA)</div></div>
+  </div>
+  <div class="menu-group" data-group="mini">
+    <div class="row"><div id="btn-homerun" class="menu-btn">HOME-RUN CONTEST</div><div id="btn-targets" class="menu-btn">BREAK THE TARGETS</div></div>
+    <div class="row"><div id="btn-endless" class="menu-btn">ENDLESS BRAWL</div></div>
+  </div>
+  <div class="menu-group" data-group="more">
+    <div class="row"><div id="btn-training" class="menu-btn">TRAINING</div><div id="btn-records" class="menu-btn">RECORDS</div></div>
+    <div class="row"><div id="btn-controls" class="menu-btn">CONTROLS</div></div>
+  </div>
+  <div id="settings-toggle" class="settings-sum"><span class="sl">SETTINGS</span><span id="settings-summary"></span><span class="caret">▾</span></div>
+  <div id="settings-panel" class="panel settings-grid hidden" style="margin-top:6px;">
     <span class="sl">STOCKS</span><div id="stock-chips" class="cs-mode-select"></div>
     <span class="sl">TIME LIMIT</span><div id="time-chips" class="cs-mode-select"></div>
     <span class="sl">RULES</span><div id="rules-chips" class="cs-mode-select"></div>
@@ -2883,7 +2911,7 @@ class Game{
   }
   _buildMenuUI(){
     const $=id=>document.getElementById(id);
-    const S=this.settings, set=k=>v=>{ S[k]=v; this._saveSettings(); AUDIO.playClick(); };
+    const S=this.settings, set=k=>v=>{ S[k]=v; this._saveSettings(); AUDIO.playClick(); this._settingsSummary(); };
     this._chipRow($('stock-chips'),[1,2,3,4,5].map(v=>({label:v+'',value:v})),S.stocks,set('stocks'));
     this._chipRow($('time-chips'),[{label:'OFF',value:0},{label:'3:00',value:180},{label:'5:00',value:300},{label:'8:00',value:480}],S.timeLimit,set('timeLimit'));
     if(typeof S.botDifficulty!=='number') S.botDifficulty={easy:2,medium:5,hard:8}[S.botDifficulty]||5;
@@ -2900,6 +2928,14 @@ class Game{
     ANNOUNCER.on=S.voice;
     AUDIO.musicOn=S.music; this._applyGraphics();
     $('btn-1v1').onclick=()=>{ this.settings.mode='vs'; this._toCharSelect(); };
+    $('btn-quick').onclick=()=>this._quickMatch();
+    const showTab=t=>{ this._menuTab=t; try{ localStorage.setItem('riftclash.menutab',t); }catch(e){}
+      document.querySelectorAll('.menu-group').forEach(g=>g.classList.toggle('on',g.dataset.group===t));
+      document.querySelectorAll('.mtab').forEach(c=>c.classList.toggle('active',c.dataset.tab===t)); };
+    document.querySelectorAll('.mtab').forEach(c=>c.onclick=()=>{ AUDIO.playClick(); showTab(c.dataset.tab); });
+    let tab='play'; try{ tab=localStorage.getItem('riftclash.menutab')||'play'; }catch(e){} showTab(tab);
+    $('settings-toggle').onclick=()=>{ AUDIO.playClick(); const p=$('settings-panel'), open=p.classList.toggle('hidden')===false; $('settings-toggle').classList.toggle('open',open); };
+    this._settingsSummary();
     $('btn-cpu').onclick=()=>{ this.settings.mode='cpu'; this._toCharSelect(); };
     $('btn-training').onclick=()=>{ this.settings.mode='training'; this._toCharSelect(); };
     $('btn-records').onclick=()=>this._toRecords();
@@ -3033,7 +3069,7 @@ class Game{
   // spatial focus navigation for controller / arrow keys on button-and-chip screens
   _focusables(){
     const root=document.getElementById(FOCUS_SCREENS[this.state]); if(!root) return [];
-    return [...root.querySelectorAll('.menu-btn, .chip, .keycap, .swatch')].filter(e=>e.offsetParent!==null);
+    return [...root.querySelectorAll('.menu-btn, .chip, .keycap, .swatch, .settings-sum')].filter(e=>e.offsetParent!==null);
   }
   _navFocus(dir){
     const els=this._focusables(); if(!els.length) return;
@@ -3061,6 +3097,18 @@ class Game{
     ['mainmenu','charselect','stageselect','pause','results','records','controls','online','tourney'].forEach(s=>document.getElementById('screen-'+s).classList.toggle('hidden',s!==id));
     document.getElementById('touch').classList.toggle('active',id==='__hud__');
     document.getElementById('hud').classList.toggle('hidden',!(id==='__hud__'||id==='pause'));
+  }
+  // the current rules at a glance, shown on the collapsed settings bar and under Quick Match
+  _settingsSummary(){ const S=this.settings, $=id=>document.getElementById(id); if(!$('settings-summary')) return;
+    const t=S.timeLimit?Math.round(S.timeLimit/60)+' MIN':'NO TIME LIMIT', rules=S.rules==='stamina'?'STAMINA':S.stocks+' STOCK'+(S.stocks>1?'S':'');
+    $('settings-summary').textContent=[rules,t,'CPU '+S.botDifficulty+'/9','ITEMS '+(S.items?'ON':'OFF'),'HAZARDS '+(S.hazards?'ON':'OFF')].join('  ·  ');
+    $('quick-sub').textContent='vs CPU level '+S.botDifficulty+'  ·  '+rules.toLowerCase()+'  ·  random stage'; }
+  // one click into a fight: your last fighter (or a random one) against a random CPU on a random stage
+  _quickMatch(){
+    AUDIO.playClick(); const N=CHAR_DATA.length; this.settings.mode='cpu'; this.p1cpu=false;
+    if(!(this.selection.p1<N)) this.selection.p1=Math.random()*N|0;
+    do{ this.selection.p2=Math.random()*N|0; }while(this.selection.p2===this.selection.p1);
+    this.selection.stageIdx=STAGES.length; this.p1char=null; this._startMatch();
   }
   _toMainMenu(){ if(this.online && NET.open){ NET.send({t:'menu'}); } if(this._savedTimeLimit!=null){ this.settings.timeLimit=this._savedTimeLimit; this._savedTimeLimit=null; } this.online=false; this.netGuest=false; this.state='menu'; this._showScreen('mainmenu'); this._teardownScene(); AUDIO.stopMusic(); ANNOUNCER.stop(); if(AUDIO.ctx) AUDIO.startMusic('menu'); }
   _toCharSelect(){
