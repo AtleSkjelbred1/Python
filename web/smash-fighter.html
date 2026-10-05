@@ -871,7 +871,7 @@ const INPUT = new InputManager();
 // ~155-175%, tilts ~220%+, and jabs effectively never.
 const ARCH_COEF = {
   power:   { dmg:1.16, kb:1.04, spd:0.82, range:1.17 },
-  speed:   { dmg:0.82, kb:0.94, spd:1.34, range:0.86 },
+  speed:   { dmg:0.82, kb:1.00, spd:1.34, range:0.86 },
   giant:   { dmg:1.42, kb:1.12, spd:0.72, range:1.42 },
   zoner:   { dmg:1.02, kb:1.02, spd:1.06, range:1.04 },
   grappler:{ dmg:1.13, kb:1.05, spd:0.96, range:1.12 },
@@ -1314,6 +1314,7 @@ const KB_DECAY = 0.35;      // launch speed lost per frame while in hitstun (uni
 const AIR_DASH_SPEED = 21;  // air dodge travel speed (units/s) ...
 const AIR_DASH_FRAMES = 9;  // ... held this many frames before it eases off (about 2.5 units in all)
 const DOUBLE_JUMP_MULT = 1.16; // double jumps launch a bit higher than each fighter's base value
+const DI_MAX = 10*Math.PI/180; // most a held direction can rotate a launch
 const COYOTE_FRAMES = 5;     // grace frames to still ground-jump after walking off an edge
 const JUMP_HOLD_FRAMES = 14; // how long a held jump button keeps reducing gravity
 const JUMP_HOLD_GRAVITY = 0.4;
@@ -1545,6 +1546,7 @@ class Fighter{
     this.walkCycle+=dt;
     if(!this._buf) this._buf={};
     cmd=Object.assign({},cmd);
+    this._stick={x:cmd.axisX||(cmd.right?1:cmd.left?-1:0),y:-(cmd.axisY||(cmd.down?1:cmd.up?-1:0))}; // held direction, read by DI when hit
     const upP=cmd.up && !this._prevUp; this._prevUp=cmd.up;
     // tech: shield pressed while tumbling, shortly before landing (a defensive shield from before the hit does not count)
     if(cmd.shieldP && this.hitstun>0 && this.tumble) this._techBuf=TECH_WINDOW; else if(this._techBuf>0) this._techBuf--;
@@ -3702,6 +3704,10 @@ class Game{
     if(this._frameHits) this._frameHits.push({at:at.clone(),col:move.color||attacker.cd.accent,dmg,kb});
     if(this.online && NET.role==='host') (this._netHits=this._netHits||[]).push([+at.x.toFixed(2),+at.y.toFixed(2),move.color||attacker.cd.accent,dmg,0,Math.round(kb)]);
     let ax=Math.cos(deg(move.angle))*dir, ay=Math.sin(deg(move.angle));
+    // directional influence: holding a direction across the launch bends it by up to 10 degrees (survive by DI'ing away from the nearest edge)
+    const st=defender._stick; if(st && Math.hypot(st.x,st.y)>0.3 && !move.spike){
+      const m=Math.hypot(st.x,st.y), perp=(ax*st.y-ay*st.x)/m, r=clamp(perp,-1,1)*DI_MAX;
+      const c=Math.cos(r), s=Math.sin(r); [ax,ay]=[ax*c-ay*s,ax*s+ay*c]; }
     if(move.spike){ if(defender.grounded){ ax=0.3*dir; ay=0.8; } else { ax=0.15*dir; ay=-1; } }
     const sp=kb*KB_TO_VEL;
     defender.vel.set(ax*sp,ay*sp,0);
