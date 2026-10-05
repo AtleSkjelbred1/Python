@@ -322,6 +322,19 @@
   .settings-sum .caret{ opacity:.6; transition:transform .2s; } .settings-sum.open .caret{ transform:rotate(180deg); }
   @media (max-height:820px) and (min-height:521px){ .quick-btn{ font-size:32px; padding:9px 50px 6px; } .menu-tabs{ margin:8px 0 2px; } }
   @media (max-height:520px){ .quick-btn{ min-width:300px; font-size:26px; } .menu-tabs .chip{ font-size:15px; padding:4px 12px 2px; } }
+
+  /* first-time player guide */
+  .tut-chip{ margin-top:8px; font-size:12px; letter-spacing:1px; } .tut-chip b{ color:var(--gold); }
+  .tut-chip.fresh{ animation:tutPulse 1.6s ease-in-out infinite; border-color:var(--edge); }
+  @keyframes tutPulse{ 50%{ box-shadow:0 0 18px rgba(255,180,90,.55); } }
+  #tut-box{ position:absolute; top:16%; left:0; right:0; margin:0 auto; width:min(560px,92vw); text-align:center; padding:14px 22px 12px; pointer-events:auto;
+    background:linear-gradient(180deg,rgba(28,31,44,.9),rgba(14,16,24,.88)); border-top:1px solid var(--edge); border-radius:6px; box-shadow:0 18px 50px rgba(0,0,0,.5); }
+  #tut-box .tut-step{ font-family:var(--display); font-size:18px; letter-spacing:3px; color:var(--gold); }
+  #tut-box .tut-text{ font-size:17px; line-height:1.45; margin:4px 0 8px; } #tut-box kbd{ font-size:14px; }
+  #tut-box .tut-dots{ display:flex; gap:6px; justify-content:center; } #tut-box .tut-dots i{ width:22px; height:5px; border-radius:2px; background:#2e3546; }
+  #tut-box .tut-dots i.on{ background:linear-gradient(90deg,#ffc061,#ff6a24); }
+  #tut-box.pop{ animation:rcSlam .4s cubic-bezier(.2,1.6,.4,1) both; }
+  #tut-done{ display:flex; gap:10px; justify-content:center; margin-top:10px; } #tut-done.hidden{ display:none; } #tut-done .menu-btn{ min-width:180px; font-size:21px; }
 </style>
 </head>
 <body>
@@ -335,6 +348,7 @@
   <div class="subtitle">AN ORIGINAL PLATFORM FIGHTER</div>
   <div id="loading-note" style="font-size:12px;letter-spacing:3px;color:#ffb347;margin-bottom:12px;">LOADING FIGHTERS…</div>
   <div class="row"><div id="btn-quick" class="menu-btn quick-btn">QUICK MATCH<small id="quick-sub">vs CPU</small></div></div>
+  <div id="btn-tutorial" class="chip tut-chip">NEW HERE? <b>HOW TO PLAY</b> · 1 MIN</div>
   <div class="menu-tabs" id="menu-tabs"><div class="chip mtab" data-tab="play">PLAY</div><div class="chip mtab" data-tab="mini">MINIGAMES</div><div class="chip mtab" data-tab="more">TRAINING &amp; MORE</div></div>
   <div class="menu-group" data-group="play">
     <div class="row"><div id="btn-cpu" class="menu-btn">VS BOT</div><div id="btn-1v1" class="menu-btn">VERSUS (2 PLAYERS)</div></div>
@@ -434,6 +448,7 @@
     <div class="tp-row"><span class="tp-label">Hitboxes</span><div id="tp-hitbox" class="cs-mode-select"></div><div id="tp-reset" class="chip">Reset positions</div></div>
     <pre id="frame-data">Attack to see frame data.</pre>
   </div>
+  <div id="tut-box" class="hidden"><div class="tut-step" id="tut-step"></div><div class="tut-text" id="tut-text"></div><div class="tut-dots" id="tut-dots"></div><div id="tut-done" class="hidden"><div id="btn-tut-quick" class="menu-btn">QUICK MATCH</div><div id="btn-tut-menu" class="menu-btn">MAIN MENU</div></div></div>
   <div id="lessons-panel" class="hidden"><div class="tp-title">LESSONS <span id="lessons-count"></span></div><div id="lessons"></div></div>
 </div>
 
@@ -2929,6 +2944,10 @@ class Game{
     AUDIO.musicOn=S.music; this._applyGraphics();
     $('btn-1v1').onclick=()=>{ this.settings.mode='vs'; this._toCharSelect(); };
     $('btn-quick').onclick=()=>this._quickMatch();
+    $('btn-tutorial').onclick=()=>this._startTutorial();
+    $('btn-tut-quick').onclick=()=>this._quickMatch();
+    $('btn-tut-menu').onclick=()=>this._toMainMenu();
+    try{ if(!localStorage.getItem('riftclash.tutDone')) $('btn-tutorial').classList.add('fresh'); }catch(e){}
     const showTab=t=>{ this._menuTab=t; try{ localStorage.setItem('riftclash.menutab',t); }catch(e){}
       document.querySelectorAll('.menu-group').forEach(g=>g.classList.toggle('on',g.dataset.group===t));
       document.querySelectorAll('.mtab').forEach(c=>c.classList.toggle('active',c.dataset.tab===t)); };
@@ -3534,8 +3553,9 @@ class Game{
     const $=id=>document.getElementById(id);
     $('stage-label').textContent=this.stageData.name.toUpperCase();
     this._buildHUD();
-    $('training-panel').classList.toggle('hidden',!this.isTraining);
-    $('lessons-panel').classList.toggle('hidden',!this.isTraining); this._lessonsHtml=null;
+    if(!this._tutStarting) this.tutorial=null;
+    $('training-panel').classList.toggle('hidden',!this.isTraining||!!this.tutorial); $('tut-box').classList.toggle('hidden',!this.tutorial);
+    $('lessons-panel').classList.toggle('hidden',!this.isTraining||!!this.tutorial); this._lessonsHtml=null;
     $('hud').classList.remove('replaying'); $('unlock-note').textContent='';
     $('big-text').style.opacity=0;
     if(this._batPending){ this._batPending=false; this._spawnItem('bat',new THREE.Vector3(this.f1.pos.x+1.3,this.f1.pos.y+0.5,0),new THREE.Vector3()); }
@@ -4566,6 +4586,41 @@ class Game{
     [[this.f1,-4,1],[this.f2,4,-1]].forEach(([f,x,dir])=>{ f.interrupt(); f.pos.set(x,top,0); f.vel.set(0,0,0); f.hitstun=0; f.hitstop=0; f.tumble=false; f.facing=dir; f.grounded=true; f.state='idle'; f.shieldHP=100; f.shieldBroken=0; });
     this.projectiles.forEach(p=>p.dead=true);
   }
+  // ---------- How to Play: six guided steps in a training session ----------
+  _startTutorial(){
+    AUDIO.playClick(); this.settings.mode='training'; if(!(this.selection.p1<CHAR_DATA.length)) this.selection.p1=0;
+    this.selection.p2=(this.selection.p1+3)%CHAR_DATA.length; this.selection.stageIdx=STAGES.findIndex(s=>s.id==='rift'); this.p1char=null;
+    this.training.dummy='stand'; this.tutorial={step:0,t:0}; this._tutStarting=true; this._startMatch(); this._tutStarting=false;
+    document.getElementById('ctrl-guide').classList.add('hidden'); this._tutShow();
+  }
+  _tutSteps(){
+    const k=KEYMAP.p1, K=c=>`<kbd>${keyLabel(c)}</kbd>`, pad=' <span style="opacity:.6">(gamepad: stick)</span>';
+    return [
+      ['MOVE','Hold '+K(k.left)+' or '+K(k.right)+' to walk. Keep holding to <b>run</b>.'+pad, f=>f.state==='run'],
+      ['JUMP','Press '+K(k.jump)+' to jump, then press it <b>again in the air</b> for a double jump.', f=>f.state==='doublejump'],
+      ['ATTACK','Walk up to the dummy and press '+K(k.attack)+'. Tap it again for a combo.', ()=>this.f2.percent>0],
+      ['SPECIAL','Press '+K(k.special)+' for your special move. Try it with a direction too.', f=>f.action&&/^special/.test(f.action.key)],
+      ['SHIELD','Hold '+K(k.shield)+' to raise your shield and block attacks.', f=>f.state==='shield'&&(this.tutorial.t+=1)>40],
+      ['GET BACK','You\'re off the stage! Double jump toward it, then press <b>up + '+K(k.special)+'</b> to fly back. You can also grab the ledge.', f=>f.grounded&&f.onPlatform===this.stage.main||f.state==='ledge'],
+    ];
+  }
+  _tutShow(){
+    const T=this.tutorial, S=this._tutSteps(), $=id=>document.getElementById(id), box=$('tut-box'), done=T.step>=S.length;
+    $('tut-step').textContent=done?'YOU\'RE READY!':'STEP '+(T.step+1)+' / '+S.length+'  ·  '+S[T.step][0];
+    $('tut-text').innerHTML=done?'That\'s the basics. Damage makes fighters fly farther — knock your opponent off the stage to win a stock.':S[T.step][1];
+    $('tut-dots').innerHTML=S.map((_,i)=>`<i class="${i<T.step?'on':''}"></i>`).join('');
+    $('tut-done').classList.toggle('hidden',!done);
+    box.classList.remove('pop'); void box.offsetWidth; box.classList.add('pop');
+    if(!done && S[T.step][0]==='GET BACK'){ const f=this.f1, m=this.stage.main; f.interrupt(); f.pos.set(m.x+m.w/2+4.5,m.y+m.h/2-1.5,0); f.vel.set(0,2,0);
+      f.grounded=false; f.state='fall'; f.facing=-1; f.jumpsLeft=1; f.upSpecialUsed=false; f.airDodged=false; }
+  }
+  _updateTutorial(){
+    const T=this.tutorial, S=this._tutSteps(), f=this.f1; if(T.step>=S.length) return;
+    if(f.state==='respawn'&&S[T.step][0]==='GET BACK'){ this._tutShow(); return; } // fell: put them back off the edge to try again
+    if(S[T.step][2](f)){ T.step++; T.t=0; AUDIO.playPickup(); this.particles.spark(new THREE.Vector3(f.pos.x,f.pos.y+1.2,0.4),0xffd166,1.4);
+      if(T.step>=S.length){ try{ localStorage.setItem('riftclash.tutDone','1'); }catch(e){} document.getElementById('btn-tutorial').classList.remove('fresh'); AUDIO.playFanfare(); }
+      this._tutShow(); }
+  }
   // training checklist: each lesson ticks off when P1 is seen doing it
   _lessonList(){
     const k=KEYMAP.p1, K=c=>`<kbd>${keyLabel(c)}</kbd>`, jump=TAP_JUMP.on?K(k.jump)+'/'+K(k.up):K(k.jump);
@@ -4915,7 +4970,7 @@ class Game{
       const t=Math.max(0,Math.ceil(this.timeLeft)); $('hud-timer').textContent=Math.floor(t/60)+':'+String(t%60).padStart(2,'0');
       $('hud-timer').style.display='';
     } else $('hud-timer').style.display='none';
-    if(this.isTraining && this.f1){ this._updateTrainingHUD(); this._updateLessons(); }
+    if(this.isTraining && this.f1){ if(this.tutorial) this._updateTutorial(); else { this._updateTrainingHUD(); this._updateLessons(); } }
   }
 
   // fighters knocked outside the camera get a bubble pinned to the screen edge, pointing at them
