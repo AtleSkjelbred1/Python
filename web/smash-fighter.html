@@ -309,7 +309,7 @@
 <body>
 
 <canvas id="game-canvas"></canvas>
-<div id="boot-status" style="position:fixed;left:8px;bottom:6px;z-index:98;font:11px monospace;color:#9aa4b8;pointer-events:none;">Starting… (JavaScript has not run yet)</div>
+<div id="boot-status" style="display:none;position:fixed;left:8px;bottom:6px;z-index:98;font:11px monospace;color:#9aa4b8;pointer-events:none;">Starting… (JavaScript has not run yet)</div>
 
 <!-- ============ MAIN MENU ============ -->
 <div id="screen-mainmenu" class="screen">
@@ -531,15 +531,36 @@
 window.__showError=function(msg){
   var el=document.getElementById('boot-error');
   if(!el){ el=document.createElement('div'); el.id='boot-error';
-    el.style.cssText='position:fixed;left:16px;right:16px;bottom:16px;z-index:99;padding:12px 16px;border-radius:8px;background:#3a1216;color:#ffd7d7;font:13px/1.4 monospace;white-space:pre-wrap;';
+    el.style.cssText='position:fixed;right:16px;bottom:16px;max-width:420px;z-index:99;padding:10px 14px;border-radius:6px;background:#3a1216;color:#ffd7d7;font:12px/1.4 Barlow,Arial,sans-serif;cursor:pointer;';
+    el.title='Click to hide'; el.onclick=function(){ el.remove(); };
+    el.innerHTML='<b>Something went wrong</b> — the game may still work. Click to hide.<div class="ed" style="font:11px monospace;opacity:.75;margin-top:4px;white-space:pre-wrap"></div>';
     document.body.appendChild(el); }
-  el.textContent+=(el.textContent?'\n':'')+msg;
+  var d=el.querySelector('.ed'); d.textContent=(d.textContent?d.textContent+'\n':'')+msg;
+};
+// a readable startup failure with a retry, instead of a raw error line
+window.__bootFail=function(e){
+  var msg=String(e&&e.message||e), net=/Could not load/.test(msg);
+  var why=e&&e.webgl?'Your browser or device has 3D graphics (WebGL) turned off or unsupported. Try another browser (Chrome, Edge, Firefox) or enable hardware acceleration.'
+    :net?'Part of the game could not be downloaded. Check your internet connection (some school or work networks block it) and try again.'
+    :'Something went wrong while starting the game.';
+  var box=document.createElement('div'); box.id='boot-fail';
+  box.style.cssText='position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;background:rgba(5,6,10,.92);font-family:Barlow,Segoe UI,Arial,sans-serif;color:#eee;';
+  box.innerHTML='<div style="max-width:520px;padding:26px 30px;border-radius:8px;background:#161a25;border-top:1px solid rgba(255,190,110,.35);text-align:center">'+
+    '<div style="font:700 34px Teko,Impact,sans-serif;letter-spacing:3px;color:#ffb347">COULD NOT START</div><p style="line-height:1.5;opacity:.9"></p>'+
+    '<div style="display:flex;gap:10px;justify-content:center;margin-top:14px"><button id="bf-retry" style="font:700 16px Barlow,Arial;padding:10px 26px;border:0;border-radius:4px;background:linear-gradient(100deg,#ffc061,#ff6a24);color:#170a02;cursor:pointer">TRY AGAIN</button>'+
+    '<button id="bf-more" style="font:600 13px Barlow,Arial;padding:10px 16px;border:1px solid #333c4d;border-radius:4px;background:transparent;color:#aab;cursor:pointer">Details</button></div>'+
+    '<pre id="bf-detail" style="display:none;text-align:left;white-space:pre-wrap;font-size:11px;opacity:.7;margin-top:12px"></pre></div>';
+  box.querySelector('p').textContent=why; box.querySelector('#bf-detail').textContent=msg;
+  box.querySelector('#bf-retry').onclick=function(){ location.reload(); };
+  box.querySelector('#bf-more').onclick=function(){ var d=box.querySelector('#bf-detail'), s=document.getElementById('boot-status'); d.textContent=msg+'\n'+(s?s.textContent:''); d.style.display='block'; };
+  document.body.appendChild(box);
 };
 window.__status={js:'ok',three:(window.THREE?'ok':'missing'),game:'not started',clicks:0};
 window.__renderStatus=function(){ var el=document.getElementById('boot-status'); var t=window.__status;
   if(el) el.textContent='JS: '+t.js+' · Three.js: '+t.three+' · game: '+t.game+' · clicks: '+t.clicks; };
 document.addEventListener('pointerdown',function(){ window.__status.clicks++; window.__renderStatus(); },true);
 window.__renderStatus();
+if(/[?&]debug/.test(location.search)) document.getElementById('boot-status').style.display=''; // diagnostics line only with ?debug
 window.addEventListener('error',function(e){ window.__showError('Error: '+(e.message||e)+(e.lineno?' (line '+e.lineno+')':'')); });
 </script>
 <script>
@@ -4979,20 +5000,25 @@ class Game{
 // Characters, the shared animation library and stage props are embedded as base64 GLB at the end of the file.
 function b64ToBuffer(b64){ const bin=atob(b64), u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return u.buffer; }
 const MODELS={
-  templates:{}, clips:{}, hitT:{}, props:null,
+  templates:{}, clips:{}, hitT:{}, props:null, warnings:[],
   async load(){
     const loader=new THREE.GLTFLoader();
-    const parse=key=>new Promise((res,rej)=>loader.parse(b64ToBuffer(window.RC_ASSETS[key]),'',res,rej));
+    const parse=key=>new Promise((res,rej)=>{ try{ loader.parse(b64ToBuffer(window.RC_ASSETS[key]),'',res,rej); }catch(e){ rej(e); } });
+    const tryParse=async key=>{ try{ return await parse(key); }catch(e){ this.warnings.push(key); console.warn('Asset failed:',key,e); return null; } };
     const share=root=>root.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; o.frustumCulled=false; } o.userData.shared=true; });
-    (await parse('anims')).animations.forEach(c=>{ this.clips[c.name]=c; });
+    const an=await tryParse('anims'); if(an) an.animations.forEach(c=>{ this.clips[c.name]=c; });
     const ids=['kael','nyx','brakka','seren','rook','vex','wren','morrow','rattle','Skeleton_Blade','Skeleton_Staff','Skeleton_Axe'], note=document.getElementById('loading-note');
     for(let i=0;i<ids.length;i++){ const id=ids[i]; if(note) note.textContent='LOADING FIGHTERS… '+Math.round(100*(i+1)/(ids.length+3))+'%';
-      const g=await parse(id); share(g.scene); this.templates[id]=g.scene; }
+      const g=await tryParse(id); if(g){ share(g.scene); this.templates[id]=g.scene; } }
+    // a fighter whose model failed borrows a working one (same rig), so the game still starts
+    const spare=Object.values(this.templates)[0]; if(!spare) throw new Error('No fighter models could be loaded.');
+    ids.forEach(id=>{ if(!this.templates[id]) this.templates[id]=spare; });
     if(note) note.textContent='LOADING STAGES…';
-    const props=await parse('props'); share(props.scene); this.props=props.scene;
-    const items=await parse('items'); share(items.scene); this.items=items.scene;
+    const empty=()=>({scene:new THREE.Group()});
+    const props=(await tryParse('props'))||empty(); share(props.scene); this.props=props.scene;
+    const items=(await tryParse('items'))||empty(); share(items.scene); this.items=items.scene;
     // the meadow props ship without their texture: they share the Hexagon-pack atlas already inside `props`
-    const p2=await parse('props2'); share(p2.scene); this.props2=p2.scene;
+    const p2=(await tryParse('props2'))||empty(); share(p2.scene); this.props2=p2.scene;
     let atlas=null; const src=this.props.getObjectByName('mountain_A'); if(src) src.traverse(o=>{ if(o.isMesh&&o.material.map&&!atlas) atlas=o.material.map; });
     p2.scene.traverse(o=>{ if(o.isMesh){ o.material.map=atlas; o.material.roughness=1; o.material.metalness=0; o.material.needsUpdate=true; } });
     // stylised props read best fully matte; glossy highlights were being blown out by the bloom pass
@@ -5004,7 +5030,7 @@ const MODELS={
   // The strike moment of each clip = where the hands and feet move fastest. Attacks are time-warped so that
   // moment lands exactly on the move's first active frame.
   _measureHits(){
-    const probe=THREE.SkeletonUtils.clone(this.templates.kael), mixer=new THREE.AnimationMixer(probe);
+    const probe=THREE.SkeletonUtils.clone(this.templates.kael||Object.values(this.templates)[0]), mixer=new THREE.AnimationMixer(probe);
     const ends=['handslot.r','handslot.l','foot.r','foot.l'].map(n=>bone(probe,n)).filter(Boolean);
     const N=40;
     for(const name in this.clips){
@@ -5157,19 +5183,21 @@ const ADDON_URLS=['https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loader
   'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/SkeletonUtils.js'];
 function loadScript(src){ return new Promise((res,rej)=>{ const sc=document.createElement('script'); sc.src=src; sc.onload=res; sc.onerror=()=>rej(new Error('Could not load '+src)); document.head.appendChild(sc); }); }
 function setStatus(k,v){ if(window.__status){ window.__status[k]=v; window.__renderStatus(); } }
+const loadRetry=async src=>{ try{ await loadScript(src); }catch(e){ await new Promise(r=>setTimeout(r,800)); await loadScript(src); } }; // one retry for flaky networks
 async function bootAll(){
   try{
-    if(!window.THREE){ setStatus('three','loading fallback'); await loadScript('https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js'); }
+    if(!window.THREE){ setStatus('three','loading fallback'); await loadRetry('https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js'); }
     setStatus('three','ok');
-    for(const u of ADDON_URLS) await loadScript(u);
+    for(const u of ADDON_URLS) await loadRetry(u);
+    { const c=document.createElement('canvas'); if(!(c.getContext('webgl2')||c.getContext('webgl'))) throw Object.assign(new Error('WebGL unavailable'),{webgl:true}); }
     if(document.readyState==='loading') await new Promise(r=>window.addEventListener('DOMContentLoaded',r));
     setStatus('game','loading models');
     await MODELS.load();
     window.__game=new Game();
     setStatus('game','running');
     const note=document.getElementById('loading-note'); if(note) note.remove();
-    setTimeout(()=>{ const el=document.getElementById('boot-status'); if(el) el.style.opacity=0; },3000);
-  }catch(e){ window.__showError('Startup failed: '+(e&&e.message||e)); }
+    if(MODELS.warnings.length) console.warn('Started with fallbacks for:',MODELS.warnings.join(', '));
+  }catch(e){ window.__bootFail(e); }
 }
 bootAll();
 </script>
