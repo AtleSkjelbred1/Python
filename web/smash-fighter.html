@@ -3987,7 +3987,10 @@ class Game{
         }
         case 'charge': P.spawn(new THREE.Vector3(f.pos.x,f.pos.y+s,0.3),4,{color:f.cd.accent,speed:0.08,life:12,additive:true}); AUDIO.tone(200+f.chargeFrames*12,0.06,'sine',0.12); break;
         case 'hazard': this.projectiles.push(new Projectile(this.scene,f,f.moveset.specialSide,new THREE.Vector3(e.x,e.y,0),new THREE.Vector3(),'hazard')); if(this.frame%2===0) AUDIO.playFire(); break;
-        case 'ledge': AUDIO.tone(240,0.05,'triangle',0.15); break;
+        case 'ledge': { AUDIO.tone(240,0.05,'triangle',0.15); AUDIO.playLand();
+          const hand=new THREE.Vector3(f.ledge!=null?f.ledge:f.pos.x,f.ledgeTop!=null?f.ledgeTop:f.pos.y,0.4); // grip flash and a puff of grit at the edge
+          P.spark(hand,0xffffff,0.9); P.ring(hand,f.cd.accent,1.1,10,0.05);
+          P.spawn(hand,6,{color:[0xbdb4a4,0x9a8f80],speed:0.06,upBias:0.2,grav:0.008,life:22,size:0.07}); break; }
         case 'shieldbreak':
           AUDIO.playShieldBreak(); P.spawn(new THREE.Vector3(f.pos.x,f.pos.y+s,0.3),24,{color:[0x6fd0ff,0xffffff],speed:0.25,life:24,additive:true});
           this.cameraRig.kick(0.6); this._floatText(f,'SHIELD BREAK'); break;
